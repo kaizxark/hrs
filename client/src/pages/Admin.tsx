@@ -6,6 +6,7 @@ import {
   getAdminSession,
   saveAdminSession,
 } from "@/lib/adminAuth";
+import { trpc } from "@/lib/trpc";
 import {
   Area,
   AreaChart,
@@ -106,6 +107,7 @@ type AdminRecord = {
   nextEligibleAt: string | null;
   publicVisible: boolean;
   initials: string;
+  lastDonationAt: string | null;
 };
 
 function formatRecordDate(value: string | null | undefined) {
@@ -123,6 +125,14 @@ function formatShortDate(value: string | null | undefined) {
   const date = new Date(value.includes("T") ? value : `${value.replace(" ", "T")}+05:30`);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" }).format(date);
+}
+
+function formatAge(dateOfBirth: string | null | undefined): string {
+  if (!dateOfBirth || dateOfBirth === "Not recorded") return "—";
+  const date = new Date(dateOfBirth);
+  if (Number.isNaN(date.getTime())) return "—";
+  const age = Math.floor((Date.now() - date.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+  return age > 0 ? `${age} years` : "—";
 }
 
 const statisticsColors = [
@@ -389,6 +399,11 @@ export default function Admin() {
   const [addedPeriod, setAddedPeriod] = useState<"today" | "week" | "month">("week");
   const [addedPeriodOpen, setAddedPeriodOpen] = useState(false);
   const addedPeriodMenuRef = useRef<HTMLDivElement>(null);
+  const [selectedDonation, setSelectedDonation] = useState<AdminRecord | null>(null);
+  const [donationDetailOpen, setDonationDetailOpen] = useState(false);
+  const [donationPage, setDonationPage] = useState(1);
+  const [recordingDonation, setRecordingDonation] = useState<AdminRecord | null>(null);
+  const [donationDateTime, setDonationDateTime] = useState("");
 
   useEffect(() => {
     if (!addedPeriodOpen) return;
@@ -490,6 +505,35 @@ export default function Admin() {
     return () => window.clearInterval(timer);
   }, [activeView, loggedIn]);
 
+  // Event listener for donation detail modal
+  useEffect(() => {
+    const handleOpenDonationDetail = (e: Event) => {
+      const customEvent = e as CustomEvent<AdminRecord>;
+      setSelectedDonation(customEvent.detail);
+      setDonationDetailOpen(true);
+    };
+
+    window.addEventListener('openDonationDetail', handleOpenDonationDetail);
+    return () => window.removeEventListener('openDonationDetail', handleOpenDonationDetail);
+  }, []);
+
+  // Scroll lock for donation detail modal
+  useEffect(() => {
+    if (donationDetailOpen) {
+      const previousOverflow = document.body.style.overflow;
+      const previousPaddingRight = document.body.style.paddingRight;
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+      document.body.style.overflow = "hidden";
+      if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+
+      return () => {
+        document.body.style.overflow = previousOverflow;
+        document.body.style.paddingRight = previousPaddingRight;
+      };
+    }
+  }, [donationDetailOpen]);
+
   useEffect(() => {
     let active = true;
     const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSoCcPYXF_yJBVjFYNNzBFdZCnjGClThAHfaIbhh3g5H46cYOYrAdYdL0DUFDvlMegkXZk8f6EIzRHe/pub?output=csv";
@@ -586,6 +630,7 @@ export default function Admin() {
             nextEligibleAt: parseSheetDate(nextEligibleTime)?.toISOString() ?? null,
             publicVisible: Boolean(id && rawStatus === "Verified" && donorConsent === true && bloodGroup),
             initials: initials || "?",
+            lastDonationAt: thirdDonationTime || secondDonationTime || firstDonationTime || null,
           });
         }
         if (active) {
@@ -1270,12 +1315,19 @@ export default function Admin() {
                 consentStatus: "Yes",
                 availability: "Unavailable",
                 donorConsent: null,
+                lastDonationAt: null,
               },
               ...current,
             ]);
             setAddOpen(false);
             toast.success("Person added to pending entry.");
           }}
+        />
+      )}
+      {donationDetailOpen && selectedDonation && (
+        <DonationDetailModal
+          record={selectedDonation}
+          onClose={() => { setDonationDetailOpen(false); setSelectedDonation(null); }}
         />
       )}
     </div>
@@ -2101,9 +2153,11 @@ function RecordModal({
                   donorConsent: donationConsent,
                   consent: storageConfirmed,
                 };
-                onSave(updatedRecord);
-                setSaveState("success");
-                setTimeout(() => setMode("view"), 1000);
+                onSave(updatedRecord, group, donationConsent, id => {
+                  setSavedId(id);
+                  setSaveState("success");
+                  setTimeout(() => setMode("view"), 1000);
+                });
               }
             }}>{isPending ? "Verify & generate HRS ID" : "Save changes"} <ArrowRight size={16} /></button>
             <div style={{ alignSelf: "stretch", display: "flex", alignItems: "flex-end" }}>{!isPending && <button className="profile-cancel-edit" onClick={() => { setMode("view"); setEditName(record.name); setEditDateOfBirth(record.dateOfBirth); setEditGender(record.gender); setEditMobile(record.mobile); setEditEmail(record.email); setEditArea(record.area); setEditLocation(record.location); }}>Cancel</button>}</div>
@@ -2266,10 +2320,126 @@ function AddPersonModal({
                   .join("")
                   .slice(0, 2)
                   .toUpperCase(),
+                lastDonationAt: null,
               });
             }}
           >
             Add to pending <ArrowRight size={16} />
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function DonationDetailModal({
+  record,
+  onClose,
+}: {
+  record: AdminRecord;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="modal-backdrop"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <section className="admin-modal donation-detail-modal" role="dialog" aria-modal="true">
+        <div className="profile-topline">
+          <button className="profile-back-button" onClick={onClose}>
+            <ArrowLeft size={15} /> Back to Records
+          </button>
+          <button className="secondary-button profile-top-edit" onClick={() => toast.info("Donation editing will be connected to the HRS sheet next.")}>
+            <Edit3 size={14} /> Edit
+          </button>
+        </div>
+
+        {/* Header */}
+        <div className="donation-detail-header">
+          <div className="donation-detail-avatar">{record.initials}</div>
+          <div className="donation-detail-identity">
+            <h2>{record.name}</h2>
+            <span className="donation-detail-id">{record.id ?? "ID pending"}</span>
+          </div>
+          <span className="table-blood donation-detail-blood">{record.group}</span>
+        </div>
+
+        {/* Donation Summary */}
+        <div className="donation-detail-summary">
+          <div className="donation-detail-stat">
+            <strong>{record.donationCount}</strong>
+            <span>Total Donations</span>
+          </div>
+          <div className="donation-detail-stat">
+            <strong>{record.lastDonationAt ? formatShortDate(record.lastDonationAt) : "—"}</strong>
+            <span>Last Donation</span>
+          </div>
+          <div className="donation-detail-stat">
+            <strong>{record.nextEligibleAt ? formatShortDate(record.nextEligibleAt) : "Now"}</strong>
+            <span>Next Eligible</span>
+          </div>
+          <div className="donation-detail-stat">
+            <strong>{record.availability === "Available" ? "Yes" : "No"}</strong>
+            <span>Available</span>
+          </div>
+        </div>
+
+        {/* Donor Info */}
+        <div className="donation-detail-section">
+          <h3>Donor Information</h3>
+          <div className="donation-detail-grid">
+            <div className="donation-detail-item">
+              <span className="donation-detail-label">Age / Gender</span>
+              <span className="donation-detail-value">({record.age}) · {record.gender}</span>
+            </div>
+            <div className="donation-detail-item">
+              <span className="donation-detail-label">Location</span>
+              <span className="donation-detail-value">{record.area}, {record.location}</span>
+            </div>
+            <div className="donation-detail-item">
+              <span className="donation-detail-label">Mobile</span>
+              <span className="donation-detail-value">{record.mobile}</span>
+            </div>
+            <div className="donation-detail-item">
+              <span className="donation-detail-label">Email</span>
+              <span className="donation-detail-value">{record.email}</span>
+            </div>
+            <div className="donation-detail-item">
+              <span className="donation-detail-label">Verified</span>
+              <span className="donation-detail-value">{record.verifiedAt ? formatRecordDate(record.verifiedAt) : "Not verified"}</span>
+            </div>
+            <div className="donation-detail-item">
+              <span className="donation-detail-label">Blood Group</span>
+              <span className="donation-detail-value">{record.group}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Donation History */}
+        <div className="donation-detail-section">
+          <h3>Donation History</h3>
+          {record.donationDates.length > 0 ? (
+            <div className="donation-history-list">
+              {record.donationDates.slice().reverse().map((date, index) => (
+                <div key={date} className="donation-history-item">
+                  <div className="donation-history-icon">
+                    <Droplets size={16} />
+                  </div>
+                  <div className="donation-history-content">
+                    <strong>Donation #{record.donationDates.length - index}</strong>
+                    <span>{formatRecordDate(date)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="donation-empty">No donation history recorded.</p>
+          )}
+        </div>
+
+        <div className="modal-actions">
+          <button className="secondary-button" onClick={onClose}>
+            Close
           </button>
         </div>
       </section>
