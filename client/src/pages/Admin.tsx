@@ -492,7 +492,14 @@ export default function Admin() {
             : "Good evening";
 
       setIndiaTime(time);
-      document.querySelector(".top-sync")?.setAttribute("data-time", time);
+      const timeEl = document.querySelector(".top-sync-time");
+      const dateEl = document.querySelector(".top-sync-date");
+      const sidebarTimeEl = document.querySelector(".sidebar-clock-time");
+      const sidebarDateEl = document.querySelector(".sidebar-clock-date");
+      if (timeEl) timeEl.textContent = time;
+      if (dateEl) dateEl.textContent = date;
+      if (sidebarTimeEl) sidebarTimeEl.textContent = time;
+      if (sidebarDateEl) sidebarDateEl.textContent = date;
       const heading = document.querySelector(".admin-page-heading h1");
       if (heading && activeView === "overview")
         heading.textContent = `${greeting}, Admin.`;
@@ -924,8 +931,9 @@ export default function Admin() {
             <strong>{VIEW_LABELS[activeView]}</strong>
           </div>
           <div className="admin-top-actions">
-            <span className="top-sync">
-              <span className="sync-dot" /> Synced
+            <span className="top-clock">
+              <span className="top-sync-time"></span>
+              <span className="top-sync-date"></span>
             </span>
             <button className="staff-top">
               <div className="staff-avatar small">
