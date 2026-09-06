@@ -541,128 +541,98 @@ export default function Admin() {
     }
   }, [donationDetailOpen]);
 
+  // Fetch profiles from API
+  const profilesQuery = trpc.hrs.profiles.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+    staleTime: 30000,
+    retry: 2,
+  });
+
+  // Convert API profiles to AdminRecord format
   useEffect(() => {
-    let active = true;
-    const sheetUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSoCcPYXF_yJBVjFYNNzBFdZCnjGClThAHfaIbhh3g5H46cYOYrAdYdL0DUFDvlMegkXZk8f6EIzRHe/pub?output=csv";
+    if (profilesQuery.data?.success && profilesQuery.data.data) {
+      // API returns data directly as array: { success, data: [...] }
+      const apiProfiles = (Array.isArray(profilesQuery.data.data)
+        ? profilesQuery.data.data
+        : profilesQuery.data.data?.profiles || []) as Record<string, string>[];
+      const convertedRecords: AdminRecord[] = apiProfiles.map((profile) => {
+        const id = profile["HRS ID"] || null;
+        const name = profile["Full Name"] || "Unknown";
+        const dob = profile["Date of Birth"] || "";
+        const gender = profile["Gender"] || "Prefer not to say";
+        const mobile = profile["Phone Number"] || "Not provided";
+        const email = profile["Email"] || "Not provided";
+        const bloodGroup = profile["Blood Group"] || "—";
+        const city = profile["City"] || "Unknown";
+        const area = profile["Area"] || "Unknown";
+        const registrationTime = profile["Registration Time"] || "";
+        const storageConsent = profile["Data Storage Consent"] || "";
+        const donationConsent = profile["Donor Consent"] || "";
+        const verificationStatus = profile["Verification Status"] || "";
+        const verifiedTime = profile["Verification Time"] || "";
+        const donationCount = profile["Blood Donation Count"] || "0";
+        const lastDonationTime = profile["Last Donation Time"] || "";
+        const nextEligibleTime = profile["Next Eligible Time"] || "";
+        const availabilityStatus = profile["Availability Status"] || "";
+        const publicVisibility = profile["Public Directory Visibility"] || "";
 
-    try {
-      const cached = localStorage.getItem(ADMIN_RECORDS_CACHE_KEY);
-      if (cached) {
-        const cachedRecords = JSON.parse(cached) as AdminRecord[];
-        if (Array.isArray(cachedRecords) && cachedRecords.length > 0) {
-          setRecords(cachedRecords);
+        const birthDate = new Date(dob);
+        const age = Number.isNaN(birthDate.getTime()) ? 0 : new Date().getFullYear() - birthDate.getFullYear();
+        const rawStatus = verificationStatus.toUpperCase();
+        const isPending = rawStatus.includes("PENDING") || rawStatus.includes("VERIFICATION");
+        const consentStatus = storageConsent.toUpperCase() === "YES" ? "Yes" : storageConsent.toUpperCase() === "NO" ? "No" : "Pending";
+        const donorConsent = isPending ? null : donationConsent.toUpperCase() === "YES";
+
+        const parseSheetDate = (value: string | undefined) => {
+          if (!value?.trim()) return null;
+          const normalized = value.trim().replace(" ", "T");
+          const withIndiaOffset = /([zZ]|[+-]\d{2}:?\d{2})$/.test(normalized) ? normalized : `${normalized}+05:30`;
+          const date = new Date(withIndiaOffset);
+          return Number.isNaN(date.getTime()) ? null : date;
+        };
+
+        const registeredAt = parseSheetDate(registrationTime)?.toISOString() ?? null;
+        const verifiedAt = parseSheetDate(verifiedTime)?.toISOString() ?? null;
+        const nextEligibleAt = parseSheetDate(nextEligibleTime)?.toISOString() ?? null;
+
+        const donationDates: string[] = [];
+        for (let i = 1; i <= 20; i++) {
+          const dateKey = `Donation ${i} Date`;
+          const dateValue = profile[dateKey];
+          if (dateValue && dateValue.trim()) donationDates.push(dateValue.trim());
         }
-      }
-    } catch (error) {
-      console.warn("Unable to restore cached HRS records:", error);
+
+        const availability = availabilityStatus.toLowerCase().includes("available") ? "Available" :
+          availabilityStatus.toLowerCase().includes("unavailable") ? "Unavailable" :
+            donorConsent ? "Available" : "Unavailable";
+
+        const publicVisible = Boolean(id && rawStatus === "VERIFIED" && donorConsent === true && bloodGroup && bloodGroup !== "—" && publicVisibility.toUpperCase() === "YES");
+        const initials = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() || "?";
+        const lastDonationAt = lastDonationTime?.trim() || (donationDates.length > 0 ? donationDates[donationDates.length - 1] : null);
+
+        return {
+          id, name, dateOfBirth: dob || "Not recorded", age: isNaN(age) ? 0 : age, gender, mobile, email,
+          group: bloodGroup, location: city, area,
+          status: isPending ? "Pending" : "Verified" as const,
+          consent: consentStatus === "Yes", consentStatus, availability, donorConsent,
+          submitted: registrationTime || "Recently", registeredAt, verifiedAt,
+          donationCount: parseInt(donationCount, 10) || 0, donationDates, nextEligibleAt,
+          publicVisible, initials, lastDonationAt,
+        };
+      });
+      setRecords(convertedRecords);
+      setLastSyncedAt(new Date());
+    } else if (profilesQuery.isError) {
+      console.error("Failed to fetch from API:", profilesQuery.error);
     }
+  }, [profilesQuery.data, profilesQuery.isError]);
 
-    async function fetchData() {
-      if (active) setIsSyncing(true);
-      try {
-        const response = await fetch(`${sheetUrl}&t=${Date.now()}`, { cache: "no-store" });
-        if (!response.ok) throw new Error(`Google Sheets responded with ${response.status}`);
-        const text = await response.text();
-        const rows = parseCsv(text).slice(1);
-        const parsedRecords: AdminRecord[] = [];
-
-        for (const cols of rows) {
-          if (cols.length < 19) continue;
-
-          const [
-            id,
-            name,
-            dob,
-            gender,
-            mobile,
-            email,
-            area,
-            city,
-            storageConsent,
-            donationConsent,
-            bloodGroup,
-            registrationTime,
-            verificationStatus,
-            verifiedTime,
-            donationCount,
-            firstDonationTime,
-            secondDonationTime,
-            thirdDonationTime,
-            nextEligibleTime,
-          ] = cols;
-
-          const birthDate = new Date(dob);
-          const age = Number.isNaN(birthDate.getTime())
-            ? 0
-            : new Date().getFullYear() - birthDate.getFullYear();
-          const safeName = name || "Unknown";
-          const initials = safeName
-            .split(" ")
-            .map(n => n[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase();
-
-          const rawStatus = (verificationStatus || "").trim();
-          const isPending = rawStatus.toLowerCase().includes("pending");
-          const consentStatus =
-            storageConsent === "Yes" ? "Yes" : storageConsent === "No" ? "No" : "Pending";
-          const donorConsent = isPending ? null : donationConsent === "Yes";
-          const nextEligible = parseSheetDate(nextEligibleTime);
-          const availability = donorConsent && (!nextEligible || nextEligible <= new Date())
-            ? "Available"
-            : "Unavailable";
-
-          parsedRecords.push({
-            id: id || null,
-            name: safeName,
-            dateOfBirth: dob || "Not recorded",
-            age: isNaN(age) ? 0 : age,
-            gender: gender || "Prefer not to say",
-            mobile: mobile || "Not provided",
-            email: email || "Not provided",
-            group: bloodGroup || "—",
-            location: city || "Unknown",
-            area: area || "Unknown",
-            status: isPending ? "Pending" : "Verified",
-            consent: consentStatus === "Yes",
-            consentStatus,
-            availability,
-            donorConsent,
-            submitted: registrationTime || "Recently",
-            registeredAt: parseSheetDate(registrationTime)?.toISOString() ?? null,
-            verifiedAt: parseSheetDate(verifiedTime)?.toISOString() ?? null,
-            donationCount: Number.parseInt(donationCount, 10) || 0,
-            donationDates: [firstDonationTime, secondDonationTime, thirdDonationTime].filter(Boolean),
-            nextEligibleAt: parseSheetDate(nextEligibleTime)?.toISOString() ?? null,
-            publicVisible: Boolean(id && rawStatus === "Verified" && donorConsent === true && bloodGroup),
-            initials: initials || "?",
-            lastDonationAt: thirdDonationTime || secondDonationTime || firstDonationTime || null,
-          });
-        }
-        if (active) {
-          setRecords(parsedRecords);
-          try {
-            localStorage.setItem(ADMIN_RECORDS_CACHE_KEY, JSON.stringify(parsedRecords));
-          } catch (error) {
-            console.warn("Unable to cache HRS records:", error);
-          }
-          setLastSyncedAt(new Date());
-        }
-      } catch (e) {
-        console.error("Failed to fetch Google Sheets data:", e);
-      } finally {
-        if (active) setIsSyncing(false);
-      }
+  // Sync trigger effect
+  useEffect(() => {
+    if (syncRequested > 0) {
+      profilesQuery.refetch();
     }
-
-    fetchData();
-    const refreshTimer = window.setInterval(fetchData, 30_000);
-    return () => {
-      active = false;
-      window.clearInterval(refreshTimer);
-    };
-  }, [syncRequested]);
+  }, [syncRequested, profilesQuery]);
 
   const pending = records.filter(record => record.status === "Pending");
   const donors = records.filter(record => record.donorConsent);
