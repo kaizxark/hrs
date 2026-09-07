@@ -30,6 +30,7 @@ import {
   ChevronDown,
   ClipboardList,
   Clock3,
+  Activity,
   Droplets,
   Edit3,
   FileSpreadsheet,
@@ -38,6 +39,7 @@ import {
   Info,
   KeyRound,
   LayoutDashboard,
+  Loader2,
   LockKeyhole,
   LogOut,
   MapPin,
@@ -72,7 +74,7 @@ const VIEW_LABELS: Record<AdminView, string> = {
   statistics: "Statistics",
   records: "Records",
   donations: "Donations",
-  locations: "Locations",
+  locations: "Tumkur",
   staff: "Staff & Access",
   audit: "Audit Log",
   sync: "Sync & Data",
@@ -397,6 +399,10 @@ export default function Admin() {
   const [filterDonorConsent, setFilterDonorConsent] = useState("All");
   const [filterAvailability, setFilterAvailability] = useState("All");
   const [records, setRecords] = useState<AdminRecord[]>([]);
+  // Flag to track if we've loaded initial data from the server.
+  // Once set, the profilesQuery.data → records sync will stop overwriting
+  // optimistic updates (the SSE still triggers refetches for background sync).
+  const hasLoadedInitialRecords = useRef(false);
   const [addedPeriod, setAddedPeriod] = useState<"today" | "week" | "month">("week");
   const [addedPeriodOpen, setAddedPeriodOpen] = useState(false);
   const addedPeriodMenuRef = useRef<HTMLDivElement>(null);
@@ -545,44 +551,144 @@ export default function Admin() {
     }
   }, [donationDetailOpen]);
 
-  // Fetch profiles from API
+  // Fetch profiles — server keeps its memory cache fresh via a background poll.
+  // Client subscribes to SSE so it refetches instantly the moment the cache updates
+  // (same as clicking the Sync button, but automatic and silent).
   const profilesQuery = trpc.hrs.profiles.useQuery(undefined, {
     refetchOnWindowFocus: false,
-    staleTime: 30000,
+    staleTime: Infinity,
     retry: 2,
   });
+
+  // Subscribe to /api/sync-events — server pushes a notification on every cache update
+  useEffect(() => {
+    if (!loggedIn) return;
+    const es = new EventSource("/api/sync-events");
+    es.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "cache-update") {
+          profilesQuery.refetch();
+        }
+      } catch {
+        /* heartbeat, ignore */
+      }
+    };
+    return () => es.close();
+  }, [loggedIn, profilesQuery]);
+
+  // Helper: apply a verified record transformation optimistically
+  function applyVerifiedRecord(
+    rec: AdminRecord,
+    hrsId: string,
+    group: string,
+    donationConsent: boolean
+  ): AdminRecord {
+    const now = new Date().toISOString();
+    const isDonor = donationConsent;
+    const nextEligibleAt = isDonor
+      ? new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()
+      : null;
+    return {
+      ...rec,
+      id: hrsId,
+      status: "Verified",
+      group,
+      donorConsent: donationConsent,
+      consent: true,
+      consentStatus: "Yes",
+      verifiedAt: now,
+      availability: isDonor ? "Available" : "Unavailable",
+      nextEligibleAt,
+      publicVisible: isDonor && group !== "—",
+    };
+  }
+
+  // Helper: apply a donation record transformation optimistically
+  function applyDonation(
+    rec: AdminRecord,
+    donationTime: string
+  ): AdminRecord {
+    const parsedTime = donationTime.includes("T") ? donationTime : `${donationTime.replace(" ", "T")}+05:30`;
+    const donationDate = new Date(parsedTime).toISOString();
+    const nextEligibleAt = new Date(Date.parse(parsedTime) + 90 * 24 * 60 * 60 * 1000).toISOString();
+    const newDonationDates = [...rec.donationDates, donationDate];
+    return {
+      ...rec,
+      donationCount: rec.donationCount + 1,
+      donationDates: newDonationDates,
+      lastDonationAt: donationDate,
+      nextEligibleAt,
+      availability: "Unavailable",
+      publicVisible: true,
+    };
+  }
+
+  // Refs to capture mutation-specific context at call-time (avoids closure staleness)
+  const pendingVerificationRef = useRef<{ rec: AdminRecord; hrsId: string; group: string; donationConsent: boolean } | null>(null);
+  const pendingDonationRef = useRef<{ recordId: string; donationTime: string } | null>(null);
+  const pendingUpdateRef = useRef<{ updatedRecord: AdminRecord; originalId: string } | null>(null);
+  // Stores records snapshot before an optimistic update — used for rollback on server failure.
+  const previousRecordsRef = useRef<AdminRecord[] | null>(null);
 
   const verifyMutation = trpc.hrs.verifyProfile.useMutation({
     onSuccess: (result) => {
       if (result.success) {
-        toast.success("Profile verified successfully!");
-        profilesQuery.refetch();
+        // Optimistic update was already applied in the click handler.
+        previousRecordsRef.current = null;
+        pendingVerificationRef.current = null;
       } else {
+        // Server returned an error result — roll back optimistic update.
+        if (previousRecordsRef.current) {
+          setRecords(previousRecordsRef.current);
+          previousRecordsRef.current = null;
+        }
+        pendingVerificationRef.current = null;
         toast.error(result.error || "Failed to verify profile");
       }
     },
-    onError: (error) => {
-      toast.error(`Verification failed: ${error.message}`);
+    onError: () => {
+      // Roll back optimistic update on network/failure
+      if (previousRecordsRef.current) {
+        setRecords(previousRecordsRef.current);
+        previousRecordsRef.current = null;
+      }
+      pendingVerificationRef.current = null;
+      toast.error(`Verification failed`);
     },
   });
 
   const recordDonationMutation = trpc.hrs.recordDonation.useMutation({
     onSuccess: (result) => {
       if (result.success) {
-        toast.success("Donation recorded successfully!");
-        profilesQuery.refetch();
+        // Optimistic update was already applied in the click handler.
+        previousRecordsRef.current = null;
+        pendingDonationRef.current = null;
       } else {
+        // Server returned an error result — roll back optimistic update.
+        if (previousRecordsRef.current) {
+          setRecords(previousRecordsRef.current);
+          previousRecordsRef.current = null;
+        }
+        pendingDonationRef.current = null;
         toast.error(result.error || "Failed to record donation");
       }
     },
-    onError: (error) => {
-      toast.error(`Recording failed: ${error.message}`);
+    onError: () => {
+      // Roll back optimistic update on network/failure
+      if (previousRecordsRef.current) {
+        setRecords(previousRecordsRef.current);
+        previousRecordsRef.current = null;
+      }
+      pendingDonationRef.current = null;
+      toast.error(`Recording failed`);
     },
   });
 
   const syncProfilesMutation = trpc.hrs.syncProfiles.useMutation({
     onSuccess: () => {
       setLastSyncedAt(new Date());
+      // Sync button is manual — do force-refetch
       profilesQuery.refetch();
     },
     onError: (error) => {
@@ -590,10 +696,37 @@ export default function Admin() {
     },
   });
 
-  const deleteProfilesMutation = trpc.hrs.deleteProfiles.useMutation({
+  const updateProfileMutation = trpc.hrs.updateProfile.useMutation({
     onSuccess: (result) => {
       if (result.success) {
-        toast.success(`${result.deleted} record${result.deleted === 1 ? "" : "s"} deleted.`);
+        // Optimistic update was already applied in the click handler.
+        previousRecordsRef.current = null;
+        pendingUpdateRef.current = null;
+      } else {
+        // Server returned an error result — roll back optimistic update.
+        if (previousRecordsRef.current) {
+          setRecords(previousRecordsRef.current);
+          previousRecordsRef.current = null;
+        }
+        pendingUpdateRef.current = null;
+        toast.error(result.error || "Failed to update profile");
+      }
+    },
+    onError: () => {
+      // Roll back optimistic update on failure
+      if (previousRecordsRef.current) {
+        setRecords(previousRecordsRef.current);
+        previousRecordsRef.current = null;
+      }
+      pendingUpdateRef.current = null;
+      toast.error(`Update failed`);
+    },
+  });
+
+  const deleteProfilesMutation = trpc.hrs.deleteProfiles.useMutation({
+    onSuccess: (result) => {
+      if (result.success && result.data) {
+        toast.success(`${result.data.deleted} record${result.data.deleted === 1 ? "" : "s"} deleted.`);
         setSelectedForDelete(new Set());
         setDeleteMode(false);
         profilesQuery.refetch();
@@ -623,79 +756,16 @@ export default function Admin() {
     },
   });
 
-  // Convert API profiles to AdminRecord format
+  // The server pre-converts profiles to AdminRecord shape.
+  // Only sync on the initial load — after that, mutations apply optimistic
+  // updates to local state. The SSE poll will eventually refresh `records`
+  // when the Google Sheets CSV reflects the change.
   useEffect(() => {
-    if (profilesQuery.data?.success && profilesQuery.data.data) {
-      // API returns data directly as array: { success, data: [...] }
-      const apiProfiles = (Array.isArray(profilesQuery.data.data)
-        ? profilesQuery.data.data
-        : profilesQuery.data.data?.profiles || []) as Record<string, string>[];
-      const convertedRecords: AdminRecord[] = apiProfiles.map((profile) => {
-        const id = profile["HRS ID"] || null;
-        const name = profile["Full Name"] || "Unknown";
-        const dob = profile["Date of Birth"] || "";
-        const gender = profile["Gender"] || "Prefer not to say";
-        const mobile = profile["Phone Number"] || "Not provided";
-        const email = profile["Email"] || "Not provided";
-        const bloodGroup = profile["Blood Group"] || "—";
-        const city = profile["City"] || "Unknown";
-        const area = profile["Area"] || "Unknown";
-        const registrationTime = profile["Registration Time"] || "";
-        const storageConsent = profile["Data Storage Consent"] || "";
-        const donationConsent = profile["Donor Consent"] || "";
-        const verificationStatus = profile["Verification Status"] || "";
-        const verifiedTime = profile["Verification Time"] || "";
-        const donationCount = profile["Blood Donation Count"] || "0";
-        const lastDonationTime = profile["Last Donation Time"] || "";
-        const nextEligibleTime = profile["Next Eligible Time"] || "";
-        const availabilityStatus = profile["Availability Status"] || "";
-        const publicVisibility = profile["Public Directory Visibility"] || "";
-
-        const birthDate = new Date(dob);
-        const age = Number.isNaN(birthDate.getTime()) ? 0 : new Date().getFullYear() - birthDate.getFullYear();
-        const rawStatus = verificationStatus.toUpperCase();
-        const isPending = rawStatus.includes("PENDING") || rawStatus.includes("VERIFICATION");
-        const consentStatus = storageConsent.toUpperCase() === "YES" ? "Yes" : storageConsent.toUpperCase() === "NO" ? "No" : "Pending";
-        const donorConsent = isPending ? null : donationConsent.toUpperCase() === "YES";
-
-        const parseSheetDate = (value: string | undefined) => {
-          if (!value?.trim()) return null;
-          const normalized = value.trim().replace(" ", "T");
-          const withIndiaOffset = /([zZ]|[+-]\d{2}:?\d{2})$/.test(normalized) ? normalized : `${normalized}+05:30`;
-          const date = new Date(withIndiaOffset);
-          return Number.isNaN(date.getTime()) ? null : date;
-        };
-
-        const registeredAt = parseSheetDate(registrationTime)?.toISOString() ?? null;
-        const verifiedAt = parseSheetDate(verifiedTime)?.toISOString() ?? null;
-        const nextEligibleAt = parseSheetDate(nextEligibleTime)?.toISOString() ?? null;
-
-        const donationDates: string[] = [];
-        for (let i = 1; i <= 20; i++) {
-          const dateKey = `Donation ${i} Date`;
-          const dateValue = profile[dateKey];
-          if (dateValue && dateValue.trim()) donationDates.push(dateValue.trim());
-        }
-
-        const availability = availabilityStatus.toLowerCase().includes("available") ? "Available" :
-          availabilityStatus.toLowerCase().includes("unavailable") ? "Unavailable" :
-            donorConsent ? "Available" : "Unavailable";
-
-        const publicVisible = Boolean(id && rawStatus === "VERIFIED" && donorConsent === true && bloodGroup && bloodGroup !== "—" && publicVisibility.toUpperCase() === "YES");
-        const initials = name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase() || "?";
-        const lastDonationAt = lastDonationTime?.trim() || (donationDates.length > 0 ? donationDates[donationDates.length - 1] : null);
-
-        return {
-          id, name, dateOfBirth: dob || "Not recorded", age: isNaN(age) ? 0 : age, gender, mobile, email,
-          group: bloodGroup, location: city, area,
-          status: isPending ? "Pending" : "Verified" as const,
-          consent: consentStatus === "Yes", consentStatus, availability, donorConsent,
-          submitted: registrationTime || "Recently", registeredAt, verifiedAt,
-          donationCount: parseInt(donationCount, 10) || 0, donationDates, nextEligibleAt,
-          publicVisible, initials, lastDonationAt,
-        };
-      });
-      setRecords(convertedRecords);
+    if (profilesQuery.data?.success && profilesQuery.data.data?.records) {
+      if (!hasLoadedInitialRecords.current) {
+        setRecords(profilesQuery.data.data.records);
+        hasLoadedInitialRecords.current = true;
+      }
       setLastSyncedAt(new Date());
     } else if (profilesQuery.isError) {
       console.error("Failed to fetch from API:", profilesQuery.error);
@@ -809,6 +879,18 @@ export default function Admin() {
     }
     return Array.from(map.values()).sort((a, b) => b.count - a.count);
   }, [records]);
+  // Compute these once at the top level so they're available to JSX below
+  // (the original definitions live inside the Statistics sub-component block).
+  const bloodGroupsTop = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+  const isVerifiedTop = (record: AdminRecord) =>
+    record.status === "Verified";
+  const verifiedTop = records.filter(isVerifiedTop);
+  const voluntaryDonorsTop = verifiedTop.filter(
+    record => record.donorConsent === true
+  );
+  const availableDonorsTop = voluntaryDonorsTop.filter(
+    record => record.availability === "Available"
+  );
   const goToView = (view: AdminView, tab: RecordTab = "all") => {
     setActiveView(view);
     setMobileNav(false);
@@ -831,32 +913,98 @@ export default function Admin() {
       />
     );
 
-  const saveRecord = async (record: AdminRecord, group: string, donationConsent: boolean | null, onSuccess?: (id: string) => void) => {
+  const saveRecord = (
+    record: AdminRecord,
+    group: string,
+    donationConsent: boolean | null,
+    onSuccess?: (id: string) => void,
+    onError?: () => void
+  ) => {
     if (!group || group === "—") {
       toast.error("Enter a blood group before saving.");
+      onError?.();
       return;
     }
     if (donationConsent === null) {
       toast.error("Record blood donation consent as Yes or No before verifying.");
+      onError?.();
       return;
     }
-    if (!record.id) {
-      toast.error("Profile HRS ID is missing. Cannot verify.");
+    const isPending = record.status === "Pending";
+    const hrsId = record.id ?? "PENDING";
+
+    // For pending records: require HRS ID (should be assigned by the spreadsheet batch job)
+    if (isPending && !record.id) {
+      toast.error("This record has no HRS ID. Please run the ID assignment first.");
+      onError?.();
       return;
     }
-    try {
-      await verifyMutation.mutateAsync({
-        hrsId: record.id,
+
+    // Save snapshot for potential rollback on server failure
+    previousRecordsRef.current = records;
+
+    if (isPending) {
+      // First-time verification: apply optimistic update immediately, then fire mutation.
+      const updated = applyVerifiedRecord(record, hrsId, group, donationConsent);
+      setRecords(current =>
+        current.map(rec => (rec.id === record.id ? updated : rec))
+      );
+      // Update selected separately (outside the setRecords updater to avoid stale closure).
+      setSelected(updated);
+      toast.success("Profile verified successfully!");
+
+      // Capture for onSuccess cleanup (no-op here since we already updated)
+      pendingVerificationRef.current = null;
+      // Fire mutation in background — UI already updated.
+      verifyMutation.mutate({
+        hrsId,
         bloodGroup: group,
         donorConsent: donationConsent ? "YES" : "NO",
       });
       // Send verification email (non-blocking — fails silently if no email on file)
-      sendVerificationEmailMutation.mutate({ hrsId: record.id });
-      await profilesQuery.refetch();
-      toast.success(`${record.id} verified successfully!`);
-      onSuccess?.(record.id);
-    } catch (error) {
-      console.error("Verification error:", error);
+      sendVerificationEmailMutation.mutate({ hrsId });
+      onSuccess?.(hrsId);
+    } else {
+      // Editing an existing record: apply optimistic update immediately, then fire mutation.
+      const updatedRecord: AdminRecord = {
+        ...record,
+        name: record.name,
+        dateOfBirth: record.dateOfBirth,
+        gender: record.gender,
+        mobile: record.mobile,
+        email: record.email,
+        group: group,
+        location: record.location,
+        area: record.area,
+        donorConsent: donationConsent,
+        consent: donationConsent === true,
+        consentStatus: donationConsent === true ? "Yes" : "No",
+        availability: donationConsent ? "Available" : "Unavailable",
+        publicVisible: donationConsent === true && group !== "—",
+      };
+      pendingUpdateRef.current = { updatedRecord, originalId: hrsId };
+      setRecords(current =>
+        current.map(rec =>
+          rec.id === hrsId ? updatedRecord : rec
+        )
+      );
+      setSelected(prev => prev?.id === hrsId ? updatedRecord : prev);
+      toast.success("Profile updated!");
+
+      // Fire mutation in background — UI already updated.
+      updateProfileMutation.mutate({
+        hrsId,
+        name: record.name,
+        dob: record.dateOfBirth,
+        gender: record.gender,
+        mobile: record.mobile,
+        email: record.email,
+        city: record.location,
+        area: record.area,
+        bloodGroup: group,
+        donorConsent: donationConsent ? "YES" : "NO",
+      });
+      onSuccess?.(hrsId);
     }
   };
 
@@ -915,7 +1063,7 @@ export default function Admin() {
             className={activeView === "locations" ? "active" : ""}
             onClick={() => goToView("locations")}
           >
-            <MapPin size={17} /> Locations
+            <MapPin size={17} /> Tumkur Zones
           </button>
           <span className="admin-nav-label">SYSTEM</span>
           <button
@@ -1441,7 +1589,7 @@ export default function Admin() {
                         }}
                         disabled={deleteProfilesMutation.isPending}
                       >
-                        <Trash2 size={15} />
+                        {deleteProfilesMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                         {deleteProfilesMutation.isPending ? "Deleting..." : "Delete permanently"}
                       </button>
                     </div>
@@ -1457,6 +1605,8 @@ export default function Admin() {
               pending={pending}
               locationRows={locationRows}
               lastSyncedAt={lastSyncedAt}
+              bloodGroups={bloodGroupsTop}
+              availableDonors={availableDonorsTop}
             />
           )}
         </main>
@@ -1533,21 +1683,31 @@ export default function Admin() {
               <button
                 className="primary-button"
                 disabled={!donationDateTime || !recordingDonation.id || recordDonationMutation.isPending}
-                onClick={async () => {
+                onClick={() => {
                   if (!recordingDonation.id || !donationDateTime) return;
-                  try {
-                    await recordDonationMutation.mutateAsync({
-                      hrsId: recordingDonation.id,
-                      donationTime: new Date(donationDateTime).toISOString(),
-                    });
-                    await profilesQuery.refetch();
-                    setRecordingDonation(null);
-                  } catch (error) {
-                    console.error("Failed to record donation:", error);
-                  }
+                  const donationTimeISO = new Date(donationDateTime).toISOString();
+                  const recordId = recordingDonation.id;
+                  // Apply optimistic update immediately, then close the modal.
+                  previousRecordsRef.current = records;
+                  setRecords(current =>
+                    current.map(rec =>
+                      rec.id === recordId ? applyDonation(rec, donationTimeISO) : rec
+                    )
+                  );
+                  setSelected(prev =>
+                    prev?.id === recordId ? applyDonation(prev, donationTimeISO) : prev
+                  );
+                  setRecordingDonation(null);
+                  toast.success("Donation recorded!");
+
+                  // Fire mutation in background — UI already updated.
+                  recordDonationMutation.mutate({
+                    hrsId: recordId,
+                    donationTime: donationTimeISO,
+                  });
                 }}
               >
-                {recordDonationMutation.isPending ? "Recording..." : "Record Donation"}
+                {recordDonationMutation.isPending ? <><Loader2 size={16} className="animate-spin" /> Recording...</> : "Record Donation"}
               </button>
             </div>
           </div>
@@ -1564,6 +1724,8 @@ function WorkspaceView({
   pending,
   locationRows,
   lastSyncedAt,
+  bloodGroups,
+  availableDonors,
 }: {
   view: AdminView;
   records: AdminRecord[];
@@ -1571,6 +1733,8 @@ function WorkspaceView({
   pending: AdminRecord[];
   locationRows: { location: string; areas: string[]; count: number }[];
   lastSyncedAt: Date | null;
+  bloodGroups: string[];
+  availableDonors: AdminRecord[];
 }) {
   if (view === "donations") {
     return (
@@ -1642,34 +1806,299 @@ function WorkspaceView({
   }
 
   if (view === "locations") {
+    // Build per-area data for Tumkur (and optionally outside)
+    const areaBreakdown = Array.from(
+      new Set(records.map(r => r.area).filter(Boolean))
+    )
+      .map(area => {
+        const areaRecords = records.filter(r => r.area === area);
+        const verified = areaRecords.filter(r => r.status === "Verified");
+        const donors = verified.filter(r => r.donorConsent === true);
+        const available = donors.filter(r => r.availability === "Available");
+        const bgCounts: Record<string, number> = {};
+        for (const r of verified) {
+          bgCounts[r.group] = (bgCounts[r.group] ?? 0) + 1;
+        }
+        const topGroup = Object.entries(bgCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+        return {
+          area,
+          total: areaRecords.length,
+          verified: verified.length,
+          donors: donors.length,
+          available: available.length,
+          topGroup,
+          bgCounts,
+        };
+      })
+      .sort((a, b) => b.donors - a.donors);
+
+    const totalDonors = donors.length;
+    const totalAreas = areaBreakdown.length;
+    const avgDonorsPerArea = totalAreas ? Math.round(totalDonors / totalAreas) : 0;
+    const totalAvailable = availableDonors.length;
+    const tumkurRecords = areaBreakdown;
+    const outsideRecords = locationRows
+      .filter(r => r.location !== "Tumkur")
+      .reduce((s, r) => s + r.count, 0);
+
+    const locationChartData = areaBreakdown.map(a => ({
+      name: a.area,
+      donors: a.donors,
+      available: a.available,
+    }));
+
+    // Coverage matrix: blood group × area
+    const coverageAreas = areaBreakdown.slice(0, 6);
+    const coverageMatrix = coverageAreas.map(area => ({
+      name: area.area,
+      ...Object.fromEntries(
+        bloodGroups.map(bg => [bg, area.bgCounts[bg] ?? 0])
+      ),
+    }));
+
     return (
       <AdminSection
-        eyebrow="MANAGEMENT"
-        title="Locations"
-        description="Cities and areas currently represented in the HRS directory."
+        eyebrow="NETWORK INTELLIGENCE"
+        title="Tumkur Locations"
+        description="Donor distribution, availability and blood group coverage across Tumkur City areas."
       >
-        <section className="admin-card records-table-card">
-          <div className="records-table-head">
-            <span>Location</span>
-            <span>Areas</span>
-            <span>Records</span>
+        {/* KPI row */}
+        <div className="statistics-kpis location-kpis">
+          <div className="statistics-kpi">
+            <span>Tumkur Areas</span>
+            <strong>{totalAreas}</strong>
+            <small>Active coverage zones</small>
           </div>
-          {locationRows.map(row => (
-            <div className="records-table-row" key={row.location}>
-              <div className="table-person">
-                <div className="mini-avatar">
-                  <MapPin size={14} />
+          <div className="statistics-kpi">
+            <span>Voluntary Donors</span>
+            <strong>{totalDonors}</strong>
+            <small>Across all areas</small>
+          </div>
+          <div className="statistics-kpi">
+            <span>Available Now</span>
+            <strong>{totalAvailable}</strong>
+            <small>{totalDonors ? Math.round((totalAvailable / totalDonors) * 100) : 0}% of donors</small>
+          </div>
+          <div className="statistics-kpi">
+            <span>Avg / Area</span>
+            <strong>{avgDonorsPerArea}</strong>
+            <small>Donors per zone</small>
+          </div>
+        </div>
+
+        <div className="admin-two-col">
+          {/* Area distribution chart */}
+          <div className="statistics-card location-chart-card">
+            <div className="statistics-card-heading">
+              <div>
+                <span>Distribution</span>
+                <h2>Donors by area</h2>
+              </div>
+            </div>
+            <div className="location-chart-wrap">
+              <ResponsiveContainer width="100%" height={Math.max(220, areaBreakdown.length * 38)}>
+                <BarChart
+                  data={locationChartData}
+                  layout="vertical"
+                  margin={{ top: 4, right: 20, left: 0, bottom: 0 }}
+                >
+                  <CartesianGrid horizontal={false} stroke="#edf0ed" />
+                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#697369" }} allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#3d483d" }} width={90} />
+                  <Tooltip
+                    contentStyle={{ border: "1px solid #dfe4df", borderRadius: 8, fontSize: 12 }}
+                    cursor={{ fill: "#f4f8f4" }}
+                  />
+                  <Bar dataKey="donors" name="All donors" fill="#c5162d" radius={[4, 4, 4, 4]} barSize={18}>
+                    {locationChartData.map((entry, index) => (
+                      <Cell key={entry.name} fill="#c5162d" fillOpacity={0.6 + (index === 0 ? 0.4 : (totalDonors ? areaBreakdown[index].donors / totalDonors : 0) * 0.4)} />
+                    ))}
+                  </Bar>
+                  <Bar dataKey="available" name="Available now" fill="#4a7a4a" radius={[4, 4, 4, 4]} barSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Top area details */}
+          <div className="statistics-card location-areas-card">
+            <div className="statistics-card-heading">
+              <div>
+                <span>Top Zones</span>
+                <h2>Area leaders</h2>
+              </div>
+            </div>
+            <div className="location-areas-list">
+              {areaBreakdown.slice(0, 8).map((area, i) => (
+                <div className="location-area-row" key={area.area}>
+                  <div className="location-area-rank">{i + 1}</div>
+                  <div className="location-area-info">
+                    <strong>{area.area}</strong>
+                    <span>{area.donors} donors · {area.available} available</span>
+                  </div>
+                  <div className="location-area-bar-wrap">
+                    <div
+                      className="location-area-bar"
+                      style={{
+                        width: `${totalDonors ? Math.round((area.donors / totalDonors) * 100) : 0}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="location-area-pct">
+                    {totalDonors ? Math.round((area.donors / totalDonors) * 100) : 0}%
+                  </div>
                 </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Blood group coverage matrix */}
+        <div className="statistics-card statistics-wide-card location-coverage-card">
+          <div className="statistics-card-heading">
+            <div>
+              <span>Coverage</span>
+              <h2>Blood groups by area</h2>
+            </div>
+            <span className="location-coverage-badge">
+              <Droplets size={13} />
+              {coverageAreas.length} areas
+            </span>
+          </div>
+          <div className="location-coverage-wrap">
+            <table className="location-coverage-table">
+              <thead>
+                <tr>
+                  <th>Area</th>
+                  <th>Donors</th>
+                  {bloodGroups.map(bg => (
+                    <th key={bg}>{bg}</th>
+                  ))}
+                  <th>Available</th>
+                </tr>
+              </thead>
+              <tbody>
+                {coverageAreas.map(area => {
+                  const pct = totalDonors ? Math.round((area.donors / totalDonors) * 100) : 0;
+                  return (
+                    <tr key={area.area}>
+                      <td className="location-coverage-area-name">
+                        <strong>{area.area}</strong>
+                        <small>{pct}%</small>
+                      </td>
+                      <td className="location-coverage-count">{area.donors}</td>
+                      {bloodGroups.map(bg => {
+                        const count = area.bgCounts[bg] ?? 0;
+                        return (
+                          <td key={bg} className={`location-coverage-cell ${count > 0 ? "has-value" : ""}`}>
+                            {count > 0 ? count : <span className="location-coverage-dash">—</span>}
+                          </td>
+                        );
+                      })}
+                      <td className="location-coverage-available">
+                        {area.available > 0 ? (
+                          <span className="location-coverage-avail-badge">{area.available}</span>
+                        ) : (
+                          <span className="location-coverage-none">0</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td><strong>Total</strong></td>
+                  <td className="location-coverage-count"><strong>{totalDonors}</strong></td>
+                  {bloodGroups.map(bg => (
+                    <td key={bg} className="location-coverage-cell">
+                      <strong>
+                        {areaBreakdown.reduce((s, a) => s + (a.bgCounts[bg] ?? 0), 0)}
+                      </strong>
+                    </td>
+                  ))}
+                  <td className="location-coverage-count">
+                    <strong>{totalAvailable}</strong>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        {/* Quick reference */}
+        <div className="admin-two-col">
+          <div className="statistics-card location-legend-card">
+            <div className="statistics-card-heading">
+              <div>
+                <span>Legend</span>
+                <h2>Understanding the data</h2>
+              </div>
+            </div>
+            <div className="location-legend">
+              <div className="location-legend-item">
+                <span className="location-legend-dot" style={{ background: "#c5162d" }} />
                 <div>
-                  <strong>{row.location}</strong>
-                  <span>{row.areas.length} area{row.areas.length === 1 ? "" : "s"}</span>
+                  <strong>Total donors</strong>
+                  <small>Verified profiles with blood donation consent = Yes</small>
                 </div>
               </div>
-              <span>{row.areas.slice(0, 3).join(", ")}</span>
-              <strong>{row.count}</strong>
+              <div className="location-legend-item">
+                <span className="location-legend-dot" style={{ background: "#4a7a4a" }} />
+                <div>
+                  <strong>Available now</strong>
+                  <small>Donors whose 90-day deferral period has passed</small>
+                </div>
+              </div>
+              <div className="location-legend-item">
+                <span className="location-legend-dot" style={{ background: "#d89a3c" }} />
+                <div>
+                  <strong>Coverage %</strong>
+                  <small>This area's share of all Tumkur donors</small>
+                </div>
+              </div>
             </div>
-          ))}
-        </section>
+          </div>
+
+          <div className="statistics-card location-stats-card">
+            <div className="statistics-card-heading">
+              <div>
+                <span>Summary</span>
+                <h2>Quick numbers</h2>
+              </div>
+            </div>
+            <div className="location-quick-stats">
+              <div className="location-quick-stat">
+                <MapPin size={16} />
+                <div>
+                  <strong>{totalAreas}</strong>
+                  <small>Active areas in Tumkur</small>
+                </div>
+              </div>
+              <div className="location-quick-stat">
+                <Users size={16} />
+                <div>
+                  <strong>{totalDonors}</strong>
+                  <small>Voluntary donors</small>
+                </div>
+              </div>
+              <div className="location-quick-stat">
+                <Heart size={16} />
+                <div>
+                  <strong>{totalAvailable}</strong>
+                  <small>Can donate today</small>
+                </div>
+              </div>
+              <div className="location-quick-stat">
+                <Activity size={16} />
+                <div>
+                  <strong>{outsideRecords}</strong>
+                  <small>Records outside Tumkur</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </AdminSection>
     );
   }
@@ -1757,7 +2186,7 @@ function WorkspaceView({
             <span className="sync-dot" />
           </div>
           <p style={{ marginTop: 16, color: "#7d897d", fontSize: 13 }}>
-            The directory refreshes automatically every 30 seconds from the published HRS sheet.
+            The directory refreshes automatically every 10 seconds from the published HRS sheet.
           </p>
         </section>
       </AdminSection>
@@ -2325,7 +2754,7 @@ function RecordModal({
   record: AdminRecord;
   origin: ModalOrigin | null;
   onClose: () => void;
-  onSave: (record: AdminRecord, group: string, donationConsent: boolean | null, onSuccess?: (id: string) => void) => void;
+  onSave: (record: AdminRecord, group: string, donationConsent: boolean | null, onSuccess?: (id: string) => void, onError?: () => void) => void;
   setRecordingDonation: (record: AdminRecord | null) => void;
   setDonationDateTime: (dateTime: string) => void;
 }) {
@@ -2357,6 +2786,7 @@ function RecordModal({
   const [savedId, setSavedId] = useState(record.id);
   const [group, setGroup] = useState(record.group === "—" ? "" : record.group);
   const [donationConsent, setDonationConsent] = useState<boolean | null>(record.donorConsent);
+  const [isSaving, setIsSaving] = useState(false);
   const [storageConfirmed, setStorageConfirmed] = useState(record.consent);
   // Edit mode state variables
   const [editName, setEditName] = useState(record.name);
@@ -2428,10 +2858,12 @@ function RecordModal({
           {!isPending && <button type="button" className={`profile-storage-toggle${storageConfirmed ? " active" : ""}`} role="switch" aria-checked={storageConfirmed} onClick={() => setStorageConfirmed(value => !value)}><span className="toggle-track"><i /></span><span>Data storage consent confirmed</span></button>}
           <p className="profile-helper">{!group ? "Add a blood group to generate an ID." : !storageConfirmed ? "Confirm the required storage consent to continue." : "Save to record the verification time and generate the HRS ID."}</p>
           <div className="profile-edit-actions-row">
-            <button className="primary-button profile-verify-button" disabled={isPending ? !group || donationConsent === null || !storageConfirmed : !editName.trim() || !group || donationConsent === null || !storageConfirmed} onClick={() => {
+            <button className="primary-button profile-verify-button" disabled={isSaving || isPending ? !group || donationConsent === null || !storageConfirmed : !editName.trim() || !group || donationConsent === null || !storageConfirmed} onClick={() => {
               if (isPending) {
-                onSave(record, group, donationConsent, id => { setSavedId(id); setSaveState("success"); });
+                setIsSaving(true);
+                onSave(record, group, donationConsent, id => { setSavedId(id); setSaveState("success"); setIsSaving(false); }, () => setIsSaving(false));
               } else {
+                setIsSaving(true);
                 const updatedRecord = {
                   ...record,
                   name: editName,
@@ -2448,10 +2880,11 @@ function RecordModal({
                 onSave(updatedRecord, group, donationConsent, id => {
                   setSavedId(id);
                   setSaveState("success");
+                  setIsSaving(false);
                   setTimeout(() => setMode("view"), 1000);
-                });
+                }, () => setIsSaving(false));
               }
-            }}>{isPending ? "Save & Email" : "Save changes"} <ArrowRight size={16} /></button>
+            }}>{isSaving ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : isPending ? "Save & Email" : "Save changes"} {!isSaving && <ArrowRight size={16} />}</button>
             <div style={{ alignSelf: "stretch", display: "flex", alignItems: "flex-end" }}>{!isPending && <button className="profile-cancel-edit" onClick={() => { setMode("view"); setEditName(record.name); setEditDateOfBirth(record.dateOfBirth); setEditGender(record.gender); setEditMobile(record.mobile); setEditEmail(record.email); setEditArea(record.area); setEditLocation(record.location); }}>Cancel</button>}</div>
           </div>
         </div></> : record.donorConsent === false ? <div className="profile-detail-section profile-disabled-section"><h3>Donation status</h3><div className="profile-disabled-grid"><div><span>Blood donation consent</span><strong>No</strong></div><div><span>Public donor visibility</span><strong>Hidden</strong></div><div><span>Donation tracking</span><strong>Disabled</strong></div><div><span>Blood donation count</span><strong>Not applicable</strong></div></div></div> : <>
@@ -2488,10 +2921,9 @@ function RecordModal({
             );
           })}
             <div className="profile-history-footer">
-              <button className="secondary-button profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><Plus size={15} /> Record new donation</button>
-              {record.availability !== "Available" && <small className="profile-action-hint">New donation can be recorded after the next eligible time.</small>}
+              <button className="profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><span className="profile-donation-button-icon"><Plus size={16} strokeWidth={2.5} /></span> Record new donation</button>
             </div>
-            </div> : <div className="profile-history-inner"><p className="profile-empty">No blood donations have been recorded yet.</p><div className="profile-history-footer"><button className="secondary-button profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><Plus size={15} /> Record new donation</button></div></div>}</div></div></div>
+            </div> : <div className="profile-history-inner"><p className="profile-empty">No blood donations have been recorded yet.</p><div className="profile-history-footer"><button className="profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><span className="profile-donation-button-icon"><Plus size={16} strokeWidth={2.5} /></span> Record new donation</button></div></div>}</div></div></div>
         </>}
         {!isPending && mode === "view" && <div className={`profile-activity-section${activityOpen ? " open" : " collapsed"}`}><div className="profile-activity-heading"><div><h3><History size={15} /> Activity timeline</h3><span>{activityEvents.length} recorded events</span></div><button type="button" className="profile-activity-toggle" onClick={() => setActivityOpen(open => !open)} aria-expanded={activityOpen} aria-controls={`activity-${record.id || record.name}`}>{activityOpen ? "Hide activity" : "View activity"}<ChevronDown size={15} /></button></div><div className="profile-activity-panel" id={`activity-${record.id || record.name}`} aria-hidden={!activityOpen}><div className="profile-activity-timeline">{activityEvents.map((event, index) => <div key={`${event.date}-${event.label}-${index}`}><span className="profile-activity-dot" /><div><b>{formatShortDate(event.date)}</b><span>{event.label}</span></div></div>)}</div></div></div>}
         </>}
@@ -2707,10 +3139,10 @@ function DonationDetailModal({
             );
           })}
           <div className="profile-history-footer">
-            <button className="secondary-button profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><Plus size={15} /> Record new donation</button>
+            <button className="profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><span className="profile-donation-button-icon"><Plus size={16} strokeWidth={2.5} /></span> Record new donation</button>
             {record.availability !== "Available" && <small className="profile-action-hint">New donation can be recorded after the next eligible time.</small>}
           </div>
-        </div> : <div className="profile-history-inner"><p className="profile-empty">No blood donations have been recorded yet.</p><div className="profile-history-footer"><button className="secondary-button profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><Plus size={15} /> Record new donation</button></div></div>}</div></div></div>
+        </div> : <div className="profile-history-inner"><p className="profile-empty">No blood donations have been recorded yet.</p><div className="profile-history-footer"><button className="profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><span className="profile-donation-button-icon"><Plus size={16} strokeWidth={2.5} /></span> Record new donation</button></div></div>}</div></div></div>
       </section>
     </div>
   );

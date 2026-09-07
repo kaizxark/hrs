@@ -128,6 +128,13 @@ export function useRecordDonation() {
   });
 }
 
+// Update an existing verified profile (edit personal details, blood group, donor consent)
+export function useUpdateProfile() {
+  return trpc.hrs.updateProfile.useMutation({
+    retry: 1,
+  });
+}
+
 // Helper to convert API profile to AdminRecord
 export function convertApiProfileToAdminRecord(profile: Profile): {
   id: string | null;
@@ -225,14 +232,14 @@ export function convertApiProfileToAdminRecord(profile: Profile): {
     }
   }
 
-  // Availability
-  const availability = availabilityStatus.toLowerCase().includes("available")
-    ? "Available"
-    : availabilityStatus.toLowerCase().includes("unavailable")
-      ? "Unavailable"
-      : donorConsent
-        ? "Available"
-        : "Unavailable";
+  // Availability is computed against the actual next-eligible date, not the
+  // sheet's status string — Apps Script may not have run by the time the
+  // optimistic UI is rendered, so we trust the timestamp.
+  const nextEligibleMs = nextEligibleAt ? Date.parse(nextEligibleAt) : null;
+  const isEligibleNow = nextEligibleMs === null || nextEligibleMs <= Date.now();
+  const availability = isEligibleNow
+    ? (donorConsent ? "Available" : "Unavailable")
+    : "Unavailable";
 
   // Public visibility
   const publicVisible = Boolean(

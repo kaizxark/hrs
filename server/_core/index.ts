@@ -8,6 +8,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { startProfilePoller, addBroadcaster, removeBroadcaster } from "./googleSheetsApi";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -29,6 +30,10 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // Start the Google Sheets profile poller in the background.
+  // First fetch is blocking; subsequent fetches run every 5 seconds.
+  await startProfilePoller();
+
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
@@ -36,6 +41,29 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+
+  // SSE endpoint — pushes a notification to admin clients every time the
+  // server's profile cache is refreshed (every ~6s by the background poller).
+  app.get("/api/sync-events", (req, res) => {
+    res.set({
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    res.flushHeaders?.();
+    // Send an initial comment so the client knows the connection is open
+    res.write(": connected\n\n");
+    const send = (data: string) => res.write(data);
+    addBroadcaster(send);
+    // Heartbeat to keep the connection alive through proxies
+    const heartbeat = setInterval(() => res.write(": ping\n\n"), 15_000);
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      removeBroadcaster(send);
+    });
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

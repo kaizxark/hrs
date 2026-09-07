@@ -1,10 +1,20 @@
 /**
  * HRS Data Router
  * Server-side routes for HRS data operations
+ *
+ * Read path:  Google Sheets CSV (via googleSheetsApi) — fast, auto-refreshed every 15s
+ * Write path: Google Apps Script API — called only on mutations (verify, donate, delete)
  */
 import { z } from "zod";
-import { adminProcedure, publicProcedure, router } from "./trpc";
+import { publicProcedure, router } from "./trpc";
 import * as gasApi from "./googleAppsScriptApi";
+import {
+  forceRefresh,
+  getCachedAdminRecords,
+  getCachedProfiles,
+  getCachedPublicProfiles,
+  getCachedStatistics,
+} from "./googleSheetsApi";
 
 export const hrsRouter = router({
   // Health check
@@ -13,36 +23,43 @@ export const hrsRouter = router({
     return result;
   }),
 
-  // Get all profiles
+  // Get admin records — pre-converted to the shape Admin.tsx uses.
+  // Smaller payload, so SSE-triggered refetches land in <200ms.
   profiles: publicProcedure.query(async () => {
-    const result = await gasApi.getProfiles(true);
-    return result;
+    return getCachedAdminRecords();
   }),
 
-  // Force-refresh profiles from Google Sheets, bypassing the cache
+  // Force-refresh profiles from Google Sheets now
   syncProfiles: publicProcedure.mutation(async () => {
-    const result = await gasApi.syncProfiles();
-    return result;
+    await forceRefresh();
+    return getCachedAdminRecords();
   }),
 
   // Get single profile by HRS ID
   profile: publicProcedure
     .input(z.object({ hrsId: z.string() }))
     .query(async ({ input }) => {
-      const result = await gasApi.getProfileById(input.hrsId);
-      return result;
+      const all = getCachedProfiles();
+      if (!all.success || !all.data) {
+        return { success: false, error: "Profiles not loaded" };
+      }
+      const found = all.data.profiles.find(
+        p => (p["HRS ID"] ?? "").trim() === input.hrsId.trim()
+      );
+      if (!found) {
+        return { success: false, error: "Profile not found" };
+      }
+      return { success: true, data: found };
     }),
 
   // Get public profiles (public - filtered by backend)
   publicProfiles: publicProcedure.query(async () => {
-    const result = await gasApi.getPublicProfiles();
-    return result;
+    return getCachedPublicProfiles();
   }),
 
   // Get statistics
   statistics: publicProcedure.query(async () => {
-    const result = await gasApi.getStatistics();
-    return result;
+    return getCachedStatistics();
   }),
 
   // Send verification email to a donor
@@ -68,9 +85,6 @@ export const hrsRouter = router({
         input.bloodGroup,
         input.donorConsent
       );
-      if (result.success) {
-        gasApi.invalidateProfilesCache();
-      }
       return result;
     }),
 
@@ -87,9 +101,6 @@ export const hrsRouter = router({
         input.hrsId,
         input.donationTime
       );
-      if (result.success) {
-        gasApi.invalidateProfilesCache();
-      }
       return result;
     }),
 
@@ -102,10 +113,37 @@ export const hrsRouter = router({
     )
     .mutation(async ({ input }) => {
       const result = await gasApi.deleteProfiles(input.hrsIds);
-      if (result.success) {
-        // Invalidate cache so the next read fetches fresh data
-        gasApi.invalidateProfilesCache();
-      }
+      return result;
+    }),
+
+  // Update an existing verified profile (edit personal details, blood group, donor consent)
+  updateProfile: publicProcedure
+    .input(
+      z.object({
+        hrsId: z.string(),
+        name: z.string().optional(),
+        dob: z.string().optional(),
+        gender: z.string().optional(),
+        mobile: z.string().optional(),
+        email: z.string().optional(),
+        city: z.string().optional(),
+        area: z.string().optional(),
+        bloodGroup: z.string().optional(),
+        donorConsent: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const result = await gasApi.updateProfile(input.hrsId, {
+        name: input.name,
+        dob: input.dob,
+        gender: input.gender,
+        mobile: input.mobile,
+        email: input.email,
+        city: input.city,
+        area: input.area,
+        bloodGroup: input.bloodGroup,
+        donorConsent: input.donorConsent,
+      });
       return result;
     }),
 });

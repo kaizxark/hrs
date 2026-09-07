@@ -1,26 +1,19 @@
 /**
  * Google Apps Script API Service
- * Handles all communication with the HRS Google Apps Script backend
+ * Handles all communication with the HRS Google Apps Script backend.
+ *
+ * Reads (profiles, statistics) now go through googleSheetsApi which polls the
+ * public CSV export directly. This file is left as the write-path only:
+ * verify, updateProfile, recordDonation, deleteProfiles, sendVerificationEmail, ping.
  */
 import { ENV } from "./env";
 
 const API_BASE_URL = ENV.googleAppsScriptUrl;
 
-// In-memory cache for profiles (30-second TTL)
-interface CacheEntry<T> {
-  data: T;
-  fetchedAt: number;
-}
-
-const profilesCache: CacheEntry<ApiResponse<ProfilesResponse>> = {
-  data: { success: false },
-  fetchedAt: 0,
-};
-const CACHE_TTL_MS = 30_000; // 30 seconds
-
-// Invalidate the profiles cache (call after mutations that modify the sheet)
+// Kept as a no-op for backward compatibility — the sheet poller always
+// re-reads from Google Sheets every 15s, so no invalidation is needed.
 export function invalidateProfilesCache() {
-  profilesCache.fetchedAt = 0;
+  /* no-op */
 }
 
 export interface ApiResponse<T = unknown> {
@@ -143,13 +136,21 @@ async function postApi<T>(
   body: Record<string, string>
 ): Promise<ApiResponse<T>> {
   try {
+    // Apps Script's doPost(e) reads e.parameter, which is populated from
+    // form-urlencoded bodies. We use URLSearchParams so the values arrive
+    // as individual query-like parameters that Apps Script can read directly.
+    const formBody = new URLSearchParams();
+    for (const [key, value] of Object.entries(body)) {
+      formBody.append(key, value);
+    }
+
     const response = await fetch(API_BASE_URL, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
         Accept: "application/json",
       },
-      body: JSON.stringify(body),
+      body: formBody.toString(),
     });
 
     if (!response.ok) {
@@ -159,18 +160,35 @@ async function postApi<T>(
       };
     }
 
-    const data = await response.json();
+    const text = await response.text();
+
+    // Apps Script's ContentService returns a plain-text JSON string.
+    // Follow redirects manually (Apps Script may redirect to an auth page on
+    // first deploy, or return a redirect response we need to follow).
+    if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
+      return {
+        success: false,
+        error: "Apps Script returned an HTML page — is the web-app deployment set to 'Anyone' (not 'Only myself')?",
+      };
+    }
+
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return { success: false, error: "Apps Script returned invalid JSON: " + text.slice(0, 200) };
+    }
 
     if (data.success === false || data.status === "error") {
       return {
         success: false,
-        error: data.message || data.error || "Unknown error",
+        error: (data.message as string) || (data.error as string) || "Unknown error",
       };
     }
 
     return {
       success: true,
-      data: data.data || data,
+      data: (data.data as T) || (data as T),
     };
   } catch (error) {
     console.error(`Google Apps Script API POST error (${action}):`, error);
@@ -186,102 +204,12 @@ export async function ping(): Promise<ApiResponse<{ message: string }>> {
   return callApi<{ message: string }>("ping");
 }
 
-// Fetch profiles from Google Apps Script (reads live sheet, always up-to-date)
-async function getProfilesFromSheet(): Promise<ApiResponse<ProfilesResponse>> {
-  try {
-    const url = new URL(API_BASE_URL);
-    url.searchParams.set("action", "profiles");
-    url.searchParams.set("t", Date.now().toString());
-
-    const response = await fetch(url.toString(), {
-      cache: "no-store",
-      headers: { Accept: "application/json" },
-    });
-
-    if (!response.ok) {
-      return {
-        success: false,
-        error: `Google Apps Script responded with ${response.status}`,
-      };
-    }
-
-    const data = await response.json();
-
-    if (data.success === false) {
-      return { success: false, error: data.error || "Apps Script error" };
-    }
-
-    // Apps Script returns { success: true, data: [...] }
-    const rawProfiles = Array.isArray(data.data) ? data.data : [];
-
-    const profiles: Profile[] = rawProfiles.map((row: Record<string, unknown>) => {
-      const profile: Profile = {};
-      for (const [key, value] of Object.entries(row)) {
-        if (key === "sheet_row") continue;
-        profile[key] = value instanceof Date ? value.toISOString() : (value != null ? String(value) : "");
-      }
-      return profile;
-    });
-
-    return { success: true, data: { profiles, count: profiles.length } };
-  } catch (error) {
-    console.error("Error fetching profiles from Apps Script:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Network error",
-    };
-  }
-}
-
-// Get all profiles (for admin) — reads directly from Google Sheet CSV, uses cache by default
-export async function getProfiles(
-  useCache = true
-): Promise<ApiResponse<ProfilesResponse>> {
-  if (
-    useCache &&
-    profilesCache.fetchedAt &&
-    Date.now() - profilesCache.fetchedAt < CACHE_TTL_MS
-  ) {
-    return profilesCache.data;
-  }
-  const result = await getProfilesFromSheet();
-  profilesCache.data = result;
-  profilesCache.fetchedAt = Date.now();
-  return result;
-}
-
-// Force-refresh profiles, bypassing the cache
-export async function syncProfiles(): Promise<ApiResponse<ProfilesResponse>> {
-  return getProfiles(false);
-}
-
-// Get single profile by HRS ID
-export async function getProfileById(
-  hrsId: string
-): Promise<ApiResponse<Profile>> {
-  return callApi<Profile>("profile", { hrs_id: hrsId });
-}
-
-// Get public donor directory
-export async function getPublicProfiles(): Promise<
-  ApiResponse<{ profiles: PublicProfile[]; count: number }>
-> {
-  return callApi<{ profiles: PublicProfile[]; count: number }>(
-    "public_profiles"
-  );
-}
-
-// Get statistics
-export async function getStatistics(): Promise<ApiResponse<Statistics>> {
-  return callApi<Statistics>("statistics");
-}
-
 // Verify profile (admin only - requires secret)
 export async function verifyProfile(
   hrsId: string,
   bloodGroup: string,
   donorConsent: string
-): Promise<ApiResponse<{ message: string }>> {
+): Promise<ApiResponse<{ message: string; hrs_id: string; blood_group: string; donor_consent: string }>> {
   if (!ENV.googleAppsScriptSecret) {
     return {
       success: false,
@@ -289,7 +217,7 @@ export async function verifyProfile(
     };
   }
 
-  return postApi<{ message: string }>("verify_profile", {
+  return postApi<{ message: string; hrs_id: string; blood_group: string; donor_consent: string }>("verify_profile", {
     action: "verify_profile",
     api_secret: ENV.googleAppsScriptSecret,
     hrs_id: hrsId,
@@ -338,6 +266,49 @@ export async function deleteProfiles(
     api_secret: ENV.googleAppsScriptSecret,
     hrs_ids: JSON.stringify(hrsIds),
   });
+}
+
+// Update an existing profile (admin only). The Apps Script action is `update_profile`
+// and accepts the editable fields: name, dob, gender, mobile, email, city, area,
+// blood_group, donor_consent. Storage consent is intentionally not editable here —
+// it is recorded at registration time and verified.
+export async function updateProfile(
+  hrsId: string,
+  fields: {
+    name?: string;
+    dob?: string;
+    gender?: string;
+    mobile?: string;
+    email?: string;
+    city?: string;
+    area?: string;
+    bloodGroup?: string;
+    donorConsent?: string;
+  }
+): Promise<ApiResponse<{ message: string }>> {
+  if (!ENV.googleAppsScriptSecret) {
+    return { success: false, error: "API secret not configured" };
+  }
+
+  // Build the payload — only include keys with non-empty values so the Apps
+  // Script can leave untouched fields alone.
+  const body: Record<string, string> = {
+    action: "update_profile",
+    api_secret: ENV.googleAppsScriptSecret,
+    hrs_id: hrsId,
+  };
+
+  if (fields.name !== undefined) body.full_name = fields.name;
+  if (fields.dob !== undefined) body.date_of_birth = fields.dob;
+  if (fields.gender !== undefined) body.gender = fields.gender;
+  if (fields.mobile !== undefined) body.phone_number = fields.mobile;
+  if (fields.email !== undefined) body.email = fields.email;
+  if (fields.city !== undefined) body.city = fields.city;
+  if (fields.area !== undefined) body.area = fields.area;
+  if (fields.bloodGroup !== undefined) body.blood_group = fields.bloodGroup;
+  if (fields.donorConsent !== undefined) body.donor_consent = fields.donorConsent;
+
+  return postApi<{ message: string }>("update_profile", body);
 }
 
 // Send verification email to a donor after they are verified
