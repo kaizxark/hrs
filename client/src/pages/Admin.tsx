@@ -47,6 +47,7 @@ import {
   Search,
   Settings2,
   ShieldCheck,
+  Trash2,
   UserRound,
   Users,
   X,
@@ -128,11 +129,11 @@ function formatShortDate(value: string | null | undefined) {
 }
 
 function formatAge(dateOfBirth: string | null | undefined): string {
-  if (!dateOfBirth || dateOfBirth === "Not recorded") return "—";
+  if (!dateOfBirth || dateOfBirth === "Not recorded") return "";
   const date = new Date(dateOfBirth);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "";
   const age = Math.floor((Date.now() - date.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-  return age > 0 ? `${age} years` : "—";
+  return age > 0 ? `(${age})` : "";
 }
 
 const statisticsColors = [
@@ -431,7 +432,9 @@ export default function Admin() {
   const [indiaTime, setIndiaTime] = useState("");
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncRequested, setSyncRequested] = useState(0);
+  const [deleteMode, setDeleteMode] = useState(false);
+  const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const openRecord = (record: AdminRecord, origin?: ModalOrigin) => {
     setSelectedOrigin(origin ?? null);
@@ -455,6 +458,11 @@ export default function Admin() {
   useEffect(() => {
     if (!loggedIn) clearAdminSession();
   }, [loggedIn]);
+
+  useEffect(() => {
+    // Reset delete selection when the records list changes
+    setSelectedForDelete(new Set());
+  }, [records]);
 
   useEffect(() => {
     if (!loggedIn) return;
@@ -494,12 +502,8 @@ export default function Admin() {
       setIndiaTime(time);
       const timeEl = document.querySelector(".top-sync-time");
       const dateEl = document.querySelector(".top-sync-date");
-      const sidebarTimeEl = document.querySelector(".sidebar-clock-time");
-      const sidebarDateEl = document.querySelector(".sidebar-clock-date");
       if (timeEl) timeEl.textContent = time;
       if (dateEl) dateEl.textContent = date;
-      if (sidebarTimeEl) sidebarTimeEl.textContent = time;
-      if (sidebarDateEl) sidebarDateEl.textContent = date;
       const heading = document.querySelector(".admin-page-heading h1");
       if (heading && activeView === "overview")
         heading.textContent = `${greeting}, Admin.`;
@@ -546,6 +550,77 @@ export default function Admin() {
     refetchOnWindowFocus: false,
     staleTime: 30000,
     retry: 2,
+  });
+
+  const verifyMutation = trpc.hrs.verifyProfile.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success("Profile verified successfully!");
+        profilesQuery.refetch();
+      } else {
+        toast.error(result.error || "Failed to verify profile");
+      }
+    },
+    onError: (error) => {
+      toast.error(`Verification failed: ${error.message}`);
+    },
+  });
+
+  const recordDonationMutation = trpc.hrs.recordDonation.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success("Donation recorded successfully!");
+        profilesQuery.refetch();
+      } else {
+        toast.error(result.error || "Failed to record donation");
+      }
+    },
+    onError: (error) => {
+      toast.error(`Recording failed: ${error.message}`);
+    },
+  });
+
+  const syncProfilesMutation = trpc.hrs.syncProfiles.useMutation({
+    onSuccess: () => {
+      setLastSyncedAt(new Date());
+      profilesQuery.refetch();
+    },
+    onError: (error) => {
+      toast.error(`Sync failed: ${error.message}`);
+    },
+  });
+
+  const deleteProfilesMutation = trpc.hrs.deleteProfiles.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        toast.success(`${result.deleted} record${result.deleted === 1 ? "" : "s"} deleted.`);
+        setSelectedForDelete(new Set());
+        setDeleteMode(false);
+        profilesQuery.refetch();
+        setLastSyncedAt(new Date());
+      } else {
+        toast.error(result.error || "Failed to delete records");
+      }
+    },
+    onError: (error) => {
+      toast.error(`Delete failed: ${error.message}`);
+    },
+  });
+
+  const sendVerificationEmailMutation = trpc.hrs.sendVerificationEmail.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        if ((result as { skipped?: boolean }).skipped) {
+          // No email on file — silent, don't bother the admin
+        } else {
+          toast.success("Verification email sent!");
+        }
+      }
+    },
+    onError: (error) => {
+      // Email failure is non-blocking — profile was saved, just email failed
+      console.warn("Email send failed:", error.message);
+    },
   });
 
   // Convert API profiles to AdminRecord format
@@ -629,10 +704,16 @@ export default function Admin() {
 
   // Sync trigger effect
   useEffect(() => {
-    if (syncRequested > 0) {
-      profilesQuery.refetch();
-    }
-  }, [syncRequested, profilesQuery]);
+    setIsSyncing(
+      profilesQuery.isFetching ||
+        profilesQuery.isLoading ||
+        syncProfilesMutation.isPending
+    );
+  }, [
+    profilesQuery.isFetching,
+    profilesQuery.isLoading,
+    syncProfilesMutation.isPending,
+  ]);
 
   const pending = records.filter(record => record.status === "Pending");
   const donors = records.filter(record => record.donorConsent);
@@ -750,7 +831,7 @@ export default function Admin() {
       />
     );
 
-  const saveRecord = (record: AdminRecord, group: string, donationConsent: boolean | null, onSuccess?: (id: string) => void) => {
+  const saveRecord = async (record: AdminRecord, group: string, donationConsent: boolean | null, onSuccess?: (id: string) => void) => {
     if (!group || group === "—") {
       toast.error("Enter a blood group before saving.");
       return;
@@ -759,26 +840,24 @@ export default function Admin() {
       toast.error("Record blood donation consent as Yes or No before verifying.");
       return;
     }
-    const verifiedAt = new Date().toISOString();
-    const newRecord = {
-      ...record,
-      group,
-      consent: true,
-      consentStatus: "Yes" as const,
-      status: "Verified" as const,
-      availability: donationConsent && (!record.nextEligibleAt || new Date(record.nextEligibleAt) <= new Date())
-        ? "Available" as const
-        : "Unavailable" as const,
-      donorConsent: donationConsent,
-      publicVisible: donationConsent,
-      verifiedAt,
-      id: record.id ?? `HRS-TMK-${String(records.length + 1).padStart(5, "0")}`,
-    };
-    setRecords(current =>
-      current.map(item => (item.name === record.name ? newRecord : item))
-    );
-    toast.success(`${newRecord.id} saved and synced to Google Sheets.`);
-    onSuccess?.(newRecord.id);
+    if (!record.id) {
+      toast.error("Profile HRS ID is missing. Cannot verify.");
+      return;
+    }
+    try {
+      await verifyMutation.mutateAsync({
+        hrsId: record.id,
+        bloodGroup: group,
+        donorConsent: donationConsent ? "YES" : "NO",
+      });
+      // Send verification email (non-blocking — fails silently if no email on file)
+      sendVerificationEmailMutation.mutate({ hrsId: record.id });
+      await profilesQuery.refetch();
+      toast.success(`${record.id} verified successfully!`);
+      onSuccess?.(record.id);
+    } catch (error) {
+      console.error("Verification error:", error);
+    }
   };
 
   return (
@@ -832,7 +911,6 @@ export default function Admin() {
           >
             <Heart size={17} /> Donations
           </button>
-          <span className="admin-nav-label">MANAGEMENT</span>
           <button
             className={activeView === "locations" ? "active" : ""}
             onClick={() => goToView("locations")}
@@ -921,16 +999,14 @@ export default function Admin() {
             <>
               <div className="admin-page-heading">
                 <div>
-                  <span className="eyebrow dark-eyebrow">
-                    THURSDAY, 04 SEP 2026
-                  </span>
+                  <span className="eyebrow dark-eyebrow" id="overview-date"></span>
                   <h1>Good morning, Admin.</h1>
                   <p>Here’s what needs your attention today.</p>
                 </div>
                 <button
                   className="record-sync-button dashboard-sync-button"
                   type="button"
-                  onClick={() => setSyncRequested(value => value + 1)}
+                  onClick={() => syncProfilesMutation.mutate()}
                   disabled={isSyncing}
                   title="Sync records from Google Sheets"
                 >
@@ -1113,9 +1189,21 @@ export default function Admin() {
                   </button>
                 ))}
                 <button
+                  className={`record-delete-toggle${deleteMode ? " active" : ""}`}
+                  type="button"
+                  onClick={() => {
+                    setDeleteMode(value => !value);
+                    setSelectedForDelete(new Set());
+                  }}
+                  title={deleteMode ? "Exit delete mode" : "Select records to delete"}
+                >
+                  <Trash2 size={14} />
+                  {deleteMode ? "Cancel" : "Delete"}
+                </button>
+                <button
                   className="record-sync-button"
                   type="button"
-                  onClick={() => setSyncRequested(value => value + 1)}
+                  onClick={() => syncProfilesMutation.mutate()}
                   disabled={isSyncing}
                   title="Sync records from Google Sheets"
                 >
@@ -1201,6 +1289,22 @@ export default function Admin() {
               </div>
               <section className="admin-card records-table-card">
                 <div className="records-table-head">
+                  {deleteMode && (
+                    <span>
+                      <input
+                        type="checkbox"
+                        checked={selectedForDelete.size === paginatedRecords.length && paginatedRecords.length > 0}
+                        onChange={() => {
+                          if (selectedForDelete.size === paginatedRecords.length) {
+                            setSelectedForDelete(new Set());
+                          } else {
+                            setSelectedForDelete(new Set(paginatedRecords.map(r => r.id ?? r.name)));
+                          }
+                        }}
+                        title="Select all on this page"
+                      />
+                    </span>
+                  )}
                   <span>Person</span>
                   <span>Blood group</span>
                   <span>Location</span>
@@ -1212,6 +1316,16 @@ export default function Admin() {
                     key={`${record.id ?? record.name}-${index}`}
                     record={record}
                     onEdit={origin => openRecord(record, origin)}
+                    deleteMode={deleteMode}
+                    selectedForDelete={selectedForDelete}
+                    onToggleDelete={(id) => {
+                      setSelectedForDelete(prev => {
+                        const next = new Set(prev);
+                        if (next.has(id)) next.delete(id);
+                        else next.add(id);
+                        return next;
+                      });
+                    }}
                   />
                 ))}
                 {currentViewRecords.length === 0 && (
@@ -1259,6 +1373,81 @@ export default function Admin() {
                   </div>
                 )}
               </section>
+              {deleteMode && selectedForDelete.size > 0 && (
+                <div className="delete-selection-bar">
+                  <div className="delete-selection-info">
+                    <Trash2 size={16} />
+                    <span>
+                      <strong>{selectedForDelete.size}</strong> record{selectedForDelete.size === 1 ? "" : "s"} selected
+                    </span>
+                  </div>
+                  <div className="delete-selection-actions">
+                    <button
+                      className="secondary-button"
+                      onClick={() => setSelectedForDelete(new Set())}
+                    >
+                      Clear
+                    </button>
+                    <button
+                      className="primary-button danger-button"
+                      onClick={() => setConfirmDeleteOpen(true)}
+                      disabled={deleteProfilesMutation.isPending}
+                    >
+                      <Trash2 size={15} />
+                      {deleteProfilesMutation.isPending
+                        ? "Deleting..."
+                        : `Delete ${selectedForDelete.size} record${selectedForDelete.size === 1 ? "" : "s"}`}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {confirmDeleteOpen && (
+                <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && setConfirmDeleteOpen(false)}>
+                  <div className="modal-card confirm-delete-modal">
+                    <div className="modal-card-header">
+                      <h2>Delete {selectedForDelete.size} record{selectedForDelete.size === 1 ? "" : "s"}?</h2>
+                      <button className="modal-close" onClick={() => setConfirmDeleteOpen(false)}><X size={18} /></button>
+                    </div>
+                    <div className="modal-card-body">
+                      <p>
+                        This will permanently remove {selectedForDelete.size} record{selectedForDelete.size === 1 ? "" : "s"} from the HRS Google Sheet. This action cannot be undone.
+                      </p>
+                      <div className="confirm-delete-list">
+                        {Array.from(selectedForDelete).slice(0, 5).map(id => {
+                          const r = records.find(rec => (rec.id ?? rec.name) === id);
+                          return r ? (
+                            <div key={id} className="confirm-delete-item">
+                              <div className="mini-avatar small">{r.initials}</div>
+                              <div>
+                                <strong>{r.name}</strong>
+                                <span>{r.id} · {r.location}</span>
+                              </div>
+                            </div>
+                          ) : null;
+                        })}
+                        {selectedForDelete.size > 5 && (
+                          <div className="confirm-delete-more">+ {selectedForDelete.size - 5} more</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="modal-card-footer">
+                      <button className="secondary-button" onClick={() => setConfirmDeleteOpen(false)}>Cancel</button>
+                      <button
+                        className="primary-button danger-button"
+                        onClick={() => {
+                          const ids = Array.from(selectedForDelete);
+                          deleteProfilesMutation.mutate({ hrsIds: ids });
+                          setConfirmDeleteOpen(false);
+                        }}
+                        disabled={deleteProfilesMutation.isPending}
+                      >
+                        <Trash2 size={15} />
+                        {deleteProfilesMutation.isPending ? "Deleting..." : "Delete permanently"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <WorkspaceView
@@ -1278,6 +1467,8 @@ export default function Admin() {
           origin={selectedOrigin}
           onClose={() => { setSelected(null); setSelectedOrigin(null); }}
           onSave={saveRecord}
+          setRecordingDonation={setRecordingDonation}
+          setDonationDateTime={setDonationDateTime}
         />
       )}
       {addOpen && (
@@ -1306,7 +1497,61 @@ export default function Admin() {
         <DonationDetailModal
           record={selectedDonation}
           onClose={() => { setDonationDetailOpen(false); setSelectedDonation(null); }}
+          setRecordingDonation={setRecordingDonation}
+          setDonationDateTime={setDonationDateTime}
         />
+      )}
+      {recordingDonation && (
+        <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && setRecordingDonation(null)}>
+          <div className="modal-card donation-record-modal">
+            <div className="donation-record-header">
+              <h2>Record Donation</h2>
+              <button className="modal-close" onClick={() => setRecordingDonation(null)}><X size={18} /></button>
+            </div>
+            <div className="donation-record-content">
+              <div className="donation-record-donor">
+                <div className="donor-avatar">{recordingDonation.initials}</div>
+                <div>
+                  <strong>{recordingDonation.name}</strong>
+                  <span>{recordingDonation.id} · {recordingDonation.group}</span>
+                </div>
+              </div>
+              <div className="donation-record-form">
+                <label className="admin-field">
+                  <span>Donation Date &amp; Time</span>
+                  <input
+                    type="datetime-local"
+                    className="plain-input"
+                    value={donationDateTime}
+                    onChange={e => setDonationDateTime(e.target.value)}
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="donation-record-actions">
+              <button className="secondary-button" onClick={() => setRecordingDonation(null)}>Cancel</button>
+              <button
+                className="primary-button"
+                disabled={!donationDateTime || !recordingDonation.id || recordDonationMutation.isPending}
+                onClick={async () => {
+                  if (!recordingDonation.id || !donationDateTime) return;
+                  try {
+                    await recordDonationMutation.mutateAsync({
+                      hrsId: recordingDonation.id,
+                      donationTime: new Date(donationDateTime).toISOString(),
+                    });
+                    await profilesQuery.refetch();
+                    setRecordingDonation(null);
+                  } catch (error) {
+                    console.error("Failed to record donation:", error);
+                  }
+                }}
+              >
+                {recordDonationMutation.isPending ? "Recording..." : "Record Donation"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1343,7 +1588,25 @@ function WorkspaceView({
             <span>Recorded</span>
           </div>
           {donors.slice(0, 30).map(record => (
-            <div className="records-table-row" key={record.name}>
+            <div
+              className="records-table-row records-table-row-clickable"
+              key={record.name}
+              role="button"
+              tabIndex={0}
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent("openDonationDetail", { detail: record }),
+                )
+              }
+              onKeyDown={event => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  window.dispatchEvent(
+                    new CustomEvent("openDonationDetail", { detail: record }),
+                  );
+                }
+              }}
+            >
               <div className="table-person">
                 <div className="mini-avatar">{record.initials}</div>
                 <div>
@@ -1356,8 +1619,12 @@ function WorkspaceView({
                 <strong>{record.location}</strong>
                 <span>{record.area}</span>
               </div>
-              <span className="table-status verified">
-                <span className="status-dot" /> Available
+              <span
+                className={`table-status ${
+                  record.availability === "Available" ? "verified" : "pending"
+                }`}
+              >
+                <span className="status-dot" /> {record.availability}
               </span>
               <span className="table-date">{record.submitted}</span>
             </div>
@@ -1969,13 +2236,56 @@ function RecordRow({
   record,
   onEdit,
   showSubmitted = true,
+  deleteMode = false,
+  selectedForDelete,
+  onToggleDelete,
 }: {
   record: AdminRecord;
   onEdit: (origin?: ModalOrigin) => void;
   showSubmitted?: boolean;
+  deleteMode?: boolean;
+  selectedForDelete?: Set<string>;
+  onToggleDelete?: (id: string) => void;
 }) {
+  const recordKey = record.id ?? record.name;
+  const isChecked = selectedForDelete?.has(recordKey) ?? false;
+
+  const handleClick = (event: React.MouseEvent) => {
+    if (deleteMode) {
+      event.stopPropagation();
+      onToggleDelete?.(recordKey);
+      return;
+    }
+    onEdit({ x: event.clientX, y: event.clientY });
+  };
+
   return (
-    <div className="records-table-row profile-row-clickable" onClick={event => onEdit({ x: event.clientX, y: event.clientY })} role="button" tabIndex={0} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") onEdit(); }}>
+    <div
+      className={`records-table-row profile-row-clickable${deleteMode ? " delete-mode" : ""}${isChecked ? " selected-for-delete" : ""}`}
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={event => {
+        if (event.key === "Enter" || event.key === " ") {
+          if (deleteMode) {
+            event.preventDefault();
+            onToggleDelete?.(recordKey);
+          } else {
+            onEdit();
+          }
+        }
+      }}
+    >
+      {deleteMode && (
+        <div className="table-checkbox">
+          <input
+            type="checkbox"
+            checked={isChecked}
+            onChange={() => onToggleDelete?.(recordKey)}
+            onClick={event => event.stopPropagation()}
+          />
+        </div>
+      )}
       <div className="table-person">
         <div className="mini-avatar">{record.initials}</div>
         <div>
@@ -2009,11 +2319,15 @@ function RecordModal({
   origin,
   onClose,
   onSave,
+  setRecordingDonation,
+  setDonationDateTime,
 }: {
   record: AdminRecord;
   origin: ModalOrigin | null;
   onClose: () => void;
   onSave: (record: AdminRecord, group: string, donationConsent: boolean | null, onSuccess?: (id: string) => void) => void;
+  setRecordingDonation: (record: AdminRecord | null) => void;
+  setDonationDateTime: (dateTime: string) => void;
 }) {
   const profileWindowRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -2071,7 +2385,7 @@ function RecordModal({
       onMouseDown={event => event.target === event.currentTarget && onClose()}
     >
       <section ref={profileWindowRef} className="admin-modal profile-modal" role="dialog" aria-modal="true">
-        {saveState === "success" ? <div className="profile-save-success"><div className="profile-success-icon"><Check size={24} /></div><span className="profile-section-kicker">{isPending ? "Verification complete" : "Changes saved"}</span><h2>{isPending ? "Profile verified" : "Profile updated"}</h2><p>{isPending ? `HRS ID <strong>${savedId}</strong> has been generated successfully.` : "All changes have been saved successfully."}</p><button className="primary-button" onClick={onClose}>Back to Records <ArrowRight size={16} /></button></div> : <>
+        {saveState === "success" ? <div className="profile-save-success"><div className="profile-success-icon"><Check size={24} /></div><span className="profile-section-kicker">{isPending ? "Verification complete" : "Changes saved"}</span><h2>{isPending ? "Profile verified & email sent" : "Profile updated"}</h2><p>{isPending ? <>HRS ID <strong>{savedId}</strong> has been verified and a confirmation email has been sent to the donor.</> : "All changes have been saved successfully."}</p><button className="primary-button" onClick={onClose}>Back to Records <ArrowRight size={16} /></button></div> : <>
         <div className="profile-topline">
           <button className="profile-back-button" onClick={onClose}><ArrowLeft size={15} /> Back to Records</button>
           {!isPending && <button className="secondary-button profile-top-edit" onClick={() => { setMode("edit"); setSaveState("idle"); setEditName(record.name); setEditDateOfBirth(record.dateOfBirth); setEditGender(record.gender); setEditMobile(record.mobile); setEditEmail(record.email); setEditArea(record.area); setEditLocation(record.location); }}><Edit3 size={14} /> Edit</button>}
@@ -2102,7 +2416,7 @@ function RecordModal({
         </div>
 
         <div className="profile-detail-section profile-personal-section"><h3><UserRound size={15} /> Personal information</h3><div className="profile-detail-grid">
-          {mode === "edit" ? <div className="profile-detail-row profile-detail-top-row"><div><span>Full name</span><input className="plain-input" value={editName} onChange={e => setEditName(e.target.value)} /></div><div><span>Date of birth</span><input type="date" className="plain-input" value={editDateOfBirth} onChange={e => setEditDateOfBirth(e.target.value)} /></div><div><span>Gender</span><select className="plain-input" value={editGender} onChange={e => setEditGender(e.target.value)} style={{ appearance: 'none', cursor: 'pointer' }}>{["Male", "Female", "Other"].map(g => <option key={g} value={g}>{g}</option>)}</select></div><div><span>Mobile number</span><input className="plain-input" value={editMobile} onChange={e => setEditMobile(e.target.value)} /></div></div> : <div className="profile-detail-row profile-detail-top-row"><div><span>Full name</span><strong>{record.name}</strong></div><div><span>Date of birth</span><strong>{record.dateOfBirth} ({record.age})</strong></div><div><span>Gender</span><strong>{record.gender}</strong></div><div><span>Mobile number</span><strong>{record.mobile}</strong></div></div>}
+          {mode === "edit" ? <div className="profile-detail-row profile-detail-top-row"><div><span>Full name</span><input className="plain-input" value={editName} onChange={e => setEditName(e.target.value)} /></div><div><span>Date of birth</span><input type="date" className="plain-input" value={editDateOfBirth.includes("T") ? editDateOfBirth.slice(0, 10) : editDateOfBirth} onChange={e => setEditDateOfBirth(e.target.value)} /></div><div><span>Gender</span><select className="plain-input" value={editGender} onChange={e => setEditGender(e.target.value)} style={{ appearance: 'none', cursor: 'pointer' }}>{["Male", "Female", "Other"].map(g => <option key={g} value={g}>{g}</option>)}</select></div><div><span>Mobile number</span><input className="plain-input" value={editMobile} onChange={e => setEditMobile(e.target.value)} /></div></div> : <div className="profile-detail-row profile-detail-top-row"><div><span>Full name</span><strong>{record.name}</strong></div><div><span>Date of birth</span><strong>{formatShortDate(record.dateOfBirth)} · {formatAge(record.dateOfBirth)}</strong></div><div><span>Gender</span><strong>{record.gender}</strong></div><div><span>Mobile number</span><strong>{record.mobile}</strong></div></div>}
           {mode === "edit" ? <div className="profile-detail-row profile-detail-bottom-row"><div className="profile-email-field"><span>Email</span><input className="plain-input" value={editEmail} onChange={e => setEditEmail(e.target.value)} /></div><div><span>Address / area</span><select className="plain-input" value={editArea} onChange={e => setEditArea(e.target.value)} style={{ appearance: 'none', cursor: 'pointer' }}>{["Tumkur City", "Ashok Nagar", "SIT", "Kyathsandra", "Gulur", "Gubbi Gate", "SS Puram", "Other"].map(a => <option key={a} value={a}>{a}</option>)}</select></div><div><span>City</span><select className="plain-input" value={editLocation} onChange={e => setEditLocation(e.target.value)} style={{ appearance: 'none', cursor: 'pointer' }}>{["Tumkur", "Bangalore", "Hassan", "Other"].map(c => <option key={c} value={c}>{c}</option>)}</select></div></div> : <div className="profile-detail-row profile-detail-bottom-row"><div className="profile-email-field"><span>Email</span><strong>{record.email}</strong></div><div><span>Address / area</span><strong>{record.area}</strong></div><div><span>City</span><strong>{record.location}</strong></div></div>}
         </div></div>
 
@@ -2137,11 +2451,11 @@ function RecordModal({
                   setTimeout(() => setMode("view"), 1000);
                 });
               }
-            }}>{isPending ? "Verify & generate HRS ID" : "Save changes"} <ArrowRight size={16} /></button>
+            }}>{isPending ? "Save & Email" : "Save changes"} <ArrowRight size={16} /></button>
             <div style={{ alignSelf: "stretch", display: "flex", alignItems: "flex-end" }}>{!isPending && <button className="profile-cancel-edit" onClick={() => { setMode("view"); setEditName(record.name); setEditDateOfBirth(record.dateOfBirth); setEditGender(record.gender); setEditMobile(record.mobile); setEditEmail(record.email); setEditArea(record.area); setEditLocation(record.location); }}>Cancel</button>}</div>
           </div>
         </div></> : record.donorConsent === false ? <div className="profile-detail-section profile-disabled-section"><h3>Donation status</h3><div className="profile-disabled-grid"><div><span>Blood donation consent</span><strong>No</strong></div><div><span>Public donor visibility</span><strong>Hidden</strong></div><div><span>Donation tracking</span><strong>Disabled</strong></div><div><span>Blood donation count</span><strong>Not applicable</strong></div></div></div> : <>
-          <div className="profile-detail-section profile-donation-section"><h3><Droplets size={15} /> Donation summary</h3><div className="profile-donation-summary"><div className="profile-summary-stat"><span>Total donations</span><strong>{record.donationCount}</strong><small>Recorded donations</small></div><div className="profile-summary-stat"><span>Last donation</span><strong>{hasDonationHistory ? formatRecordDate(lastDonation) : "Not yet donated"}</strong><small>{hasDonationHistory ? "Most recent record" : "No donation history yet"}</small></div><div className="profile-summary-stat"><span>Next eligible</span><strong>{record.nextEligibleAt ? formatRecordDate(record.nextEligibleAt) : "Eligible now"}</strong><small>{record.nextEligibleAt ? "Recovery window" : "Ready to donate"}</small></div><div className={`profile-readiness ${record.availability === "Unavailable" ? "unavailable" : ""}`}><span>{record.availability === "Available" ? <Check size={18} /> : <Clock3 size={18} />}</span><div><small>Current status</small><strong>{statusLabel}</strong><em>{record.availability === "Available" ? "No eligibility restrictions" : `New donation after ${formatShortDate(record.nextEligibleAt)}`}</em></div></div></div><div className="profile-public-status">● {record.publicVisible ? "Visible publicly" : "Not visible publicly"}</div></div>
+          <div className="profile-detail-section profile-donation-section"><h3><Droplets size={15} /> Donation summary</h3><div className="profile-donation-summary"><div className="profile-summary-stat"><span>Total donations</span><strong>{record.donationCount}</strong></div><div className="profile-summary-stat"><span>Last donation</span><strong>{hasDonationHistory ? formatRecordDate(lastDonation) : "Not yet donated"}</strong></div><div className="profile-summary-stat"><span>Next eligible</span><strong>{record.nextEligibleAt ? formatRecordDate(record.nextEligibleAt) : "Eligible now"}</strong></div><div className={`profile-readiness ${record.availability === "Unavailable" ? "unavailable" : ""}`}><span>{record.availability === "Available" ? <Check size={18} /> : <Clock3 size={18} />}</span><div><strong>{statusLabel}</strong></div></div></div><div className="profile-public-status">● {record.publicVisible ? "Visible publicly" : "Not visible publicly"}</div></div>
           <div className={`profile-history-section${historyOpen ? " open" : " collapsed"}`}><div className="profile-history-heading"><h3><Droplets size={15} /> Donation history</h3><button type="button" className="profile-history-toggle" onClick={() => setHistoryOpen(open => !open)} aria-expanded={historyOpen}>{historyOpen ? "Hide" : "View"}<ChevronDown size={15} /></button></div><div className="profile-history-panel"><div className="profile-history-inner">{record.donationDates.length ? <div className="profile-history">
             <div className="profile-history-head">
               <span>Donation</span>
@@ -2174,10 +2488,10 @@ function RecordModal({
             );
           })}
             <div className="profile-history-footer">
-              <button className="secondary-button profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => toast.info("Donation recording will be connected to the HRS sheet next.")}><Plus size={15} /> Record new donation</button>
+              <button className="secondary-button profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><Plus size={15} /> Record new donation</button>
               {record.availability !== "Available" && <small className="profile-action-hint">New donation can be recorded after the next eligible time.</small>}
             </div>
-            </div> : <div className="profile-history-inner"><p className="profile-empty">No blood donations have been recorded yet.</p><div className="profile-history-footer"><button className="secondary-button profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => toast.info("Donation recording will be connected to the HRS sheet next.")}><Plus size={15} /> Record new donation</button></div></div>}</div></div></div>
+            </div> : <div className="profile-history-inner"><p className="profile-empty">No blood donations have been recorded yet.</p><div className="profile-history-footer"><button className="secondary-button profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><Plus size={15} /> Record new donation</button></div></div>}</div></div></div>
         </>}
         {!isPending && mode === "view" && <div className={`profile-activity-section${activityOpen ? " open" : " collapsed"}`}><div className="profile-activity-heading"><div><h3><History size={15} /> Activity timeline</h3><span>{activityEvents.length} recorded events</span></div><button type="button" className="profile-activity-toggle" onClick={() => setActivityOpen(open => !open)} aria-expanded={activityOpen} aria-controls={`activity-${record.id || record.name}`}>{activityOpen ? "Hide activity" : "View activity"}<ChevronDown size={15} /></button></div><div className="profile-activity-panel" id={`activity-${record.id || record.name}`} aria-hidden={!activityOpen}><div className="profile-activity-timeline">{activityEvents.map((event, index) => <div key={`${event.date}-${event.label}-${index}`}><span className="profile-activity-dot" /><div><b>{formatShortDate(event.date)}</b><span>{event.label}</span></div></div>)}</div></div></div>}
         </>}
@@ -2313,113 +2627,90 @@ function AddPersonModal({
 function DonationDetailModal({
   record,
   onClose,
+  setRecordingDonation,
+  setDonationDateTime,
 }: {
   record: AdminRecord;
   onClose: () => void;
+  setRecordingDonation: (record: AdminRecord | null) => void;
+  setDonationDateTime: (dateTime: string) => void;
 }) {
+  const hasDonationHistory = record.donationCount > 0 && record.donationDates.length > 0;
+  const lastDonation = record.donationDates.at(-1);
+  const statusLabel = record.availability === "Available" ? "Eligible to donate" : record.nextEligibleAt ? "Temporarily unavailable" : "Eligibility unknown";
+
   return (
     <div
       className="modal-backdrop"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <section className="admin-modal donation-detail-modal" role="dialog" aria-modal="true">
+      <section className="admin-modal profile-modal donation-detail-modal" role="dialog" aria-modal="true">
         <div className="profile-topline">
           <button className="profile-back-button" onClick={onClose}>
-            <ArrowLeft size={15} /> Back to Records
-          </button>
-          <button className="secondary-button profile-top-edit" onClick={() => toast.info("Donation editing will be connected to the HRS sheet next.")}>
-            <Edit3 size={14} /> Edit
+            <ArrowLeft size={15} /> Back to Donations
           </button>
         </div>
 
-        {/* Header */}
-        <div className="donation-detail-header">
-          <div className="donation-detail-avatar">{record.initials}</div>
-          <div className="donation-detail-identity">
-            <h2>{record.name}</h2>
-            <span className="donation-detail-id">{record.id ?? "ID pending"}</span>
+        <header className="profile-header">
+          <div className="profile-id-block">
+            <div className="profile-id-value">{record.id || "—"}</div>
           </div>
-          <span className="table-blood donation-detail-blood">{record.group}</span>
-        </div>
+          <div className="profile-identity">
+            <div className="profile-avatar">{record.initials}<span className={`profile-avatar-status ${record.status.toLowerCase()}`}>{record.status === "Verified" ? <Check size={10} /> : <Clock3 size={10} />}</span></div>
+            <div>
+              <h2>{record.name}</h2>
+              <div className="profile-badges">
+                <span className={`profile-status ${record.status.toLowerCase()}`}>● {record.status.toUpperCase()}</span>
+                {record.donorConsent === true && <span className="profile-status consented">DONOR CONSENTED</span>}
+                {record.donorConsent === false && <span className="profile-status private">NOT PUBLIC</span>}
+              </div>
+            </div>
+          </div>
+          <div className="profile-blood-block">
+            <div className="profile-blood-badge">{record.group}<small>Blood group</small></div>
+          </div>
+        </header>
 
-        {/* Donation Summary */}
-        <div className="donation-detail-summary">
-          <div className="donation-detail-stat">
-            <strong>{record.donationCount}</strong>
-            <span>Total Donations</span>
-          </div>
-          <div className="donation-detail-stat">
-            <strong>{record.lastDonationAt ? formatShortDate(record.lastDonationAt) : "—"}</strong>
-            <span>Last Donation</span>
-          </div>
-          <div className="donation-detail-stat">
-            <strong>{record.nextEligibleAt ? formatShortDate(record.nextEligibleAt) : "Now"}</strong>
-            <span>Next Eligible</span>
-          </div>
-          <div className="donation-detail-stat">
-            <strong>{record.availability === "Available" ? "Yes" : "No"}</strong>
-            <span>Available</span>
-          </div>
-        </div>
+        <div className="profile-detail-section profile-personal-section"><h3><UserRound size={15} /> Personal information</h3><div className="profile-detail-grid"><div className="profile-detail-row profile-detail-top-row"><div><span>Full name</span><strong>{record.name}</strong></div><div><span>Date of birth</span><strong>{formatShortDate(record.dateOfBirth)} · {formatAge(record.dateOfBirth)}</strong></div><div><span>Gender</span><strong>{record.gender}</strong></div><div><span>Mobile number</span><strong>{record.mobile}</strong></div></div><div className="profile-detail-row profile-detail-bottom-row"><div className="profile-email-field"><span>Email</span><strong>{record.email}</strong></div><div><span>Address / area</span><strong>{record.area}</strong></div><div><span>City</span><strong>{record.location}</strong></div></div></div></div>
 
-        {/* Donor Info */}
-        <div className="donation-detail-section">
-          <h3>Donor Information</h3>
-          <div className="donation-detail-grid">
-            <div className="donation-detail-item">
-              <span className="donation-detail-label">Age / Gender</span>
-              <span className="donation-detail-value">({record.age}) · {record.gender}</span>
-            </div>
-            <div className="donation-detail-item">
-              <span className="donation-detail-label">Location</span>
-              <span className="donation-detail-value">{record.area}, {record.location}</span>
-            </div>
-            <div className="donation-detail-item">
-              <span className="donation-detail-label">Mobile</span>
-              <span className="donation-detail-value">{record.mobile}</span>
-            </div>
-            <div className="donation-detail-item">
-              <span className="donation-detail-label">Email</span>
-              <span className="donation-detail-value">{record.email}</span>
-            </div>
-            <div className="donation-detail-item">
-              <span className="donation-detail-label">Verified</span>
-              <span className="donation-detail-value">{record.verifiedAt ? formatRecordDate(record.verifiedAt) : "Not verified"}</span>
-            </div>
-            <div className="donation-detail-item">
-              <span className="donation-detail-label">Blood Group</span>
-              <span className="donation-detail-value">{record.group}</span>
-            </div>
+        <div className="profile-detail-section profile-donation-section"><h3><Droplets size={15} /> Donation summary</h3><div className="profile-donation-summary"><div className="profile-summary-stat"><span>Total donations</span><strong>{record.donationCount}</strong></div><div className="profile-summary-stat"><span>Last donation</span><strong>{hasDonationHistory ? formatRecordDate(lastDonation) : "Not yet donated"}</strong></div><div className="profile-summary-stat"><span>Next eligible</span><strong>{record.nextEligibleAt ? formatRecordDate(record.nextEligibleAt) : "Eligible now"}</strong></div><div className={`profile-readiness ${record.availability === "Unavailable" ? "unavailable" : ""}`}><span>{record.availability === "Available" ? <Check size={18} /> : <Clock3 size={18} />}</span><div><strong>{statusLabel}</strong></div></div></div><div className="profile-public-status">● {record.publicVisible ? "Visible publicly" : "Not visible publicly"}</div></div>
+
+        <div className="profile-history-section open"><div className="profile-history-heading"><h3><Droplets size={15} /> Donation history</h3></div><div className="profile-history-panel"><div className="profile-history-inner">{record.donationDates.length ? <div className="profile-history">
+          <div className="profile-history-head">
+            <span>Donation</span>
+            <b>Donated on</b>
+            <b>Eligible date</b>
+            <b>Status</b>
           </div>
-        </div>
-
-        {/* Donation History */}
-        <div className="donation-detail-section">
-          <h3>Donation History</h3>
-          {record.donationDates.length > 0 ? (
-            <div className="donation-history-list">
-              {record.donationDates.slice().reverse().map((date, index) => (
-                <div key={date} className="donation-history-item">
-                  <div className="donation-history-icon">
-                    <Droplets size={16} />
-                  </div>
-                  <div className="donation-history-content">
-                    <strong>Donation #{record.donationDates.length - index}</strong>
-                    <span>{formatRecordDate(date)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="donation-empty">No donation history recorded.</p>
-          )}
-        </div>
-
-        <div className="modal-actions">
-          <button className="secondary-button" onClick={onClose}>
-            Close
-          </button>
-        </div>
+          {record.donationDates.map((date, index) => {
+            const isLast = index === record.donationDates.length - 1;
+            const nextEligibleDate = isLast && record.nextEligibleAt ? new Date(record.nextEligibleAt) : null;
+            const isFuture = nextEligibleDate ? nextEligibleDate > new Date() : false;
+            const eligibleLabel = isLast && record.nextEligibleAt ? formatShortDate(record.nextEligibleAt) : "—";
+            return (
+              <div key={`${date}-${index}`}>
+                <span>Donation #{index + 1}</span>
+                <b>{formatShortDate(date)}</b>
+                <b>{eligibleLabel}</b>
+                <small className="profile-history-status">
+                  {isLast ? (
+                    isFuture ? (
+                      <div className="eligible-icon eligible-icon-amber" title={`Eligible on ${formatShortDate(record.nextEligibleAt)}`}><Clock3 size={16} strokeWidth={2.4} /></div>
+                    ) : (
+                      <div className="eligible-icon eligible-icon-green" title="Eligible now"><BadgeCheck size={16} strokeWidth={2.4} /></div>
+                    )
+                  ) : (
+                    <div className="eligible-icon eligible-icon-green" title="Eligible since this donation"><BadgeCheck size={16} strokeWidth={2.4} /></div>
+                  )}
+                </small>
+              </div>
+            );
+          })}
+          <div className="profile-history-footer">
+            <button className="secondary-button profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><Plus size={15} /> Record new donation</button>
+            {record.availability !== "Available" && <small className="profile-action-hint">New donation can be recorded after the next eligible time.</small>}
+          </div>
+        </div> : <div className="profile-history-inner"><p className="profile-empty">No blood donations have been recorded yet.</p><div className="profile-history-footer"><button className="secondary-button profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><Plus size={15} /> Record new donation</button></div></div>}</div></div></div>
       </section>
     </div>
   );

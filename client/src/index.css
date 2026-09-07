@@ -8436,3 +8436,180 @@ body::-webkit-scrollbar {
   min-height: 40px;
   padding: 0 18px;
 }
+
+/* Delete mode styles */
+.record-delete-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  margin-right: 10px;
+  padding: 0 14px;
+  min-height: 36px;
+  border: 1px solid #dfe4df;
+  border-radius: 8px;
+  background: white;
+  color: #5c665c;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.record-delete-toggle:hover {
+  border-color: #c92f3b;
+  color: #c92f3b;
+}
+.record-delete-toggle.active {
+  background: #c92f3b;
+  border-color: #c92f3b;
+  color: white;
+}
+
+.records-table-row.delete-mode {
+  cursor: default;
+}
+.records-table-row.delete-mode:hover {
+  background: #fff5f5;
+}
+.records-table-row.selected-for-delete {
+  background: #fcebec !important;
+}
+.records-table-row.selected-for-delete:hover {
+  background: #f8d7d9 !important;
+}
+
+.table-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  flex-shrink: 0;
+}
+.table-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #c92f3b;
+}
+.records-table-head > .table-checkbox {
+  padding-left: 8px;
+}
+
+.delete-selection-bar {
+  position: sticky;
+  bottom: 24px;
+  margin-top: 16px;
+  padding: 14px 20px;
+  background: white;
+  border: 1px solid #c92f3b;
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(201, 47, 59, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  z-index: 50;
+}
+.delete-selection-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #c92f3b;
+  font-size: 14px;
+}
+.delete-selection-info strong {
+  font-weight: 700;
+}
+.delete-selection-actions {
+  display: flex;
+  gap: 10px;
+}
+.danger-button {
+  background: #c92f3b !important;
+  border-color: #c92f3b !important;
+  color: white !important;
+}
+.danger-button:hover:not(:disabled) {
+  background: #a0242f !important;
+  border-color: #a0242f !important;
+}
+.danger-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.confirm-delete-modal {
+  max-width: 480px;
+  width: 90%;
+}
+.confirm-delete-modal .modal-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid #e8ebe8;
+}
+.confirm-delete-modal .modal-card-header h2 {
+  margin: 0;
+  font-size: 17px;
+  color: #c92f3b;
+}
+.confirm-delete-modal .modal-card-body {
+  padding: 20px 22px;
+}
+.confirm-delete-modal .modal-card-body > p {
+  margin: 0 0 14px;
+  color: #5c665c;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.confirm-delete-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 8px;
+  background: #f7f8f6;
+  border-radius: 8px;
+}
+.confirm-delete-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.confirm-delete-item .mini-avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 11px;
+}
+.confirm-delete-item .mini-avatar.small {
+  width: 28px;
+  height: 28px;
+}
+.confirm-delete-item > div:last-child {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+.confirm-delete-item strong {
+  color: #1f1f1f;
+}
+.confirm-delete-item span {
+  color: #7d897d;
+  font-size: 12px;
+}
+.confirm-delete-more {
+  padding: 6px 8px;
+  font-size: 12px;
+  color: #7d897d;
+  font-style: italic;
+}
+.confirm-delete-modal .modal-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 22px;
+  border-top: 1px solid #e8ebe8;
+  background: #fafbf9;
+}

@@ -6,6 +6,23 @@ import { ENV } from "./env";
 
 const API_BASE_URL = ENV.googleAppsScriptUrl;
 
+// In-memory cache for profiles (30-second TTL)
+interface CacheEntry<T> {
+  data: T;
+  fetchedAt: number;
+}
+
+const profilesCache: CacheEntry<ApiResponse<ProfilesResponse>> = {
+  data: { success: false },
+  fetchedAt: 0,
+};
+const CACHE_TTL_MS = 30_000; // 30 seconds
+
+// Invalidate the profiles cache (call after mutations that modify the sheet)
+export function invalidateProfilesCache() {
+  profilesCache.fetchedAt = 0;
+}
+
 export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
@@ -169,9 +186,73 @@ export async function ping(): Promise<ApiResponse<{ message: string }>> {
   return callApi<{ message: string }>("ping");
 }
 
-// Get all profiles (for admin)
-export async function getProfiles(): Promise<ApiResponse<ProfilesResponse>> {
-  return callApi<ProfilesResponse>("profiles");
+// Fetch profiles from Google Apps Script (reads live sheet, always up-to-date)
+async function getProfilesFromSheet(): Promise<ApiResponse<ProfilesResponse>> {
+  try {
+    const url = new URL(API_BASE_URL);
+    url.searchParams.set("action", "profiles");
+    url.searchParams.set("t", Date.now().toString());
+
+    const response = await fetch(url.toString(), {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: `Google Apps Script responded with ${response.status}`,
+      };
+    }
+
+    const data = await response.json();
+
+    if (data.success === false) {
+      return { success: false, error: data.error || "Apps Script error" };
+    }
+
+    // Apps Script returns { success: true, data: [...] }
+    const rawProfiles = Array.isArray(data.data) ? data.data : [];
+
+    const profiles: Profile[] = rawProfiles.map((row: Record<string, unknown>) => {
+      const profile: Profile = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (key === "sheet_row") continue;
+        profile[key] = value instanceof Date ? value.toISOString() : (value != null ? String(value) : "");
+      }
+      return profile;
+    });
+
+    return { success: true, data: { profiles, count: profiles.length } };
+  } catch (error) {
+    console.error("Error fetching profiles from Apps Script:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Network error",
+    };
+  }
+}
+
+// Get all profiles (for admin) — reads directly from Google Sheet CSV, uses cache by default
+export async function getProfiles(
+  useCache = true
+): Promise<ApiResponse<ProfilesResponse>> {
+  if (
+    useCache &&
+    profilesCache.fetchedAt &&
+    Date.now() - profilesCache.fetchedAt < CACHE_TTL_MS
+  ) {
+    return profilesCache.data;
+  }
+  const result = await getProfilesFromSheet();
+  profilesCache.data = result;
+  profilesCache.fetchedAt = Date.now();
+  return result;
+}
+
+// Force-refresh profiles, bypassing the cache
+export async function syncProfiles(): Promise<ApiResponse<ProfilesResponse>> {
+  return getProfiles(false);
 }
 
 // Get single profile by HRS ID
@@ -235,4 +316,47 @@ export async function recordDonation(
     hrs_id: hrsId,
     donation_time: donationTime,
   });
+}
+
+// Delete profiles by HRS ID(s) - permanently removes rows from the sheet
+export async function deleteProfiles(
+  hrsIds: string[]
+): Promise<ApiResponse<{ deleted: number; message: string }>> {
+  if (!ENV.googleAppsScriptSecret) {
+    return {
+      success: false,
+      error: "API secret not configured",
+    };
+  }
+
+  if (!hrsIds.length) {
+    return { success: false, error: "No records selected for deletion" };
+  }
+
+  return postApi<{ deleted: number; message: string }>("delete_profiles", {
+    action: "delete_profiles",
+    api_secret: ENV.googleAppsScriptSecret,
+    hrs_ids: JSON.stringify(hrsIds),
+  });
+}
+
+// Send verification email to a donor after they are verified
+export async function sendVerificationEmail(
+  hrsId: string
+): Promise<ApiResponse<{ sent: boolean; skipped?: boolean; reason?: string; to?: string }>> {
+  if (!ENV.googleAppsScriptSecret) {
+    return {
+      success: false,
+      error: "API secret not configured",
+    };
+  }
+
+  return postApi<{ sent: boolean; skipped?: boolean; reason?: string; to?: string }>(
+    "send_verification_email",
+    {
+      action: "send_verification_email",
+      api_secret: ENV.googleAppsScriptSecret,
+      hrs_id: hrsId,
+    }
+  );
 }

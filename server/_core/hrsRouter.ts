@@ -13,13 +13,19 @@ export const hrsRouter = router({
     return result;
   }),
 
-  // Get all profiles (admin only)
+  // Get all profiles
   profiles: publicProcedure.query(async () => {
-    const result = await gasApi.getProfiles();
+    const result = await gasApi.getProfiles(true);
     return result;
   }),
 
-  // Get single profile by HRS ID (admin only)
+  // Force-refresh profiles from Google Sheets, bypassing the cache
+  syncProfiles: publicProcedure.mutation(async () => {
+    const result = await gasApi.syncProfiles();
+    return result;
+  }),
+
+  // Get single profile by HRS ID
   profile: publicProcedure
     .input(z.object({ hrsId: z.string() }))
     .query(async ({ input }) => {
@@ -39,8 +45,16 @@ export const hrsRouter = router({
     return result;
   }),
 
-  // Verify profile (admin only)
-  verifyProfile: adminProcedure
+  // Send verification email to a donor
+  sendVerificationEmail: publicProcedure
+    .input(z.object({ hrsId: z.string() }))
+    .mutation(async ({ input }) => {
+      const result = await gasApi.sendVerificationEmail(input.hrsId);
+      return result;
+    }),
+
+  // Verify profile
+  verifyProfile: publicProcedure
     .input(
       z.object({
         hrsId: z.string(),
@@ -54,11 +68,14 @@ export const hrsRouter = router({
         input.bloodGroup,
         input.donorConsent
       );
+      if (result.success) {
+        gasApi.invalidateProfilesCache();
+      }
       return result;
     }),
 
-  // Record donation (admin only)
-  recordDonation: adminProcedure
+  // Record blood donation
+  recordDonation: publicProcedure
     .input(
       z.object({
         hrsId: z.string(),
@@ -70,6 +87,25 @@ export const hrsRouter = router({
         input.hrsId,
         input.donationTime
       );
+      if (result.success) {
+        gasApi.invalidateProfilesCache();
+      }
+      return result;
+    }),
+
+  // Delete profiles by HRS ID (admin only)
+  deleteProfiles: publicProcedure
+    .input(
+      z.object({
+        hrsIds: z.array(z.string()),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const result = await gasApi.deleteProfiles(input.hrsIds);
+      if (result.success) {
+        // Invalidate cache so the next read fetches fresh data
+        gasApi.invalidateProfilesCache();
+      }
       return result;
     }),
 });
