@@ -1,12 +1,12 @@
-import { FormEvent, useMemo, useState, useEffect, useLayoutEffect, useRef } from "react";
-import { Link } from "wouter";
+import { FormEvent, useMemo, useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
-import {
-  clearAdminSession,
-  getAdminSession,
-  saveAdminSession,
-} from "@/lib/adminAuth";
 import { trpc } from "@/lib/trpc";
+import { useStaffAuth } from "@/lib/staffAuth";
+import type { StaffSession } from "@/lib/staffAuth";
+import type { LocationStats } from "@/lib/api";
+import LocationsView from "./LocationsView";
+import AuditLog from "@/components/AuditLog";
 import {
   Area,
   AreaChart,
@@ -22,15 +22,22 @@ import {
   YAxis,
 } from "recharts";
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   BarChart3,
   BadgeCheck,
+  Bell,
+  Calendar,
   Check,
+  CheckCircle,
   ChevronDown,
   ClipboardList,
+  Clock,
   Clock3,
   Activity,
+  Database,
+  Download,
   Droplets,
   Edit3,
   FileSpreadsheet,
@@ -38,6 +45,7 @@ import {
   History,
   Info,
   KeyRound,
+  Layout,
   LayoutDashboard,
   Loader2,
   LockKeyhole,
@@ -46,13 +54,21 @@ import {
   Menu,
   Plus,
   RefreshCw,
+  Save,
   Search,
   Settings2,
+  Shield,
   ShieldCheck,
+  Table,
   Trash2,
+  User,
   UserRound,
   Users,
+  Wifi,
+  WifiOff,
   X,
+  XCircle,
+  Zap,
 } from "lucide-react";
 
 type AdminView =
@@ -77,7 +93,7 @@ const VIEW_LABELS: Record<AdminView, string> = {
   locations: "Tumkur",
   staff: "Staff & Access",
   audit: "Audit Log",
-  sync: "Sync & Data",
+  sync: "Settings",
   settings: "Settings",
 };
 
@@ -86,7 +102,7 @@ const RECORD_TABS: { id: RecordTab; label: string }[] = [
   { id: "pending", label: "Pending" },
 ];
 
-type AdminRecord = {
+export type AdminRecord = {
   id: string | null;
   name: string;
   dateOfBirth: string;
@@ -150,6 +166,34 @@ const statisticsColors = [
 ];
 
 const ADMIN_RECORDS_CACHE_KEY = "hrs-admin-records-cache-v1";
+const ADMIN_SETTINGS_KEY = "hrs-admin-settings-v1";
+
+type AdminSettings = {
+  defaultView: AdminView;
+  recordsPerPage: number;
+  timeFormat: "12h" | "24h";
+  lowSupplyThresholds: Record<string, number>;
+  displayName: string;
+};
+
+const DEFAULT_SETTINGS: AdminSettings = {
+  defaultView: "overview",
+  recordsPerPage: 30,
+  timeFormat: "12h",
+  lowSupplyThresholds: {},
+  displayName: "Admin",
+};
+
+function loadAdminSettings(): AdminSettings {
+  try {
+    const raw = localStorage.getItem(ADMIN_SETTINGS_KEY);
+    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch { /* ignore */ }
+  return DEFAULT_SETTINGS;
+}
+function saveAdminSettings(s: AdminSettings) {
+  try { localStorage.setItem(ADMIN_SETTINGS_KEY, JSON.stringify(s)); } catch { /* ignore */ }
+}
 
 function parseCsvLine(line: string) {
   const values: string[] = [];
@@ -252,11 +296,12 @@ function Select({
   );
 }
 
-function Login({ onLogin }: { onLogin: (username: string) => void }) {
+function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const { staff, login, isLoggingIn } = useStaffAuth();
+  const [, navigate] = useLocation() as [string, (to: string) => void];
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -264,9 +309,17 @@ function Login({ onLogin }: { onLogin: (username: string) => void }) {
       toast.error("Enter your username and password to continue.");
       return;
     }
-    setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1200));
-    onLogin(username.trim());
+
+    try {
+      const result = await login(username.trim(), password);
+      if (!result.success) {
+        toast.error(result.error || "Invalid username or password");
+      }
+      // Login success handled in useStaffAuth hook
+    } catch (error) {
+      console.error("Login error:", error);
+      toast.error("An unexpected error occurred during login.");
+    }
   };
 
   return (
@@ -303,7 +356,16 @@ function Login({ onLogin }: { onLogin: (username: string) => void }) {
         <div className="login-form-wrap">
           <div className="mobile-login-brand">
             <div className="logo-mark">
-              <Droplets size={19} />
+              <img
+                src="/hrs-logo.png"
+                alt=""
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  borderRadius: "inherit",
+                }}
+              />
             </div>
             <strong>HRS</strong>
           </div>
@@ -319,7 +381,7 @@ function Login({ onLogin }: { onLogin: (username: string) => void }) {
                   onChange={event => setUsername(event.target.value)}
                   placeholder="Enter username"
                   autoComplete="username"
-                  disabled={isLoading}
+                  disabled={isLoggingIn}
                 />
               </div>
             </Field>
@@ -332,13 +394,13 @@ function Login({ onLogin }: { onLogin: (username: string) => void }) {
                   onChange={event => setPassword(event.target.value)}
                   placeholder="Enter password"
                   autoComplete="current-password"
-                  disabled={isLoading}
+                  disabled={isLoggingIn}
                 />
                 <button
                   type="button"
                   className="input-icon-button"
                   onClick={() => setShowPassword(value => !value)}
-                  disabled={isLoading}
+                  disabled={isLoggingIn}
                 >
                   {showPassword ? "Hide" : "Show"}
                 </button>
@@ -347,10 +409,10 @@ function Login({ onLogin }: { onLogin: (username: string) => void }) {
             <button
               className="primary-button wide-button"
               type="submit"
-              disabled={isLoading}
-              style={{ gap: isLoading ? "10px" : "6px" }}
+              disabled={isLoggingIn}
+              style={{ gap: isLoggingIn ? "10px" : "6px" }}
             >
-              {isLoading ? (
+              {isLoggingIn ? (
                 <>
                   Signing in...{" "}
                   <span
@@ -379,7 +441,7 @@ function Login({ onLogin }: { onLogin: (username: string) => void }) {
             </span>
           </div>
           <div className="demo-hint">
-            Demo mode · enter any non-empty credentials to explore
+            Try <strong>admin / admin123</strong> (default admin account)
           </div>
         </div>
       </div>
@@ -387,9 +449,234 @@ function Login({ onLogin }: { onLogin: (username: string) => void }) {
   );
 }
 
+/** Staff & Access management view — CRUD for volunteer/admin accounts. */
+function StaffAccessView() {
+  const { data: staffList, isLoading, refetch } = trpc.staff.list.useQuery();
+  const createMutation = trpc.staff.create.useMutation({
+    onSuccess: () => {
+      toast.success("Volunteer account created.");
+      refetch();
+    },
+    onError: error => {
+      const msg = (error as unknown as Error).message || "Failed to create account.";
+      toast.error(msg);
+    },
+  });
+  const deleteMutation = trpc.staff.delete.useMutation({
+    onSuccess: () => {
+      toast.success("Account deleted.");
+      refetch();
+    },
+    onError: error => {
+      const msg = (error as unknown as Error).message || "Failed to delete account.";
+      toast.error(msg);
+    },
+  });
+
+  const [showCreate, setShowCreate] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+  const [newDisplayName, setNewDisplayName] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const handleCreate = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!newUsername.trim() || !newDisplayName.trim() || !newPassword.trim()) {
+      toast.error("Fill in all fields.");
+      return;
+    }
+    setCreating(true);
+    try {
+      await createMutation.mutateAsync({
+        username: newUsername.trim(),
+        displayName: newDisplayName.trim(),
+        password: newPassword,
+      });
+      setShowCreate(false);
+      setNewUsername("");
+      setNewDisplayName("");
+      setNewPassword("");
+    } catch {
+      // Mutation error handled by onError
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDelete = (id: number, displayName: string) => {
+    if (!window.confirm(`Delete "${displayName}"? This cannot be undone.`)) return;
+    deleteMutation.mutate({ id });
+  };
+
+  if (isLoading) {
+    return (
+      <div style={{ textAlign: "center", padding: "60px 20px", color: "#636c63" }}>
+        Loading staff directory...
+      </div>
+    );
+  }
+
+  const members = staffList ?? [];
+
+  return (
+    <AdminSection
+      eyebrow="SYSTEM"
+      title="Staff & Access"
+      description="Manage authorized HRS staff accounts."
+    >
+      <section className="admin-card">
+        <div className="admin-card-heading">
+          <div>
+            <h2>Authorized directory</h2>
+            <p>
+              {members.length} staff account{members.length !== 1 ? "s" : ""}.
+              Create new volunteer accounts below.
+            </p>
+          </div>
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => setShowCreate(true)}
+            disabled={createMutation.isPending}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+          >
+            <Plus size={16} /> Add Volunteer
+          </button>
+        </div>
+
+        {/* Create form */}
+        {showCreate && (
+          <form onSubmit={handleCreate} className="login-form" style={{ marginBottom: "20px", maxWidth: "400px" }}>
+            <Field label="Username">
+              <div className="admin-input">
+                <UserRound size={17} />
+                <input
+                  value={newUsername}
+                  onChange={e => setNewUsername(e.target.value)}
+                  placeholder="e.g. volunteer-john"
+                  required
+                  disabled={creating}
+                  style={{ textTransform: "lowercase" }}
+                />
+              </div>
+            </Field>
+            <Field label="Display Name">
+              <div className="admin-input">
+                <UserRound size={17} />
+                <input
+                  value={newDisplayName}
+                  onChange={e => setNewDisplayName(e.target.value)}
+                  placeholder="e.g. John Doe"
+                  required
+                  disabled={creating}
+                />
+              </div>
+            </Field>
+            <Field label="Password">
+              <div className="admin-input">
+                <KeyRound size={17} />
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Min 6 characters"
+                  required
+                  disabled={creating}
+                />
+              </div>
+            </Field>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="submit"
+                className="primary-button"
+                disabled={creating}
+              >
+                {creating ? "Creating..." : "Create Account"}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setShowCreate(false)}
+                disabled={creating}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Staff list */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {members.map(member => (
+            <div
+              key={member.id}
+              className="recent-row"
+              style={{
+                padding: "12px 16px",
+                borderRadius: "8px",
+                background: member.role === "admin" ? "#fef3e2" : "#f8f9f8",
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+              }}
+            >
+              <div className="mini-avatar">
+                <UserRound size={14} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <strong>{member.displayName}</strong>
+                <span>
+                  {" "}
+                  {member.username} · {member.role === "admin" ? "Administrator" : "Volunteer"}{" "}
+                  ·{" "}
+                  {member.role === "admin"
+                    ? "Full workspace access"
+                    : "Can view and contact donors"}
+                </span>
+              </div>
+              <small style={{ color: member.active ? "#4c7652" : "#c92a37" }}>
+                {member.active ? "Active" : "Inactive"}
+              </small>
+              {member.role === "volunteer" && (
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => handleDelete(member.id, member.displayName)}
+                  disabled={deleteMutation.isPending}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    fontSize: "12px",
+                    padding: "4px 10px",
+                  }}
+                >
+                  <Trash2 size={12} /> Remove
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+    </AdminSection>
+  );
+}
+
 export default function Admin() {
-  const [loggedIn, setLoggedIn] = useState(() => Boolean(getAdminSession()));
-  const [activeView, setActiveView] = useState<AdminView>("overview");
+  const { staff, isLoading: staffLoading, logout } = useStaffAuth();
+  const [, navigate] = useLocation() as [string, (to: string) => void];
+  const cookiePresent = typeof document !== "undefined" && document.cookie.includes("hrs_staff_session_v2");
+  const loggedIn = !!staff && staff.active && cookiePresent;
+
+  // Defensive: cookie must match session
+  useEffect(() => {
+    // If cookie missing but old staff cached, force reload to clear stale state
+    if (cookiePresent === false && staff && !staffLoading) {
+      window.location.reload();
+    }
+  }, [cookiePresent, staff, staffLoading]);
+
+  const [activeView, setActiveView] = useState<AdminView>(loadAdminSettings().defaultView);
   const [recordTab, setRecordTab] = useState<RecordTab>("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filterGroup, setFilterGroup] = useState("All");
@@ -429,16 +716,42 @@ export default function Admin() {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [addedPeriodOpen]);
+
+  useEffect(() => {
+    const closeMenus = (event: PointerEvent) => {
+      if (profileMenuRef.current?.contains(event.target as Node)) return;
+      if (topProfileMenuRef.current?.contains(event.target as Node)) return;
+      setProfileMenuOpen(false);
+      setTopProfileMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setProfileMenuOpen(false);
+        setTopProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", closeMenus);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenus);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<AdminRecord | null>(null);
   const [selectedOrigin, setSelectedOrigin] = useState<ModalOrigin | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [topProfileMenuOpen, setTopProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+  const topProfileMenuRef = useRef<HTMLDivElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [indiaTime, setIndiaTime] = useState("");
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [deleteMode, setDeleteMode] = useState(false);
+  const [adminSettings, setAdminSettings] = useState<AdminSettings>(loadAdminSettings());
   const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
@@ -462,8 +775,26 @@ export default function Admin() {
   ]);
 
   useEffect(() => {
-    if (!loggedIn) clearAdminSession();
-  }, [loggedIn]);
+    // If staff session expires (not logged in), redirect to public page
+    if (!loggedIn && staffLoading === false) {
+      // No-op: redirect handled by component logic
+    }
+  }, [loggedIn, staffLoading]);
+
+  const handleLogout = async () => {
+    setProfileMenuOpen(false);
+    setTopProfileMenuOpen(false);
+    try {
+      await logout();
+    } catch {}
+    try {
+      sessionStorage.removeItem("manus-cookie");
+    } catch {}
+    toast.success("Signed out securely.");
+    // Defensively clear cookie with both old (Lax/false) and new (None/true) settings
+    document.cookie = "hrs_staff_session_v2=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax; Secure=false";
+    document.cookie = "hrs_staff_session_v2=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=None; Secure=true";
+  };
 
   useEffect(() => {
     // Reset delete selection when the records list changes
@@ -471,8 +802,6 @@ export default function Admin() {
   }, [records]);
 
   useEffect(() => {
-    if (!loggedIn) return;
-
     const updateIndiaTime = () => {
       const now = new Date();
       const time = new Intl.DateTimeFormat("en-IN", {
@@ -480,7 +809,7 @@ export default function Admin() {
         hour: "numeric",
         minute: "2-digit",
         second: "2-digit",
-        hour12: true,
+        hour12: adminSettings.timeFormat === "12h",
       }).format(now);
       const date = new Intl.DateTimeFormat("en-IN", {
         timeZone: "Asia/Kolkata",
@@ -512,7 +841,7 @@ export default function Admin() {
       if (dateEl) dateEl.textContent = date;
       const heading = document.querySelector(".admin-page-heading h1");
       if (heading && activeView === "overview")
-        heading.textContent = `${greeting}, Admin.`;
+        heading.textContent = `${greeting}, ${adminSettings.displayName || staff?.displayName || "Admin"}.`;
       const dateLabel = document.querySelector(".admin-page-heading .eyebrow");
       if (dateLabel && activeView === "overview") dateLabel.textContent = date;
     };
@@ -560,6 +889,21 @@ export default function Admin() {
     retry: 2,
   });
 
+  // Tumkur locations — auto-detects new areas from Google Sheets
+  const locationsQuery = trpc.hrs.locations.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
+    retry: 2,
+  });
+
+  const lok = locationsQuery.data?.data;
+  const locationStats = lok?.locations ?? [];
+  const totalAreas = lok?.totalAreas ?? 0;
+  const totalDonors = lok?.totalDonors ?? 0;
+  const totalAvailable = lok?.totalAvailable ?? 0;
+  const newThisSync = lok?.newThisSync ?? [];
+  const outsideTumkur = lok?.outsideTumkur ?? 0;
+
   // Subscribe to /api/sync-events — server pushes a notification on every cache update
   useEffect(() => {
     if (!loggedIn) return;
@@ -569,13 +913,14 @@ export default function Admin() {
         const msg = JSON.parse(e.data);
         if (msg.type === "cache-update") {
           profilesQuery.refetch();
+          locationsQuery.refetch();
         }
       } catch {
         /* heartbeat, ignore */
       }
     };
     return () => es.close();
-  }, [loggedIn, profilesQuery]);
+  }, [loggedIn, profilesQuery, locationsQuery]);
 
   // Helper: apply a verified record transformation optimistically
   function applyVerifiedRecord(
@@ -685,16 +1030,49 @@ export default function Admin() {
     },
   });
 
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
+  const [syncIntervalMs, setSyncIntervalMs] = useState(10000);
+
   const syncProfilesMutation = trpc.hrs.syncProfiles.useMutation({
     onSuccess: () => {
       setLastSyncedAt(new Date());
-      // Sync button is manual — do force-refetch
+      // Force-refetch so the latest data flows into records/locations/stats
       profilesQuery.refetch();
     },
     onError: (error) => {
+      // syncProfiles is only ever invoked by the manual "Sync Now" button
+      // (auto-sync lives server-side), so every failure is worth surfacing.
       toast.error(`Sync failed: ${error.message}`);
     },
   });
+
+  // Use a ref to hold a stable sync trigger so the manual Sync button doesn't
+  // recreate the tRPC mutation object on every render.
+  const triggerSyncRef = useRef<(manual: boolean) => void>(() => {});
+  triggerSyncRef.current = (manual: boolean) => {
+    if (syncProfilesMutation.isPending) return;
+    syncProfilesMutation.mutate();
+  };
+  const triggerSync = useCallback(
+    (manual: boolean) => triggerSyncRef.current(manual),
+    []
+  );
+
+  // Hard auto-sync timer: call mutation directly every interval
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      triggerSync(true);
+    }, syncIntervalMs);
+    return () => window.clearInterval(timer);
+  }, [syncIntervalMs, triggerSync]);
+
+  // Auto-sync is now driven by the SERVER-side poller (googleSheetsApi.ts),
+  // controlled from the Settings panel via trpc.hrs.setAutoSync. The server
+  // polls Google Sheets on its own interval and pushes `/api/sync-events`
+  // SSE notifications on every cache update, so the client here refetches
+  // profiles/locations automatically (see the sync-events subscription above).
+  // No client-side timer is needed — a second timer would double-poll the CSV
+  // and corrupt the sync counters shown in the panel.
 
   const updateProfileMutation = trpc.hrs.updateProfile.useMutation({
     onSuccess: (result) => {
@@ -891,27 +1269,24 @@ export default function Admin() {
   const availableDonorsTop = voluntaryDonorsTop.filter(
     record => record.availability === "Available"
   );
+  const onUpdateAdminSettings = useCallback((patch: Partial<AdminSettings>) => {
+    setAdminSettings(prev => {
+      const next = { ...prev, ...patch };
+      saveAdminSettings(next);
+      return next;
+    });
+  }, []);
+
   const goToView = (view: AdminView, tab: RecordTab = "all") => {
     setActiveView(view);
     setMobileNav(false);
     if (view === "records") setRecordTab(tab);
   };
-  const totalPages = Math.ceil(currentViewRecords.length / 30);
+  const totalPages = Math.ceil(currentViewRecords.length / adminSettings.recordsPerPage);
   const paginatedRecords = currentViewRecords.slice(
-    (currentPage - 1) * 30,
-    currentPage * 30
+    (currentPage - 1) * adminSettings.recordsPerPage,
+    currentPage * adminSettings.recordsPerPage
   );
-
-  if (!loggedIn)
-    return (
-      <Login
-        onLogin={username => {
-          saveAdminSession(username);
-          setLoggedIn(true);
-          toast.success("Welcome to the HRS staff workspace.");
-        }}
-      />
-    );
 
   const saveRecord = (
     record: AdminRecord,
@@ -1014,7 +1389,16 @@ export default function Admin() {
         <div className="admin-sidebar-head">
           <a className="brand" href="/">
             <div className="logo-mark">
-              <Droplets size={19} />
+              <img
+                src="/hrs-logo.png"
+                alt=""
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  borderRadius: "inherit",
+                }}
+              />
             </div>
             <span>
               <strong>HRS</strong>
@@ -1082,33 +1466,40 @@ export default function Admin() {
             className={activeView === "sync" ? "active" : ""}
             onClick={() => goToView("sync")}
           >
-            <FileSpreadsheet size={17} /> Sync & Data
-          </button>
-          <button
-            className={activeView === "settings" ? "active" : ""}
-            onClick={() => goToView("settings")}
-          >
-            <Settings2 size={17} /> Settings
+            <FileSpreadsheet size={17} /> Settings
           </button>
         </nav>
         <div className="sidebar-bottom">
-          <div className="staff-profile">
-            <div className="staff-avatar">
-              <UserRound size={16} />
-            </div>
-            <div>
-              <strong>Admin</strong>
-              <span>Administrator</span>
-            </div>
+          <div className="staff-profile-wrap" ref={profileMenuRef}>
             <button
-              onClick={() => {
-                setLoggedIn(false);
-                toast.success("Signed out securely.");
-              }}
-              aria-label="Sign out"
+              className={`staff-profile${profileMenuOpen ? " open" : ""}`}
+              onClick={() => setProfileMenuOpen(open => !open)}
+              aria-label="Account menu"
+              aria-expanded={profileMenuOpen}
             >
-              <LogOut size={16} />
+              <div className="staff-avatar">
+                <UserRound size={16} />
+              </div>
+              <span className="staff-info">
+                <strong>{adminSettings.displayName || staff?.displayName || "Admin"}</strong>
+                <span>{staff?.role === "admin" ? "Administrator" : "Volunteer"}</span>
+              </span>
+              <ChevronDown size={16} className="staff-profile-chevron" />
             </button>
+            <div className={`profile-menu sidebar-profile-menu${profileMenuOpen ? " open" : ""}`}>
+              <div className="profile-menu-head">
+                <div className="staff-avatar">
+                  <UserRound size={16} />
+                </div>
+                <span className="staff-info">
+                  <strong>{adminSettings.displayName || staff?.displayName || "Admin"}</strong>
+                  <span>{staff?.role === "admin" ? "Administrator" : "Volunteer"}</span>
+                </span>
+              </div>
+              <button className="profile-menu-item danger" onClick={handleLogout}>
+                <LogOut size={16} /> Logout
+              </button>
+            </div>
           </div>
         </div>
       </aside>
@@ -1131,13 +1522,34 @@ export default function Admin() {
               <span className="top-sync-time"></span>
               <span className="top-sync-date"></span>
             </span>
-            <button className="staff-top">
-              <div className="staff-avatar small">
-                <UserRound size={14} />
+            <div className="staff-top-wrap" ref={topProfileMenuRef}>
+              <button
+                className={`staff-top${topProfileMenuOpen ? " open" : ""}`}
+                onClick={() => setTopProfileMenuOpen(open => !open)}
+                aria-label="Account menu"
+                aria-expanded={topProfileMenuOpen}
+              >
+                <div className="staff-avatar small">
+                  <UserRound size={14} />
+                </div>
+                <span>Admin</span>
+                <ChevronDown size={15} />
+              </button>
+              <div className={`profile-menu top-profile-menu${topProfileMenuOpen ? " open" : ""}`}>
+                <div className="profile-menu-head">
+                  <div className="staff-avatar small">
+                    <UserRound size={14} />
+                  </div>
+                  <span className="staff-info">
+                    <strong>{adminSettings.displayName || staff?.displayName || "Admin"}</strong>
+                    <span>{staff?.role === "admin" ? "Administrator" : "Volunteer"}</span>
+                  </span>
+                </div>
+                <button className="profile-menu-item danger" onClick={handleLogout}>
+                  <LogOut size={16} /> Logout
+                </button>
               </div>
-              <span>Admin</span>
-              <ChevronDown size={15} />
-            </button>
+            </div>
           </div>
         </header>
         <main className={`admin-content ${activeView === "statistics" ? "statistics-content" : ""}`}>
@@ -1148,13 +1560,13 @@ export default function Admin() {
               <div className="admin-page-heading">
                 <div>
                   <span className="eyebrow dark-eyebrow" id="overview-date"></span>
-                  <h1>Good morning, Admin.</h1>
+                  <h1>Good morning, {adminSettings.displayName || staff?.displayName || "Admin"}.</h1>
                   <p>Here’s what needs your attention today.</p>
                 </div>
                 <button
                   className="record-sync-button dashboard-sync-button"
                   type="button"
-                  onClick={() => syncProfilesMutation.mutate()}
+                  onClick={() => triggerSync(true)}
                   disabled={isSyncing}
                   title="Sync records from Google Sheets"
                 >
@@ -1351,7 +1763,7 @@ export default function Admin() {
                 <button
                   className="record-sync-button"
                   type="button"
-                  onClick={() => syncProfilesMutation.mutate()}
+                  onClick={() => triggerSync(true)}
                   disabled={isSyncing}
                   title="Sync records from Google Sheets"
                 >
@@ -1607,6 +2019,23 @@ export default function Admin() {
               lastSyncedAt={lastSyncedAt}
               bloodGroups={bloodGroupsTop}
               availableDonors={availableDonorsTop}
+              locationStats={locationStats}
+              totalAreas={totalAreas}
+              totalDonors={totalDonors}
+              totalAvailable={totalAvailable}
+              newThisSync={newThisSync}
+              outsideTumkur={outsideTumkur}
+              isSyncing={isSyncing}
+              onSync={() => triggerSync(true)}
+              autoSyncEnabled={autoSyncEnabled}
+              setAutoSyncEnabled={setAutoSyncEnabled}
+              syncIntervalMs={syncIntervalMs}
+              setSyncIntervalMs={setSyncIntervalMs}
+              adminSettings={adminSettings}
+              onUpdateAdminSettings={onUpdateAdminSettings}
+              staff={staff}
+              loggedIn={loggedIn}
+              handleLogout={handleLogout}
             />
           )}
         </main>
@@ -1726,6 +2155,23 @@ function WorkspaceView({
   lastSyncedAt,
   bloodGroups,
   availableDonors,
+  locationStats,
+  totalAreas,
+  totalDonors,
+  totalAvailable,
+  newThisSync,
+  outsideTumkur,
+  isSyncing,
+  onSync,
+  autoSyncEnabled,
+  setAutoSyncEnabled,
+  syncIntervalMs,
+  setSyncIntervalMs,
+  adminSettings,
+  onUpdateAdminSettings,
+  staff,
+  loggedIn,
+  handleLogout,
 }: {
   view: AdminView;
   records: AdminRecord[];
@@ -1735,7 +2181,101 @@ function WorkspaceView({
   lastSyncedAt: Date | null;
   bloodGroups: string[];
   availableDonors: AdminRecord[];
+  locationStats: LocationStats[];
+  totalAreas: number;
+  totalDonors: number;
+  totalAvailable: number;
+  newThisSync: LocationStats[];
+  outsideTumkur: number;
+  isSyncing: boolean;
+  onSync: () => void;
+  autoSyncEnabled: boolean;
+  setAutoSyncEnabled: (v: boolean) => void;
+  syncIntervalMs: number;
+  setSyncIntervalMs: (v: number) => void;
+  adminSettings: AdminSettings;
+  onUpdateAdminSettings: (patch: Partial<AdminSettings>) => void;
+  staff: StaffSession | null;
+  loggedIn: boolean;
+  handleLogout: () => void;
 }) {
+  // ── Settings hooks ──────────────────────────────────────────────
+  const syncStatusQuery = trpc.hrs.syncStatus.useQuery(undefined, {
+    refetchInterval: 6000,
+    enabled: view === "sync" || view === "settings",
+  });
+  const syncDiagMutation = trpc.hrs.syncDiagnostics.useMutation();
+
+  // Mutation that actually controls the server-side poller.
+  const setAutoSyncMutation = trpc.hrs.setAutoSync.useMutation();
+  const prevAutoSyncEnabledRef = useRef(autoSyncEnabled);
+  const prevSyncIntervalRef = useRef(syncIntervalMs);
+
+  // Push toggle changes to the server poller.
+  useEffect(() => {
+    if (prevAutoSyncEnabledRef.current !== autoSyncEnabled) {
+      prevAutoSyncEnabledRef.current = autoSyncEnabled;
+      setAutoSyncMutation.mutate({ enabled: autoSyncEnabled });
+    }
+  }, [autoSyncEnabled]);
+
+  // Push interval changes to the server poller.
+  useEffect(() => {
+    if (prevSyncIntervalRef.current !== syncIntervalMs) {
+      prevSyncIntervalRef.current = syncIntervalMs;
+      setAutoSyncMutation.mutate({ enabled: autoSyncEnabled, intervalMs: syncIntervalMs });
+    }
+  }, [syncIntervalMs]);
+
+  // Reconcile the local controls with the server poller's ACTUAL state once,
+  // the first time syncStatus arrives (e.g. after a page reload the poller may
+  // be paused or running at a different interval than the UI defaults). We
+  // update the prev refs first so the effects above don't echo the change back.
+  const reconciledRef = useRef(false);
+  useEffect(() => {
+    if (reconciledRef.current) return;
+    const st = syncStatusQuery.data;
+    if (!st) return;
+    reconciledRef.current = true;
+    if (st.running !== autoSyncEnabled) {
+      prevAutoSyncEnabledRef.current = st.running;
+      setAutoSyncEnabled(st.running);
+    }
+    if (st.currentIntervalMs != null && st.currentIntervalMs !== syncIntervalMs) {
+      prevSyncIntervalRef.current = st.currentIntervalMs;
+      setSyncIntervalMs(st.currentIntervalMs);
+    }
+  }, [syncStatusQuery.data]);
+
+  const exportCsvQuery = trpc.hrs.exportCsv.useQuery(undefined, {
+    enabled: false, // only fetch on explicit click
+  });
+  const csvDownloadedRef = useRef(false);
+
+  const triggerExportCsv = useCallback(() => {
+    csvDownloadedRef.current = false;
+    exportCsvQuery.refetch();
+  }, [exportCsvQuery]);
+
+  useEffect(() => {
+    if (!csvDownloadedRef.current && exportCsvQuery.data && "filename" in exportCsvQuery.data && exportCsvQuery.data.filename) {
+      csvDownloadedRef.current = true;
+      // Server returns base64-encoded XLSX bytes.
+      const binaryStr = atob(exportCsvQuery.data.data);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+      const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = exportCsvQuery.data.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  }, [exportCsvQuery.data]);
+
   if (view === "donations") {
     return (
       <AdminSection
@@ -1806,332 +2346,47 @@ function WorkspaceView({
   }
 
   if (view === "locations") {
-    // Build per-area data for Tumkur (and optionally outside)
-    const areaBreakdown = Array.from(
-      new Set(records.map(r => r.area).filter(Boolean))
-    )
-      .map(area => {
-        const areaRecords = records.filter(r => r.area === area);
-        const verified = areaRecords.filter(r => r.status === "Verified");
-        const donors = verified.filter(r => r.donorConsent === true);
-        const available = donors.filter(r => r.availability === "Available");
-        const bgCounts: Record<string, number> = {};
-        for (const r of verified) {
-          bgCounts[r.group] = (bgCounts[r.group] ?? 0) + 1;
-        }
-        const topGroup = Object.entries(bgCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
-        return {
-          area,
-          total: areaRecords.length,
-          verified: verified.length,
-          donors: donors.length,
-          available: available.length,
-          topGroup,
-          bgCounts,
-        };
-      })
-      .sort((a, b) => b.donors - a.donors);
-
-    const totalDonors = donors.length;
-    const totalAreas = areaBreakdown.length;
-    const avgDonorsPerArea = totalAreas ? Math.round(totalDonors / totalAreas) : 0;
-    const totalAvailable = availableDonors.length;
-    const tumkurRecords = areaBreakdown;
-    const outsideRecords = locationRows
-      .filter(r => r.location !== "Tumkur")
-      .reduce((s, r) => s + r.count, 0);
-
-    const locationChartData = areaBreakdown.map(a => ({
-      name: a.area,
-      donors: a.donors,
-      available: a.available,
-    }));
-
-    // Coverage matrix: blood group × area
-    const coverageAreas = areaBreakdown.slice(0, 6);
-    const coverageMatrix = coverageAreas.map(area => ({
-      name: area.area,
-      ...Object.fromEntries(
-        bloodGroups.map(bg => [bg, area.bgCounts[bg] ?? 0])
-      ),
-    }));
-
     return (
       <AdminSection
         eyebrow="NETWORK INTELLIGENCE"
-        title="Tumkur Locations"
-        description="Donor distribution, availability and blood group coverage across Tumkur City areas."
+        title="Tumkur Zones"
+        description="Every area across Tumkur, auto-registered the moment it appears in the donor sheet."
+        action={
+          <button
+            className="record-sync-button"
+            type="button"
+            onClick={onSync}
+            disabled={isSyncing}
+            title="Sync records from Google Sheets"
+          >
+            <RefreshCw size={14} className={isSyncing ? "syncing-icon" : ""} />
+            {isSyncing ? "Syncing..." : "Sync"}
+          </button>
+        }
       >
-        {/* KPI row */}
-        <div className="statistics-kpis location-kpis">
-          <div className="statistics-kpi">
-            <span>Tumkur Areas</span>
-            <strong>{totalAreas}</strong>
-            <small>Active coverage zones</small>
-          </div>
-          <div className="statistics-kpi">
-            <span>Voluntary Donors</span>
-            <strong>{totalDonors}</strong>
-            <small>Across all areas</small>
-          </div>
-          <div className="statistics-kpi">
-            <span>Available Now</span>
-            <strong>{totalAvailable}</strong>
-            <small>{totalDonors ? Math.round((totalAvailable / totalDonors) * 100) : 0}% of donors</small>
-          </div>
-          <div className="statistics-kpi">
-            <span>Avg / Area</span>
-            <strong>{avgDonorsPerArea}</strong>
-            <small>Donors per zone</small>
-          </div>
-        </div>
-
-        <div className="admin-two-col">
-          {/* Area distribution chart */}
-          <div className="statistics-card location-chart-card">
-            <div className="statistics-card-heading">
-              <div>
-                <span>Distribution</span>
-                <h2>Donors by area</h2>
-              </div>
-            </div>
-            <div className="location-chart-wrap">
-              <ResponsiveContainer width="100%" height={Math.max(220, areaBreakdown.length * 38)}>
-                <BarChart
-                  data={locationChartData}
-                  layout="vertical"
-                  margin={{ top: 4, right: 20, left: 0, bottom: 0 }}
-                >
-                  <CartesianGrid horizontal={false} stroke="#edf0ed" />
-                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#697369" }} allowDecimals={false} />
-                  <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#3d483d" }} width={90} />
-                  <Tooltip
-                    contentStyle={{ border: "1px solid #dfe4df", borderRadius: 8, fontSize: 12 }}
-                    cursor={{ fill: "#f4f8f4" }}
-                  />
-                  <Bar dataKey="donors" name="All donors" fill="#c5162d" radius={[4, 4, 4, 4]} barSize={18}>
-                    {locationChartData.map((entry, index) => (
-                      <Cell key={entry.name} fill="#c5162d" fillOpacity={0.6 + (index === 0 ? 0.4 : (totalDonors ? areaBreakdown[index].donors / totalDonors : 0) * 0.4)} />
-                    ))}
-                  </Bar>
-                  <Bar dataKey="available" name="Available now" fill="#4a7a4a" radius={[4, 4, 4, 4]} barSize={18} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Top area details */}
-          <div className="statistics-card location-areas-card">
-            <div className="statistics-card-heading">
-              <div>
-                <span>Top Zones</span>
-                <h2>Area leaders</h2>
-              </div>
-            </div>
-            <div className="location-areas-list">
-              {areaBreakdown.slice(0, 8).map((area, i) => (
-                <div className="location-area-row" key={area.area}>
-                  <div className="location-area-rank">{i + 1}</div>
-                  <div className="location-area-info">
-                    <strong>{area.area}</strong>
-                    <span>{area.donors} donors · {area.available} available</span>
-                  </div>
-                  <div className="location-area-bar-wrap">
-                    <div
-                      className="location-area-bar"
-                      style={{
-                        width: `${totalDonors ? Math.round((area.donors / totalDonors) * 100) : 0}%`,
-                      }}
-                    />
-                  </div>
-                  <div className="location-area-pct">
-                    {totalDonors ? Math.round((area.donors / totalDonors) * 100) : 0}%
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Blood group coverage matrix */}
-        <div className="statistics-card statistics-wide-card location-coverage-card">
-          <div className="statistics-card-heading">
-            <div>
-              <span>Coverage</span>
-              <h2>Blood groups by area</h2>
-            </div>
-            <span className="location-coverage-badge">
-              <Droplets size={13} />
-              {coverageAreas.length} areas
-            </span>
-          </div>
-          <div className="location-coverage-wrap">
-            <table className="location-coverage-table">
-              <thead>
-                <tr>
-                  <th>Area</th>
-                  <th>Donors</th>
-                  {bloodGroups.map(bg => (
-                    <th key={bg}>{bg}</th>
-                  ))}
-                  <th>Available</th>
-                </tr>
-              </thead>
-              <tbody>
-                {coverageAreas.map(area => {
-                  const pct = totalDonors ? Math.round((area.donors / totalDonors) * 100) : 0;
-                  return (
-                    <tr key={area.area}>
-                      <td className="location-coverage-area-name">
-                        <strong>{area.area}</strong>
-                        <small>{pct}%</small>
-                      </td>
-                      <td className="location-coverage-count">{area.donors}</td>
-                      {bloodGroups.map(bg => {
-                        const count = area.bgCounts[bg] ?? 0;
-                        return (
-                          <td key={bg} className={`location-coverage-cell ${count > 0 ? "has-value" : ""}`}>
-                            {count > 0 ? count : <span className="location-coverage-dash">—</span>}
-                          </td>
-                        );
-                      })}
-                      <td className="location-coverage-available">
-                        {area.available > 0 ? (
-                          <span className="location-coverage-avail-badge">{area.available}</span>
-                        ) : (
-                          <span className="location-coverage-none">0</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td><strong>Total</strong></td>
-                  <td className="location-coverage-count"><strong>{totalDonors}</strong></td>
-                  {bloodGroups.map(bg => (
-                    <td key={bg} className="location-coverage-cell">
-                      <strong>
-                        {areaBreakdown.reduce((s, a) => s + (a.bgCounts[bg] ?? 0), 0)}
-                      </strong>
-                    </td>
-                  ))}
-                  <td className="location-coverage-count">
-                    <strong>{totalAvailable}</strong>
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
-
-        {/* Quick reference */}
-        <div className="admin-two-col">
-          <div className="statistics-card location-legend-card">
-            <div className="statistics-card-heading">
-              <div>
-                <span>Legend</span>
-                <h2>Understanding the data</h2>
-              </div>
-            </div>
-            <div className="location-legend">
-              <div className="location-legend-item">
-                <span className="location-legend-dot" style={{ background: "#c5162d" }} />
-                <div>
-                  <strong>Total donors</strong>
-                  <small>Verified profiles with blood donation consent = Yes</small>
-                </div>
-              </div>
-              <div className="location-legend-item">
-                <span className="location-legend-dot" style={{ background: "#4a7a4a" }} />
-                <div>
-                  <strong>Available now</strong>
-                  <small>Donors whose 90-day deferral period has passed</small>
-                </div>
-              </div>
-              <div className="location-legend-item">
-                <span className="location-legend-dot" style={{ background: "#d89a3c" }} />
-                <div>
-                  <strong>Coverage %</strong>
-                  <small>This area's share of all Tumkur donors</small>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="statistics-card location-stats-card">
-            <div className="statistics-card-heading">
-              <div>
-                <span>Summary</span>
-                <h2>Quick numbers</h2>
-              </div>
-            </div>
-            <div className="location-quick-stats">
-              <div className="location-quick-stat">
-                <MapPin size={16} />
-                <div>
-                  <strong>{totalAreas}</strong>
-                  <small>Active areas in Tumkur</small>
-                </div>
-              </div>
-              <div className="location-quick-stat">
-                <Users size={16} />
-                <div>
-                  <strong>{totalDonors}</strong>
-                  <small>Voluntary donors</small>
-                </div>
-              </div>
-              <div className="location-quick-stat">
-                <Heart size={16} />
-                <div>
-                  <strong>{totalAvailable}</strong>
-                  <small>Can donate today</small>
-                </div>
-              </div>
-              <div className="location-quick-stat">
-                <Activity size={16} />
-                <div>
-                  <strong>{outsideRecords}</strong>
-                  <small>Records outside Tumkur</small>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <LocationsView
+          locations={locationStats}
+          totalAreas={totalAreas}
+          totalDonors={totalDonors}
+          totalAvailable={totalAvailable}
+          newThisSync={newThisSync}
+          outsideTumkur={outsideTumkur}
+          records={records}
+          donors={donors}
+          availableDonors={availableDonors}
+          pending={pending}
+          lastSyncedAt={lastSyncedAt}
+          bloodGroups={bloodGroups}
+          isSyncing={isSyncing}
+          onSync={onSync}
+        />
       </AdminSection>
     );
   }
 
   if (view === "staff") {
-    return (
-      <AdminSection
-        eyebrow="SYSTEM"
-        title="Staff & Access"
-        description="Authorized HRS staff and workspace permissions."
-      >
-        <section className="admin-card">
-          <div className="admin-card-heading">
-            <div>
-              <h2>Authorized directory</h2>
-              <p>Staff permissions are managed in the authorized HRS directory.</p>
-            </div>
-          </div>
-          <div className="recent-list">
-            <div className="recent-row">
-              <div className="mini-avatar">
-                <UserRound size={14} />
-              </div>
-              <div>
-                <strong>Admin</strong>
-                <span>Administrator · full workspace access</span>
-              </div>
-              <small>Active</small>
-            </div>
-          </div>
-        </section>
-      </AdminSection>
-    );
+    // Real staff CRUD view using tRPC staff router
+    return <StaffAccessView />;
   }
 
   if (view === "audit") {
@@ -2139,84 +2394,287 @@ function WorkspaceView({
       <AdminSection
         eyebrow="SYSTEM"
         title="Audit Log"
-        description="Recent staff activity and directory changes."
+        description="Every action performed in the admin panel, recorded with actor, timestamp, and outcome."
       >
-        <section className="admin-card">
-          <div className="recent-list" style={{ marginTop: 0 }}>
-            <div className="recent-row">
-              <div className="mini-avatar">
-                <FileSpreadsheet size={14} />
-              </div>
-              <div>
-                <strong>Google Sheets sync</strong>
-                <span>{formatIndiaSyncTime(lastSyncedAt)}</span>
-              </div>
-              <small>System</small>
-            </div>
-            <div className="recent-row">
-              <div className="mini-avatar">
-                <Users size={14} />
-              </div>
-              <div>
-                <strong>{records.length} records in directory</strong>
-                <span>{pending.length} pending · {donors.length} verified</span>
-              </div>
-              <small>Live</small>
-            </div>
-          </div>
-        </section>
+        <AuditLog />
       </AdminSection>
     );
   }
 
   if (view === "sync") {
+    const sync = syncStatusQuery.data;
+    const diag = syncDiagMutation.data;
+    const syncOk = sync?.lastStatus === "ok";
+    const writeOk = diag?.write?.ok;
+    const writeTested = diag?.write != null;
+    const readTested = diag?.read != null;
+    // A poll landed within the last ~7.5s → pulse the status dot.
+    const justSynced =
+      sync?.lastAttemptAt != null && Date.now() - sync.lastAttemptAt < 7500;
+
+    const intervalOptions = [
+      { label: "5s", value: 5000 },
+      { label: "10s", value: 10000 },
+      { label: "30s", value: 30000 },
+      { label: "1m", value: 60000 },
+    ];
+
+    const fmtMs = (ms: number | undefined | null) =>
+      ms == null ? "—" : ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+
+    const fmtRate = (successes: number, attempts: number) =>
+      attempts === 0 ? "—" : `${Math.round((successes / attempts) * 100)}%`;
+
     return (
       <AdminSection
         eyebrow="SYSTEM"
-        title="Sync & Data"
-        description="Google Sheets connection and directory refresh status."
+        title="Settings"
+        description="Google Sheets connection, auto-sync controls, and data health overview."
+        action={
+          <button
+            className="sync-action-btn"
+            type="button"
+            onClick={() => syncDiagMutation.mutate()}
+            disabled={syncDiagMutation.isPending}
+          >
+            {syncDiagMutation.isPending
+              ? <Loader2 size={14} className="syncing-icon" />
+              : <Wifi size={14} />}
+            {syncDiagMutation.isPending ? "Running…" : "Run Diagnostics"}
+          </button>
+        }
       >
-        <section className="admin-card">
-          <div className="sheet-sync" style={{ background: "#f4f6f3", color: "#5c665c" }}>
-            <FileSpreadsheet size={18} />
-            <span>
-              <strong>Google Sheets</strong>
-              <small>{formatIndiaSyncTime(lastSyncedAt)}</small>
-            </span>
-            <span className="sync-dot" />
-          </div>
-          <p style={{ marginTop: 16, color: "#7d897d", fontSize: 13 }}>
-            The directory refreshes automatically every 10 seconds from the published HRS sheet.
-          </p>
-        </section>
+        {/* ── Connection Health ──────────────────────────────────────── */}
+        <div className="sync-grid">
+          <section className={`admin-card sync-health-card ${syncOk ? "sync-ok" : sync?.lastStatus === "error" ? "sync-error" : ""}`}>
+            <div className="sync-card-header">
+              <div className="sync-card-icon read-icon">
+                <FileSpreadsheet size={18} />
+              </div>
+              <div className="sync-card-badge" data-ok={syncOk}>
+                {syncOk
+                  ? <><CheckCircle size={13} /> Healthy</>
+                  : sync?.lastStatus === "error"
+                    ? <><AlertTriangle size={13} /> Error</>
+                    : <><Clock size={13} /> Unknown</>}
+              </div>
+            </div>
+            <h3>Google Sheets (Read)</h3>
+            <p className="sync-card-desc">CSV polling — directory data source</p>
+            <div className="sync-metrics">
+              <div className="sync-metric">
+                <span className="sync-metric-label">Latency</span>
+                <span className="sync-metric-value">{fmtMs(sync?.avgLatencyMs)}</span>
+              </div>
+              <div className="sync-metric">
+                <span className="sync-metric-label">Success rate</span>
+                <span className="sync-metric-value">{fmtRate(sync?.successes ?? 0, sync?.attempts ?? 0)}</span>
+              </div>
+              <div className="sync-metric">
+                <span className="sync-metric-label">Records cached</span>
+                <span className="sync-metric-value">{sync?.cachedRecordCount ?? "—"}</span>
+              </div>
+              <div className="sync-metric">
+                <span className="sync-metric-label">Poller</span>
+                <span className="sync-metric-value sync-metric-small">
+                  {sync == null ? "—" : sync.running ? "Running" : "Paused"}
+                </span>
+              </div>
+              <div className="sync-metric">
+                <span className="sync-metric-label">Interval</span>
+                <span className="sync-metric-value sync-metric-small">{sync?.currentIntervalMs ? `${sync.currentIntervalMs / 1000}s` : "—"}</span>
+              </div>
+              <div className="sync-metric">
+                <span className="sync-metric-label">Last attempt</span>
+                <span className="sync-metric-value sync-metric-time">{formatIndiaSyncTime(sync?.lastAttemptAt ? new Date(sync.lastAttemptAt) : null)}</span>
+              </div>
+            </div>
+            {sync?.lastError && (
+              <div className="sync-card-error">
+                <AlertTriangle size={13} />
+                <span>{sync.lastError}</span>
+              </div>
+            )}
+          </section>
+
+          <section className={`admin-card sync-health-card ${writeTested ? (writeOk ? "sync-ok" : "sync-error") : ""}`}>
+            <div className="sync-card-header">
+              <div className="sync-card-icon write-icon">
+                <Zap size={18} />
+              </div>
+              <div className="sync-card-badge" data-ok={writeOk}>
+                {writeTested
+                  ? writeOk
+                    ? <><CheckCircle size={13} /> Reachable</>
+                    : <><XCircle size={13} /> Unreachable</>
+                  : <><Clock size={13} /> Not tested</>}
+              </div>
+            </div>
+            <h3>Apps Script (Write)</h3>
+            <p className="sync-card-desc">Mutation endpoint — verification, updates, donations</p>
+            <div className="sync-metrics">
+              <div className="sync-metric">
+                <span className="sync-metric-label">Write latency</span>
+                <span className="sync-metric-value">{diag?.write ? fmtMs(diag.write.latencyMs) : "—"}</span>
+              </div>
+              <div className="sync-metric">
+                <span className="sync-metric-label">Write path</span>
+                <span className="sync-metric-value sync-metric-small">{diag?.write?.ok ? "Active" : "—"}</span>
+              </div>
+            </div>
+            {diag?.write && !diag.write.ok && diag.write.error && (
+              <div className="sync-card-error">
+                <AlertTriangle size={13} />
+                <span>{diag.write.error}</span>
+              </div>
+            )}
+            {diag?.write?.message && (
+              <div className="sync-card-note">
+                <Info size={12} />
+                <span>{diag.write.message}</span>
+              </div>
+            )}
+            {readTested && diag?.read && (
+              <div className="sync-card-note">
+                <Activity size={12} />
+                <span>Read refresh: {fmtMs(diag.read.latencyMs)} — {diag.read.count} records</span>
+              </div>
+            )}
+          </section>
+        </div>
+
+        {/* ── Auto-Sync Controls ────────────────────────────────────── */}
+        <div className="sync-controls-row">
+          <section className="admin-card sync-controls-card">
+            <div className="sync-controls-header">
+              <div className="sync-controls-label">
+                <RefreshCw size={16} className={isSyncing || setAutoSyncMutation.isPending ? "syncing-icon" : ""} />
+                <div>
+                  <strong>Auto-Sync</strong>
+                  <small>Refresh directory data from Google Sheets</small>
+                </div>
+              </div>
+              <label className="sync-toggle" htmlFor="autoSyncToggle">
+                <input
+                  id="autoSyncToggle"
+                  type="checkbox"
+                  checked={autoSyncEnabled}
+                  onChange={e => setAutoSyncEnabled(e.target.checked)}
+                  disabled={setAutoSyncMutation.isPending}
+                />
+                <span className="sync-toggle-track">
+                  <span className="sync-toggle-thumb" />
+                </span>
+                <span className={`sync-toggle-label ${autoSyncEnabled ? "active" : ""}`}>
+                  {autoSyncEnabled ? "On" : "Off"}
+                </span>
+              </label>
+            </div>
+            <div className="sync-interval-row">
+              <span className="sync-interval-label">Refresh interval</span>
+              <div className="sync-interval-pills">
+                {intervalOptions.map(opt => (
+                  <button
+                    key={opt.value}
+                    className={`sync-interval-pill ${syncIntervalMs === opt.value ? "active" : ""}`}
+                    type="button"
+                    onClick={() => setSyncIntervalMs(opt.value)}
+                    disabled={!autoSyncEnabled || setAutoSyncMutation.isPending}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="sync-status-row">
+              <span className="sync-status-text">
+                <span className={`sync-dot ${isSyncing || justSynced ? "syncing" : ""}`} />
+                {isSyncing
+                  ? "Syncing now…"
+                  : autoSyncEnabled
+                    ? `Polling every ${syncIntervalMs < 1000 ? syncIntervalMs : `${syncIntervalMs / 1000}s`}`
+                    : "Auto-sync paused"}
+              </span>
+              <span className="sync-status-time">
+                Last sync: {formatIndiaSyncTime(
+                  sync?.lastAttemptAt ? new Date(sync.lastAttemptAt) : lastSyncedAt
+                )}
+              </span>
+            </div>
+          </section>
+
+          <section className="admin-card sync-manual-card">
+            <h3>Manual Sync</h3>
+            <p className="sync-card-desc">Trigger a one-time refresh of the directory cache</p>
+            <button
+              className="sync-action-btn primary"
+              type="button"
+              onClick={() => onSync()}
+              disabled={isSyncing}
+            >
+              {isSyncing
+                ? <Loader2 size={15} className="syncing-icon" />
+                : <RefreshCw size={15} />}
+              {isSyncing ? "Syncing…" : "Sync Now"}
+            </button>
+            <div className="sync-manual-meta">
+              <span>Attempted: {sync?.attempts ?? 0}</span>
+              <span>Succeeded: {sync?.successes ?? 0}</span>
+              <span>Failed: {sync?.failures ?? 0}</span>
+            </div>
+          </section>
+        </div>
+
+                {/* ── Export & Actions ──────────────────────────────────────── */}
+        <div className="sync-controls-row">
+          <section className="admin-card sync-export-card">
+            <h3>
+              <Download size={16} />
+              Export Directory
+            </h3>
+            <p className="sync-card-desc">Download the full HRS directory as an Excel spreadsheet</p>
+            <button
+              className="sync-action-btn"
+              type="button"
+              onClick={triggerExportCsv}
+              disabled={exportCsvQuery.isFetching}
+            >
+              {exportCsvQuery.isFetching
+                ? <Loader2 size={14} className="syncing-icon" />
+                : <Download size={14} />}
+              {exportCsvQuery.isFetching ? "Preparing…" : "Export Excel"}
+            </button>
+          </section>
+
+          <section className="admin-card sync-export-card">
+            <h3>
+              <ShieldCheck size={16} />
+              Quick Health Check
+            </h3>
+            <p className="sync-card-desc">Test both read and write connectivity to Google services</p>
+            <button
+              className="sync-action-btn"
+              type="button"
+              onClick={() => syncDiagMutation.mutate()}
+              disabled={syncDiagMutation.isPending}
+            >
+              {syncDiagMutation.isPending
+                ? <Loader2 size={14} className="syncing-icon" />
+                : <Wifi size={14} />}
+              {syncDiagMutation.isPending ? "Testing…" : "Test Connections"}
+            </button>
+            {diag && (
+              <div className={`sync-diag-result ${diag.read?.ok && diag.write?.ok ? "ok" : "error"}`}>
+                {diag.read?.ok && diag.write?.ok
+                  ? <><CheckCircle size={13} /> Both read and write paths are healthy</>
+                  : <><AlertTriangle size={13} /> Issues detected — see connection health above</>}
+              </div>
+            )}
+          </section>
+        </div>
       </AdminSection>
     );
   }
-
-  return (
-    <AdminSection
-      eyebrow="SYSTEM"
-      title="Settings"
-      description="Workspace preferences for the HRS staff portal."
-    >
-      <section className="admin-card">
-        <div className="admin-card-heading">
-          <div>
-            <h2>Workspace</h2>
-            <p>Timezone is fixed to India Standard Time for live sync and greetings.</p>
-          </div>
-        </div>
-        <div className="add-form" style={{ maxWidth: 420 }}>
-          <Field label="Display name">
-            <input className="plain-input" defaultValue="Admin" readOnly />
-          </Field>
-          <Field label="Role">
-            <input className="plain-input" defaultValue="Administrator" readOnly />
-          </Field>
-        </div>
-      </section>
-    </AdminSection>
-  );
 }
 
 function AdminSection({

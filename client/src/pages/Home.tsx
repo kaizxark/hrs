@@ -944,10 +944,14 @@ export default function Home() {
           </span>
           <span>Emergency</span>
         </button>
-        <Link href="/admin">
+        <button
+          className="nav-btn"
+          onClick={() => window.location.assign("/admin")}
+          aria-label="Login to staff workspace"
+        >
           <LockKeyhole size={19} />
           <span>Login</span>
-        </Link>
+        </button>
       </nav>
 
       {emergencyOpen && (
