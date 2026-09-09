@@ -31,7 +31,10 @@ export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 
-    if (!ctx.user || ctx.user.role !== "admin") {
+    const isOAuthAdmin = ctx.user?.role === "admin";
+    const isStaffAdmin = ctx.staff?.role === "admin";
+
+    if (!isOAuthAdmin && !isStaffAdmin) {
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
 
@@ -39,6 +42,33 @@ export const adminProcedure = t.procedure.use(
       ctx: {
         ...ctx,
         user: ctx.user,
+        staff: ctx.staff,
+      },
+    });
+  })
+);
+
+/**
+ * Requires an authenticated volunteer OR admin — either a staff account
+ * (volunteer/admin) or an OAuth admin user. Used by the volunteer portal
+ * which exposes personal contact details that the public homepage hides.
+ */
+export const volunteerProcedure = t.procedure.use(
+  t.middleware(async opts => {
+    const { ctx, next } = opts;
+
+    const isStaff = ctx.staff?.role === "volunteer" || ctx.staff?.role === "admin";
+    const isOAuthAdmin = ctx.user?.role === "admin";
+
+    if (!isStaff && !isOAuthAdmin) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+    }
+
+    return next({
+      ctx: {
+        ...ctx,
+        user: ctx.user,
+        staff: ctx.staff,
       },
     });
   })

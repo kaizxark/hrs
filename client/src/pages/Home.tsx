@@ -695,6 +695,11 @@ export default function Home() {
     setEmergencyOpen(true);
   };
 
+  /* ------------------------------------------------------------------ */
+/*  Public home page: volunteer login takes them straight to the      */
+/*  admin-style read-only dashboard at /admin.                         */
+/* ------------------------------------------------------------------ */
+
   return (
     <div className="portal-shell">
       <main id="top">

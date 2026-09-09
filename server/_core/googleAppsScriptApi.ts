@@ -81,9 +81,10 @@ export interface Statistics {
   };
 }
 
-async function callApi<T>(
+export async function callApi<T>(
   action: string,
-  params: Record<string, string> = {}
+  params: Record<string, string> = {},
+  timeoutMs = 8000
 ): Promise<ApiResponse<T>> {
   try {
     const url = new URL(API_BASE_URL);
@@ -94,12 +95,20 @@ async function callApi<T>(
       url.searchParams.set(key, value);
     }
 
-    const response = await fetch(url.toString(), {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    let response: globalThis.Response;
+    try {
+      response = await fetch(url.toString(), {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       return {
@@ -131,7 +140,7 @@ async function callApi<T>(
   }
 }
 
-async function postApi<T>(
+export async function postApi<T>(
   action: string,
   body: Record<string, string>
 ): Promise<ApiResponse<T>> {
@@ -202,6 +211,69 @@ async function postApi<T>(
 // Health check
 export async function ping(): Promise<ApiResponse<{ message: string }>> {
   return callApi<{ message: string }>("ping");
+}
+
+/**
+ * Measure connectivity + latency to the Apps Script write endpoint.
+ * Returns a decorated result the admin "Sync & Data" diagnostics panel can show.
+ */
+export async function testWritePath(): Promise<{
+  ok: boolean;
+  latencyMs: number | null;
+  error?: string;
+  message?: string;
+}> {
+  const startedAt = Date.now();
+  const res = await ping();
+  const latencyMs = Date.now() - startedAt;
+  if (res.success) {
+    return { ok: true, latencyMs, message: res.data?.message ?? "pong" };
+  }
+  return { ok: false, latencyMs, error: res.error ?? "Unknown error" };
+}
+
+// ---------------------------------------------------------------------------
+// Audit log (read from Google Sheet "Audit Logs" tab)
+// ---------------------------------------------------------------------------
+
+/** Raw shape returned by the Apps Script `getAuditLogs` helper (sheet columns). */
+export interface RawAuditLogEntry {
+  "Timestamp"?: string;
+  "Action Type"?: string;
+  "Action"?: string;
+  "Actor Name"?: string;
+  "Actor Role"?: string;
+  "Actor OpenID"?: string;
+  "Target Type"?: string;
+  "Target ID"?: string;
+  "Details"?: string;
+  "Success"?: string;
+  "IP Address"?: string;
+}
+
+/**
+ * Fetch audit log entries from the Google Sheet via Apps Script.
+ * Returns newest-first rows from the "Audit Logs" sheet.
+ */
+/** Clear all audit entries from the Google Sheet "Audit Log" tab. */
+export async function clearAuditLogs(): Promise<ApiResponse<{ removed: number; message: string }>> {
+  return callApi<{ removed: number; message: string }>("clear_audit");
+}
+
+export async function fetchAuditLogs(
+  limit = 500,
+  offset = 0,
+): Promise<ApiResponse<RawAuditLogEntry[]>> {
+  // Audit log reads can be slow (Apps Script cold start / sheet reads), so use
+  // a generous timeout instead of the 8s default.
+  return callApi<RawAuditLogEntry[]>(
+    "audit_logs",
+    {
+      limit: String(limit),
+      offset: String(offset),
+    },
+    30000
+  );
 }
 
 // Verify profile (admin only - requires secret)

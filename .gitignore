@@ -13,6 +13,7 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.save
 
 # IDE and editor files
 .vscode/
@@ -45,6 +46,9 @@ pids
 *.seed
 *.pid.lock
 *.bak
+
+# Netlify local state
+.netlify/
 
 # Coverage directory used by tools like istanbul
 coverage/
@@ -118,3 +122,7 @@ client/public/__manus__/version.json
 
 # Manus logs
 .manus-logs/
+
+# Exported data files
+files.zip
+hrs-directory-*.xlsx

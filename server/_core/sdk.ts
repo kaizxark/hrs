@@ -292,20 +292,47 @@ class SDKServer {
 
     const sessionUserId = session.openId;
     const signedInAt = new Date();
-    let user = await db.getUserByOpenId(sessionUserId);
+
+    const hasDb = Boolean(process.env.DATABASE_URL);
+    let user = hasDb ? await db.getUserByOpenId(sessionUserId) : undefined;
 
     // If user not in DB, sync from OAuth server automatically
     if (!user) {
       try {
         const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
-        await db.upsertUser({
-          openId: userInfo.openId,
-          name: userInfo.name || null,
-          email: userInfo.email ?? null,
-          loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-          lastSignedIn: signedInAt,
-        });
-        user = await db.getUserByOpenId(userInfo.openId);
+        if (hasDb) {
+          await db.upsertUser({
+            openId: userInfo.openId,
+            name: userInfo.name || null,
+            email: userInfo.email ?? null,
+            loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
+            lastSignedIn: signedInAt,
+          });
+          user = await db.getUserByOpenId(userInfo.openId);
+        }
+
+        // When the DB is unavailable, construct a synthetic user from the
+        // JWT session + OAuth info so authenticated users can still access
+        // admin endpoints (audit log, etc.).  In a no-DB deployment every
+        // logged-in user is treated as admin since there's no other role
+        // store.
+        if (!user) {
+          const now = new Date();
+          user = {
+            id: 0,
+            openId: userInfo.openId || sessionUserId,
+            name: userInfo.name || session.name || null,
+            email: userInfo.email ?? null,
+            loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
+            role: "admin" as const,
+            createdAt: now,
+            updatedAt: now,
+            lastSignedIn: signedInAt,
+          };
+          console.log(
+            `[Auth] No DB — using synthetic user for ${user.openId} (role: ${user.role})`,
+          );
+        }
       } catch (error) {
         console.error("[Auth] Failed to sync user from OAuth:", error);
         throw ForbiddenError("Failed to sync user info");
@@ -316,10 +343,12 @@ class SDKServer {
       throw ForbiddenError("User not found");
     }
 
-    await db.upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt,
-    });
+    if (hasDb) {
+      await db.upsertUser({
+        openId: user.openId,
+        lastSignedIn: signedInAt,
+      });
+    }
 
     return user;
   }

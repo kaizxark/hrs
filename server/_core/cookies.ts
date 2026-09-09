@@ -39,10 +39,15 @@ export function getSessionCookieOptions(
   //       ? hostname
   //       : undefined;
 
+  // Secure cookies don't work properly over http://localhost (browsers
+  // treat localhost as secure for Set-Cookie but may block SameSite=None
+  // over non-https connections). Use sameSite=Lax and secure=false for
+  // localhost/dev; sameSite=None and secure=true only for production https.
+  const isLocal = LOCAL_HOSTS.has(req.hostname || '') || isIpAddress(req.hostname || '');
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
-    secure: isSecureRequest(req),
+    sameSite: isLocal ? "lax" : "none",
+    secure: !isLocal,
   };
 }

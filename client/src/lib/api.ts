@@ -70,6 +70,27 @@ export interface ApiResponse<T> {
   error?: string;
 }
 
+export interface LocationStats {
+  area: string;
+  total: number;
+  verified: number;
+  donors: number;
+  available: number;
+  bloodGroupCounts: Record<string, number>;
+  topGroup: string;
+  isNew: boolean;
+  firstSeenAt: string | null;
+}
+
+export interface LocationsResponse {
+  locations: LocationStats[];
+  totalAreas: number;
+  totalDonors: number;
+  totalAvailable: number;
+  newThisSync: LocationStats[];
+  outsideTumkur: number;
+}
+
 // Health check
 export function useHealthCheck() {
   return trpc.hrs.health.useQuery(undefined, {
@@ -111,6 +132,15 @@ export function useStatistics() {
   return trpc.hrs.statistics.useQuery(undefined, {
     refetchOnWindowFocus: false,
     staleTime: 30000,
+  });
+}
+
+// Get Tumkur locations with auto-detected new areas
+export function useLocations() {
+  return trpc.hrs.locations.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
+    retry: 2,
   });
 }
 

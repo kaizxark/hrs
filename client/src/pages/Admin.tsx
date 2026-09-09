@@ -1,9 +1,10 @@
 import { FormEvent, useMemo, useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useStaffAuth } from "@/lib/staffAuth";
 import type { StaffSession } from "@/lib/staffAuth";
+import { Field, StaffLogin } from "@/components/StaffLogin";
 import type { LocationStats } from "@/lib/api";
 import LocationsView from "./LocationsView";
 import AuditLog from "@/components/AuditLog";
@@ -52,6 +53,7 @@ import {
   LogOut,
   MapPin,
   Menu,
+  PhoneCall,
   Plus,
   RefreshCw,
   Save,
@@ -181,7 +183,7 @@ const DEFAULT_SETTINGS: AdminSettings = {
   recordsPerPage: 30,
   timeFormat: "12h",
   lowSupplyThresholds: {},
-  displayName: "Admin",
+  displayName: "",
 };
 
 function loadAdminSettings(): AdminSettings {
@@ -256,23 +258,6 @@ function formatIndiaSyncTime(date: Date | null) {
   return `Last synced ${elapsedHours} hr ago`;
 }
 
-function Field({
-  label,
-  children,
-  className,
-}: {
-  label: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <label className={`admin-field${className ? ` ${className}` : ""}`}>
-      <span>{label}</span>
-      {children}
-    </label>
-  );
-}
-
 function Select({
   value,
   onChange,
@@ -292,159 +277,6 @@ function Select({
         ))}
       </select>
       <ChevronDown size={15} />
-    </div>
-  );
-}
-
-function Login() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const { staff, login, isLoggingIn } = useStaffAuth();
-  const [, navigate] = useLocation() as [string, (to: string) => void];
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!username || !password) {
-      toast.error("Enter your username and password to continue.");
-      return;
-    }
-
-    try {
-      const result = await login(username.trim(), password);
-      if (!result.success) {
-        toast.error(result.error || "Invalid username or password");
-      }
-      // Login success handled in useStaffAuth hook
-    } catch (error) {
-      console.error("Login error:", error);
-      toast.error("An unexpected error occurred during login.");
-    }
-  };
-
-  return (
-    <div className="login-page">
-      <div className="login-side">
-        <Link className="login-back" href="/">
-          <ArrowLeft size={16} /> Back to public portal
-        </Link>
-        <div className="login-side-content">
-          <div className="login-symbol">
-            <Droplets size={28} />
-          </div>
-          <span className="eyebrow light-eyebrow">STAFF WORKSPACE</span>
-          <h1>
-            Care starts
-            <br />
-            with <em>coordination.</em>
-          </h1>
-          <p>
-            Manage verified donor records and help the relief team respond with
-            confidence.
-          </p>
-          <div className="login-quote">
-            <ShieldCheck size={18} />
-            <span>
-              All public searches keep phone numbers and email addresses
-              private.
-            </span>
-          </div>
-        </div>
-        <span className="login-side-foot">HRS · Internal operations</span>
-      </div>
-      <div className="login-form-area">
-        <div className="login-form-wrap">
-          <div className="mobile-login-brand">
-            <div className="logo-mark">
-              <img
-                src="/hrs-logo.png"
-                alt=""
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "contain",
-                  borderRadius: "inherit",
-                }}
-              />
-            </div>
-            <strong>HRS</strong>
-          </div>
-          <span className="eyebrow dark-eyebrow">AUTHORIZED ACCESS</span>
-          <h2>Welcome back.</h2>
-          <p className="login-copy">Sign in to manage blood donor records.</p>
-          <form onSubmit={submit} className="login-form">
-            <Field label="Username">
-              <div className="admin-input">
-                <UserRound size={17} />
-                <input
-                  value={username}
-                  onChange={event => setUsername(event.target.value)}
-                  placeholder="Enter username"
-                  autoComplete="username"
-                  disabled={isLoggingIn}
-                />
-              </div>
-            </Field>
-            <Field label="Password">
-              <div className="admin-input">
-                <KeyRound size={17} />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={event => setPassword(event.target.value)}
-                  placeholder="Enter password"
-                  autoComplete="current-password"
-                  disabled={isLoggingIn}
-                />
-                <button
-                  type="button"
-                  className="input-icon-button"
-                  onClick={() => setShowPassword(value => !value)}
-                  disabled={isLoggingIn}
-                >
-                  {showPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-            </Field>
-            <button
-              className="primary-button wide-button"
-              type="submit"
-              disabled={isLoggingIn}
-              style={{ gap: isLoggingIn ? "10px" : "6px" }}
-            >
-              {isLoggingIn ? (
-                <>
-                  Signing in...{" "}
-                  <span
-                    className="spinner"
-                    style={{
-                      width: "16px",
-                      height: "16px",
-                      border: "2px solid rgba(255,255,255,0.3)",
-                      borderTopColor: "white",
-                      marginBottom: 0,
-                    }}
-                  ></span>
-                </>
-              ) : (
-                <>
-                  Sign in <ArrowRight size={17} />
-                </>
-              )}
-            </button>
-          </form>
-          <div className="login-note">
-            <LockKeyhole size={14} />
-            <span>
-              Admin credentials are checked against the authorized HRS staff
-              directory.
-            </span>
-          </div>
-          <div className="demo-hint">
-            Try <strong>admin / admin123</strong> (default admin account)
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -665,18 +497,12 @@ function StaffAccessView() {
 export default function Admin() {
   const { staff, isLoading: staffLoading, logout } = useStaffAuth();
   const [, navigate] = useLocation() as [string, (to: string) => void];
-  const cookiePresent = typeof document !== "undefined" && document.cookie.includes("hrs_staff_session_v2");
-  const loggedIn = !!staff && staff.active && cookiePresent;
+  // The session cookie is httpOnly — document.cookie cannot see it. The
+  // server's staff.me query is the ONLY source of truth for auth state.
+  const loggedIn = !!staff && staff.active;
+  const isVolunteer = staff?.role === "volunteer";
 
-  // Defensive: cookie must match session
-  useEffect(() => {
-    // If cookie missing but old staff cached, force reload to clear stale state
-    if (cookiePresent === false && staff && !staffLoading) {
-      window.location.reload();
-    }
-  }, [cookiePresent, staff, staffLoading]);
-
-  const [activeView, setActiveView] = useState<AdminView>(loadAdminSettings().defaultView);
+  const [activeView, setActiveView] = useState<AdminView>(isVolunteer ? "statistics" : loadAdminSettings().defaultView);
   const [recordTab, setRecordTab] = useState<RecordTab>("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filterGroup, setFilterGroup] = useState("All");
@@ -748,6 +574,8 @@ export default function Admin() {
   const topProfileMenuRef = useRef<HTMLDivElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [indiaTime, setIndiaTime] = useState("");
+  const [indiaDate, setIndiaDate] = useState("");
+  const [greeting, setGreeting] = useState("Good morning");
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [deleteMode, setDeleteMode] = useState(false);
@@ -756,6 +584,7 @@ export default function Admin() {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const openRecord = (record: AdminRecord, origin?: ModalOrigin) => {
+    // Volunteers may view the profile; edit/save actions are hidden inside the modal.
     setSelectedOrigin(origin ?? null);
     setSelected(record);
   };
@@ -775,6 +604,20 @@ export default function Admin() {
   ]);
 
   useEffect(() => {
+    // Always keep localStorage displayName in sync with the server-provided
+    // staff name (from Google Sheets Name column).  This ensures stale values
+    // (e.g. a username accidentally stored here) are corrected, and the name
+    // from the sheet is always the source of truth.
+    if (staff?.displayName && staff.displayName !== adminSettings.displayName) {
+      setAdminSettings(prev => {
+        const next = { ...prev, displayName: staff.displayName };
+        saveAdminSettings(next);
+        return next;
+      });
+    }
+  }, [staff?.displayName]);
+
+  useEffect(() => {
     // If staff session expires (not logged in), redirect to public page
     if (!loggedIn && staffLoading === false) {
       // No-op: redirect handled by component logic
@@ -791,9 +634,6 @@ export default function Admin() {
       sessionStorage.removeItem("manus-cookie");
     } catch {}
     toast.success("Signed out securely.");
-    // Defensively clear cookie with both old (Lax/false) and new (None/true) settings
-    document.cookie = "hrs_staff_session_v2=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax; Secure=false";
-    document.cookie = "hrs_staff_session_v2=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=None; Secure=true";
   };
 
   useEffect(() => {
@@ -835,15 +675,8 @@ export default function Admin() {
             : "Good evening";
 
       setIndiaTime(time);
-      const timeEl = document.querySelector(".top-sync-time");
-      const dateEl = document.querySelector(".top-sync-date");
-      if (timeEl) timeEl.textContent = time;
-      if (dateEl) dateEl.textContent = date;
-      const heading = document.querySelector(".admin-page-heading h1");
-      if (heading && activeView === "overview")
-        heading.textContent = `${greeting}, ${adminSettings.displayName || staff?.displayName || "Admin"}.`;
-      const dateLabel = document.querySelector(".admin-page-heading .eyebrow");
-      if (dateLabel && activeView === "overview") dateLabel.textContent = date;
+      setIndiaDate(date);
+      setGreeting(greeting);
     };
 
     updateIndiaTime();
@@ -1278,6 +1111,9 @@ export default function Admin() {
   }, []);
 
   const goToView = (view: AdminView, tab: RecordTab = "all") => {
+    if (isVolunteer && !["statistics", "records", "donations", "locations"].includes(view)) {
+      return; // volunteers can only view statistics, records, donations, and locations
+    }
     setActiveView(view);
     setMobileNav(false);
     if (view === "records") setRecordTab(tab);
@@ -1383,7 +1219,7 @@ export default function Admin() {
     }
   };
 
-  return (
+  return !loggedIn ? <StaffLogin /> : (
     <div className="admin-shell">
       <aside className={`admin-sidebar ${mobileNav ? "open" : ""}`}>
         <div className="admin-sidebar-head">
@@ -1417,13 +1253,17 @@ export default function Admin() {
           <span>{formatIndiaSyncTime(lastSyncedAt)}</span>
         </div>
         <nav className="admin-nav">
-          <span className="admin-nav-label">OVERVIEW</span>
-          <button
-            className={activeView === "overview" ? "active" : ""}
-            onClick={() => goToView("overview")}
-          >
-            <LayoutDashboard size={17} /> Dashboard
-          </button>
+          {!isVolunteer && (
+            <>
+              <span className="admin-nav-label">OVERVIEW</span>
+              <button
+                className={activeView === "overview" ? "active" : ""}
+                onClick={() => goToView("overview")}
+              >
+                <LayoutDashboard size={17} /> Dashboard
+              </button>
+            </>
+          )}
           <button
             className={activeView === "statistics" ? "active" : ""}
             onClick={() => goToView("statistics")}
@@ -1449,25 +1289,29 @@ export default function Admin() {
           >
             <MapPin size={17} /> Tumkur Zones
           </button>
-          <span className="admin-nav-label">SYSTEM</span>
-          <button
-            className={activeView === "staff" ? "active" : ""}
-            onClick={() => goToView("staff")}
-          >
-            <KeyRound size={17} /> Staff & Access
-          </button>
-          <button
-            className={activeView === "audit" ? "active" : ""}
-            onClick={() => goToView("audit")}
-          >
-            <History size={17} /> Audit Log
-          </button>
-          <button
-            className={activeView === "sync" ? "active" : ""}
-            onClick={() => goToView("sync")}
-          >
-            <FileSpreadsheet size={17} /> Settings
-          </button>
+          {!isVolunteer && (
+            <>
+              <span className="admin-nav-label">SYSTEM</span>
+              <button
+                className={activeView === "staff" ? "active" : ""}
+                onClick={() => goToView("staff")}
+              >
+                <KeyRound size={17} /> Staff & Access
+              </button>
+              <button
+                className={activeView === "audit" ? "active" : ""}
+                onClick={() => goToView("audit")}
+              >
+                <History size={17} /> Audit Log
+              </button>
+              <button
+                className={activeView === "sync" ? "active" : ""}
+                onClick={() => goToView("sync")}
+              >
+                <FileSpreadsheet size={17} /> Settings
+              </button>
+            </>
+          )}
         </nav>
         <div className="sidebar-bottom">
           <div className="staff-profile-wrap" ref={profileMenuRef}>
@@ -1519,8 +1363,8 @@ export default function Admin() {
           </div>
           <div className="admin-top-actions">
             <span className="top-clock">
-              <span className="top-sync-time"></span>
-              <span className="top-sync-date"></span>
+              <span className="top-sync-time">{indiaTime}</span>
+              <span className="top-sync-date">{indiaDate}</span>
             </span>
             <div className="staff-top-wrap" ref={topProfileMenuRef}>
               <button
@@ -1532,7 +1376,7 @@ export default function Admin() {
                 <div className="staff-avatar small">
                   <UserRound size={14} />
                 </div>
-                <span>Admin</span>
+                <span>{isVolunteer ? "Volunteer" : "Admin"}</span>
                 <ChevronDown size={15} />
               </button>
               <div className={`profile-menu top-profile-menu${topProfileMenuOpen ? " open" : ""}`}>
@@ -1559,20 +1403,22 @@ export default function Admin() {
             <>
               <div className="admin-page-heading">
                 <div>
-                  <span className="eyebrow dark-eyebrow" id="overview-date"></span>
-                  <h1>Good morning, {adminSettings.displayName || staff?.displayName || "Admin"}.</h1>
+                  <span className="eyebrow dark-eyebrow" id="overview-date">{indiaDate}</span>
+                  <h1>{greeting}, {adminSettings.displayName || staff?.displayName || "Admin"}.</h1>
                   <p>Here’s what needs your attention today.</p>
                 </div>
-                <button
-                  className="record-sync-button dashboard-sync-button"
-                  type="button"
-                  onClick={() => triggerSync(true)}
-                  disabled={isSyncing}
-                  title="Sync records from Google Sheets"
-                >
-                  <RefreshCw size={14} className={isSyncing ? "syncing-icon" : ""} />
-                  {isSyncing ? "Syncing..." : "Sync"}
-                </button>
+                {!isVolunteer && (
+                  <button
+                    className="record-sync-button dashboard-sync-button"
+                    type="button"
+                    onClick={() => triggerSync(true)}
+                    disabled={isSyncing}
+                    title="Sync records from Google Sheets"
+                  >
+                    <RefreshCw size={14} className={isSyncing ? "syncing-icon" : ""} />
+                    {isSyncing ? "Syncing..." : "Sync"}
+                  </button>
+                )}
               </div>
               {isSyncing && records.length === 0 ? (
                 <DashboardLoading />
@@ -1729,14 +1575,16 @@ export default function Admin() {
                 <div>
                   <span className="eyebrow dark-eyebrow">DIRECTORY</span>
                   <h1>Records</h1>
-                  <p>Search, edit, and manage every HRS donor record.</p>
+                  <p>{isVolunteer ? "Search and view every HRS donor record." : "Search, edit, and manage every HRS donor record."}</p>
                 </div>
-                <button
-                  className="primary-button"
-                  onClick={() => setAddOpen(true)}
-                >
-                  <Plus size={17} /> Add Person
-                </button>
+                {!isVolunteer && (
+                  <button
+                    className="primary-button"
+                    onClick={() => setAddOpen(true)}
+                  >
+                    <Plus size={17} /> Add Person
+                  </button>
+                )}
               </div>
               <div className="record-tabs">
                 {RECORD_TABS.map(tab => (
@@ -1748,28 +1596,32 @@ export default function Admin() {
                     {tab.label}
                   </button>
                 ))}
-                <button
-                  className={`record-delete-toggle${deleteMode ? " active" : ""}`}
-                  type="button"
-                  onClick={() => {
-                    setDeleteMode(value => !value);
-                    setSelectedForDelete(new Set());
-                  }}
-                  title={deleteMode ? "Exit delete mode" : "Select records to delete"}
-                >
-                  <Trash2 size={14} />
-                  {deleteMode ? "Cancel" : "Delete"}
-                </button>
-                <button
-                  className="record-sync-button"
-                  type="button"
-                  onClick={() => triggerSync(true)}
-                  disabled={isSyncing}
-                  title="Sync records from Google Sheets"
-                >
-                  <RefreshCw size={14} className={isSyncing ? "syncing-icon" : ""} />
-                  {isSyncing ? "Syncing..." : "Sync"}
-                </button>
+                {!isVolunteer && (
+                  <>
+                    <button
+                      className="record-sync-button"
+                      type="button"
+                      onClick={() => triggerSync(true)}
+                      disabled={isSyncing}
+                      title="Sync records from Google Sheets"
+                    >
+                      <RefreshCw size={14} className={isSyncing ? "syncing-icon" : ""} />
+                      {isSyncing ? "Syncing..." : "Sync"}
+                    </button>
+                    <button
+                      className={`record-delete-toggle${deleteMode ? " active" : ""}`}
+                      type="button"
+                      onClick={() => {
+                        setDeleteMode(value => !value);
+                        setSelectedForDelete(new Set());
+                      }}
+                      title={deleteMode ? "Exit delete mode" : "Select records to delete"}
+                    >
+                      <Trash2 size={14} />
+                      {deleteMode ? "Cancel" : "Delete"}
+                    </button>
+                  </>
+                )}
               </div>
               <div className="record-toolbar">
                 <div className="admin-search">
@@ -2036,6 +1888,7 @@ export default function Admin() {
               staff={staff}
               loggedIn={loggedIn}
               handleLogout={handleLogout}
+              isVolunteer={isVolunteer}
             />
           )}
         </main>
@@ -2048,9 +1901,10 @@ export default function Admin() {
           onSave={saveRecord}
           setRecordingDonation={setRecordingDonation}
           setDonationDateTime={setDonationDateTime}
+          isVolunteer={isVolunteer}
         />
       )}
-      {addOpen && (
+      {addOpen && !isVolunteer && (
         <AddPersonModal
           onClose={() => setAddOpen(false)}
           onSave={record => {
@@ -2078,9 +1932,10 @@ export default function Admin() {
           onClose={() => { setDonationDetailOpen(false); setSelectedDonation(null); }}
           setRecordingDonation={setRecordingDonation}
           setDonationDateTime={setDonationDateTime}
+          isVolunteer={isVolunteer}
         />
       )}
-      {recordingDonation && (
+      {recordingDonation && !isVolunteer && (
         <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && setRecordingDonation(null)}>
           <div className="modal-card donation-record-modal">
             <div className="donation-record-header">
@@ -2172,6 +2027,7 @@ function WorkspaceView({
   staff,
   loggedIn,
   handleLogout,
+  isVolunteer,
 }: {
   view: AdminView;
   records: AdminRecord[];
@@ -2198,7 +2054,11 @@ function WorkspaceView({
   staff: StaffSession | null;
   loggedIn: boolean;
   handleLogout: () => void;
+  isVolunteer: boolean;
 }) {
+  // ── Donation pagination ────────────────────────────────────────
+  const [donationPage, setDonationPage] = useState(1);
+
   // ── Settings hooks ──────────────────────────────────────────────
   const syncStatusQuery = trpc.hrs.syncStatus.useQuery(undefined, {
     refetchInterval: 6000,
@@ -2277,6 +2137,13 @@ function WorkspaceView({
   }, [exportCsvQuery.data]);
 
   if (view === "donations") {
+    const DONATIONS_PER_PAGE = 30;
+    const donationTotalPages = Math.ceil(donors.length / DONATIONS_PER_PAGE);
+    const donationStart = (donationPage - 1) * DONATIONS_PER_PAGE;
+    const paginatedDonors = donors.slice(
+      donationStart,
+      donationStart + DONATIONS_PER_PAGE,
+    );
     return (
       <AdminSection
         eyebrow="DIRECTORY"
@@ -2291,7 +2158,7 @@ function WorkspaceView({
             <span>Status</span>
             <span>Recorded</span>
           </div>
-          {donors.slice(0, 30).map(record => (
+          {paginatedDonors.map(record => (
             <div
               className="records-table-row records-table-row-clickable"
               key={record.name}
@@ -2302,7 +2169,7 @@ function WorkspaceView({
                   new CustomEvent("openDonationDetail", { detail: record }),
                 )
               }
-              onKeyDown={event => {
+              onKeyDown={(event: React.KeyboardEvent) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
                   window.dispatchEvent(
@@ -2341,6 +2208,36 @@ function WorkspaceView({
             </div>
           )}
         </section>
+        {donors.length > DONATIONS_PER_PAGE && (
+          <div className="donations-pagination">
+            <span className="donations-pagination-info">
+              Showing {donationStart + 1}–
+              {Math.min(donationStart + DONATIONS_PER_PAGE, donors.length)} of{" "}
+              {donors.length} donors
+            </span>
+            <div className="donations-pagination-controls">
+              <button
+                className="secondary-button"
+                disabled={donationPage <= 1}
+                onClick={() => setDonationPage(p => Math.max(1, p - 1))}
+              >
+                ← Prev
+              </button>
+              <span className="donations-pagination-page">
+                Page {donationPage} of {donationTotalPages}
+              </span>
+              <button
+                className="secondary-button"
+                disabled={donationPage >= donationTotalPages}
+                onClick={() =>
+                  setDonationPage(p => Math.min(donationTotalPages, p + 1))
+                }
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
       </AdminSection>
     );
   }
@@ -2352,16 +2249,18 @@ function WorkspaceView({
         title="Tumkur Zones"
         description="Every area across Tumkur, auto-registered the moment it appears in the donor sheet."
         action={
-          <button
-            className="record-sync-button"
-            type="button"
-            onClick={onSync}
-            disabled={isSyncing}
-            title="Sync records from Google Sheets"
-          >
-            <RefreshCw size={14} className={isSyncing ? "syncing-icon" : ""} />
-            {isSyncing ? "Syncing..." : "Sync"}
-          </button>
+          !isVolunteer ? (
+            <button
+              className="record-sync-button"
+              type="button"
+              onClick={onSync}
+              disabled={isSyncing}
+              title="Sync records from Google Sheets"
+            >
+              <RefreshCw size={14} className={isSyncing ? "syncing-icon" : ""} />
+              {isSyncing ? "Syncing..." : "Sync"}
+            </button>
+          ) : undefined
         }
       >
         <LocationsView
@@ -3208,6 +3107,7 @@ function RecordModal({
   onSave,
   setRecordingDonation,
   setDonationDateTime,
+  isVolunteer,
 }: {
   record: AdminRecord;
   origin: ModalOrigin | null;
@@ -3215,6 +3115,7 @@ function RecordModal({
   onSave: (record: AdminRecord, group: string, donationConsent: boolean | null, onSuccess?: (id: string) => void, onError?: () => void) => void;
   setRecordingDonation: (record: AdminRecord | null) => void;
   setDonationDateTime: (dateTime: string) => void;
+  isVolunteer: boolean;
 }) {
   const profileWindowRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -3239,7 +3140,7 @@ function RecordModal({
   }, [origin]);
 
   const isPending = record.status === "Pending";
-  const [mode, setMode] = useState<"view" | "edit">(isPending ? "edit" : "view");
+  const [mode, setMode] = useState<"view" | "edit">(isVolunteer ? "view" : isPending ? "edit" : "view");
   const [saveState, setSaveState] = useState<"idle" | "success" | "error">("idle");
   const [savedId, setSavedId] = useState(record.id);
   const [group, setGroup] = useState(record.group === "—" ? "" : record.group);
@@ -3276,7 +3177,10 @@ function RecordModal({
         {saveState === "success" ? <div className="profile-save-success"><div className="profile-success-icon"><Check size={24} /></div><span className="profile-section-kicker">{isPending ? "Verification complete" : "Changes saved"}</span><h2>{isPending ? "Profile verified & email sent" : "Profile updated"}</h2><p>{isPending ? <>HRS ID <strong>{savedId}</strong> has been verified and a confirmation email has been sent to the donor.</> : "All changes have been saved successfully."}</p><button className="primary-button" onClick={onClose}>Back to Records <ArrowRight size={16} /></button></div> : <>
         <div className="profile-topline">
           <button className="profile-back-button" onClick={onClose}><ArrowLeft size={15} /> Back to Records</button>
-          {!isPending && <button className="secondary-button profile-top-edit" onClick={() => { setMode("edit"); setSaveState("idle"); setEditName(record.name); setEditDateOfBirth(record.dateOfBirth); setEditGender(record.gender); setEditMobile(record.mobile); setEditEmail(record.email); setEditArea(record.area); setEditLocation(record.location); }}><Edit3 size={14} /> Edit</button>}
+          <div className="profile-topline-actions">
+            {record.mobile && record.mobile !== "—" ? <a className="secondary-button profile-call-button" href={`tel:${record.mobile.replace(/[^\d+]/g, "")}`} style={{ marginRight: 8 }}><PhoneCall size={14} /> Call {record.mobile}</a> : null}
+            {!isVolunteer && !isPending && <button className="secondary-button profile-top-edit" onClick={() => { setMode("edit"); setSaveState("idle"); setEditName(record.name); setEditDateOfBirth(record.dateOfBirth); setEditGender(record.gender); setEditMobile(record.mobile); setEditEmail(record.email); setEditArea(record.area); setEditLocation(record.location); }}><Edit3 size={14} /> Edit</button>}
+          </div>
         </div>
         <header className="profile-header">
           <div className="profile-id-block">
@@ -3310,7 +3214,7 @@ function RecordModal({
 
         <div className={`profile-detail-section profile-consent-section${isPending ? " profile-consent-pending" : ""}`}><h3><ShieldCheck size={15} /> Consent <span className="profile-info-tip" title="Donation consent is recorded during verification and cannot be overridden in edit mode."><Info size={13} /></span></h3><div className="profile-consent-layout"><div className="profile-consent-row"><b className="profile-consent-icon">✓</b><span><small>Data storage consent</small><strong>Given</strong><em>Consent to store registration information</em></span></div><div className="profile-consent-row"><b className={`profile-consent-icon ${record.donorConsent === true ? "" : "muted"}`}>{record.donorConsent === null ? "−" : record.donorConsent ? "✓" : "×"}</b><span><small>Blood donation consent</small><strong>{record.donorConsent === null ? "Not yet recorded" : record.donorConsent ? "Yes · willing to donate" : "No · not participating"}</strong><em>{record.donorConsent === null ? "Will be collected during verification" : record.donorConsent ? "Can participate in blood donation" : "Not available for donation or public listing"}</em></span></div></div></div>
 
-        {isPending || mode === "edit" ? <><div className="profile-verification-section">
+        {!isVolunteer && (isPending || mode === "edit") ? <><div className="profile-verification-section">
           <div className="profile-verification-heading"><div><span className="profile-section-kicker">{isPending ? "Complete verification" : "Edit profile"}</span><h3>{isPending ? "Finish this blood grouping record" : "Update verification details"}</h3></div><span className="profile-required">{isPending ? "2 required fields" : "View mode paused"}</span></div>
           <div className="profile-verification-fields">{isPending ? <div><span className="profile-field-label">Blood group · Required</span><div className="profile-blood-choice-grid">{["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(bloodGroup => <button type="button" key={bloodGroup} className={group === bloodGroup ? "selected" : ""} onClick={() => setGroup(bloodGroup)}>{bloodGroup}</button>)}</div></div> : <Field label="Blood group · Required"><Select value={group || "Select blood group"} onChange={value => setGroup(value === "Select blood group" ? "" : value)} options={["Select blood group", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]} /></Field>}{isPending ? <div><span className="profile-field-label">Blood donation consent · Required</span><div className="profile-choice-group"><button type="button" className={donationConsent === true ? "selected yes" : ""} onClick={() => setDonationConsent(true)}>Yes</button><button type="button" className={donationConsent === false ? "selected no" : ""} onClick={() => setDonationConsent(false)}>No</button></div><button type="button" className={`profile-storage-toggle${storageConfirmed ? " active" : ""}`} role="switch" aria-checked={storageConfirmed} onClick={() => setStorageConfirmed(value => !value)}><span className="toggle-track"><i /></span><span>Data storage consent confirmed</span></button></div> : <div className="profile-edit-reference"><strong>{record.donorConsent ? "YES — willing to donate" : "NO — does not consent"}</strong></div>}</div>
           {!isPending && <button type="button" className={`profile-storage-toggle${storageConfirmed ? " active" : ""}`} role="switch" aria-checked={storageConfirmed} onClick={() => setStorageConfirmed(value => !value)}><span className="toggle-track"><i /></span><span>Data storage consent confirmed</span></button>}
@@ -3379,9 +3283,9 @@ function RecordModal({
             );
           })}
             <div className="profile-history-footer">
-              <button className="profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><span className="profile-donation-button-icon"><Plus size={16} strokeWidth={2.5} /></span> Record new donation</button>
+              {!isVolunteer && <button className="profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><span className="profile-donation-button-icon"><Plus size={16} strokeWidth={2.5} /></span> Record new donation</button>}
             </div>
-            </div> : <div className="profile-history-inner"><p className="profile-empty">No blood donations have been recorded yet.</p><div className="profile-history-footer"><button className="profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><span className="profile-donation-button-icon"><Plus size={16} strokeWidth={2.5} /></span> Record new donation</button></div></div>}</div></div></div>
+            </div> : <div className="profile-history-inner"><p className="profile-empty">No blood donations have been recorded yet.</p><div className="profile-history-footer">{!isVolunteer && <button className="profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><span className="profile-donation-button-icon"><Plus size={16} strokeWidth={2.5} /></span> Record new donation</button>}</div></div>}</div></div></div>
         </>}
         {!isPending && mode === "view" && <div className={`profile-activity-section${activityOpen ? " open" : " collapsed"}`}><div className="profile-activity-heading"><div><h3><History size={15} /> Activity timeline</h3><span>{activityEvents.length} recorded events</span></div><button type="button" className="profile-activity-toggle" onClick={() => setActivityOpen(open => !open)} aria-expanded={activityOpen} aria-controls={`activity-${record.id || record.name}`}>{activityOpen ? "Hide activity" : "View activity"}<ChevronDown size={15} /></button></div><div className="profile-activity-panel" id={`activity-${record.id || record.name}`} aria-hidden={!activityOpen}><div className="profile-activity-timeline">{activityEvents.map((event, index) => <div key={`${event.date}-${event.label}-${index}`}><span className="profile-activity-dot" /><div><b>{formatShortDate(event.date)}</b><span>{event.label}</span></div></div>)}</div></div></div>}
         </>}
@@ -3519,11 +3423,13 @@ function DonationDetailModal({
   onClose,
   setRecordingDonation,
   setDonationDateTime,
+  isVolunteer,
 }: {
   record: AdminRecord;
   onClose: () => void;
   setRecordingDonation: (record: AdminRecord | null) => void;
   setDonationDateTime: (dateTime: string) => void;
+  isVolunteer: boolean;
 }) {
   const hasDonationHistory = record.donationCount > 0 && record.donationDates.length > 0;
   const lastDonation = record.donationDates.at(-1);
@@ -3539,6 +3445,7 @@ function DonationDetailModal({
           <button className="profile-back-button" onClick={onClose}>
             <ArrowLeft size={15} /> Back to Donations
           </button>
+          {record.mobile && record.mobile !== "—" ? <a className="secondary-button profile-call-button" href={`tel:${record.mobile.replace(/[^\d+]/g, "")}`}><PhoneCall size={14} /> Call {record.mobile}</a> : null}
         </div>
 
         <header className="profile-header">
@@ -3597,10 +3504,9 @@ function DonationDetailModal({
             );
           })}
           <div className="profile-history-footer">
-            <button className="profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><span className="profile-donation-button-icon"><Plus size={16} strokeWidth={2.5} /></span> Record new donation</button>
-            {record.availability !== "Available" && <small className="profile-action-hint">New donation can be recorded after the next eligible time.</small>}
+            {!isVolunteer && <button className="profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><span className="profile-donation-button-icon"><Plus size={16} strokeWidth={2.5} /></span> Record new donation</button>}
           </div>
-        </div> : <div className="profile-history-inner"><p className="profile-empty">No blood donations have been recorded yet.</p><div className="profile-history-footer"><button className="profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><span className="profile-donation-button-icon"><Plus size={16} strokeWidth={2.5} /></span> Record new donation</button></div></div>}</div></div></div>
+        </div> : <div className="profile-history-inner"><p className="profile-empty">No blood donations have been recorded yet.</p><div className="profile-history-footer">{!isVolunteer && <button className="profile-donation-button" disabled={record.availability !== "Available"} title={record.availability === "Available" ? "Record a new donation" : `New donation can be recorded after ${formatRecordDate(record.nextEligibleAt)}`} onClick={() => { setRecordingDonation(record); setDonationDateTime(new Date().toISOString().slice(0, 16)); }}><span className="profile-donation-button-icon"><Plus size={16} strokeWidth={2.5} /></span> Record new donation</button>}</div></div>}</div></div></div>
       </section>
     </div>
   );

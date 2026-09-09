@@ -8,6 +8,13 @@
       "when": 1788505682462,
       "tag": "0000_quick_manta",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1788863715183,
+      "tag": "0001_thick_harry_osborn",
+      "breakpoints": true
     }
   ]
 }

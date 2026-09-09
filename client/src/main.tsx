@@ -42,6 +42,9 @@ const trpcClient = trpc.createClient({
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
+      fetch(url, init) {
+        return fetch(url, { ...init, credentials: "include" });
+      },
       headers() {
         // Preview auto-login fallback: when the browser blocks iframe cookies
         // (Safari ITP / private browsing / WebView), the runtime mirrors the
@@ -71,6 +74,13 @@ const trpcClient = trpc.createClient({
     }),
   ],
 });
+
+// Force unregister stale service workers (sw.js) that cache admin pages
+if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations().then(registrations => {
+    registrations.forEach(r => r.unregister());
+  }).catch(() => {});
+}
 
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>
