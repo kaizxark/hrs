@@ -12371,7 +12371,6 @@ a.vol-contact-row:hover {
   .vol-action-verify {
     grid-column: auto;
   }
-}
 @media (max-width: 460px) {
   .vol-modal {
     width: calc(100vw - 24px);
@@ -12394,6 +12393,293 @@ a.vol-contact-row:hover {
     align-items: stretch;
   }
   .vol-hero-cta a {
+    justify-content: center;
+  }
+}
+
+/* ==========================================================================
+   MOBILE RESPONSIVE PASS
+   Desktop (>960px) layouts untouched. Adds/fixes ≤700px & ≤480px behavior
+   plus one global records-table alignment bugfix (delete mode).
+   ========================================================================== */
+
+/* --- Global: delete-mode column alignment fix. In delete mode the head and
+   rows render a checkbox cell + 5 data cells (6 children) but the grid only
+   had 5 tracks, so the Submitted column wrapped onto an implicit row. --- */
+.records-table-head:has(> span > input[type="checkbox"]),
+.records-table-row.delete-mode {
+  grid-template-columns: 40px 1.7fr 0.75fr 1.1fr 0.8fr 0.85fr;
+}
+.records-table-head:has(> span > input[type="checkbox"]) span:first-child,
+.records-table-row.delete-mode > *:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* --- Global: pagination wrappers (were inline-styled; now class-based).
+   Values replicate the previous inline styles exactly. --- */
+.records-pagination {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  padding: 20px;
+  flex-wrap: wrap;
+}
+.records-pagination-info {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #666;
+}
+.results-pagination {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 30px;
+  flex-wrap: wrap;
+}
+
+/* --- Global: Admin side-drawer backdrop (rendered only when mobileNav set) --- */
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 44; /* under .admin-sidebar (50) and .admin-topbar (45) */
+  background: rgba(12, 17, 12, 0.45);
+  display: none;
+}
+
+/* --- Global: EmergencyDropup card is a SIBLING of its backdrop (portal).
+   Reproduces the removed inline fixed-centering so desktop is unchanged,
+   with a translate-carrying entry animation (old donor-pop behavior). --- */
+.modal-backdrop.emergency-modal-backdrop + .modal-card {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1001;
+  margin: 0;
+  padding: 30px;
+  animation: emergency-pop 0.15s ease-out forwards;
+}
+@keyframes emergency-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* --- Global touch feel (touch devices only; inert on desktop) --- */
+button,
+a,
+input,
+select,
+textarea,
+label {
+  touch-action: manipulation;
+}
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ============================ ≤700px ============================ */
+@media (max-width: 700px) {
+  /* Reset the desktop body zoom (1.1) so mobile breakpoints/sizes behave
+     exactly as declared; the mobile rules make up for the 10% whatnot. */
+  body {
+    zoom: 1;
+  }
+  body {
+    padding-bottom: calc(65px + env(safe-area-inset-bottom));
+  }
+
+  /* EmergencyDropup → bottom sheet (sibling card needs its own rules) */
+  .modal-backdrop.emergency-modal-backdrop + .modal-card {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    transform: none;
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 17px 17px 0 0;
+    padding: 25px 17px;
+    animation-name: sheet-in;
+  }
+  .modal-backdrop.emergency-modal-backdrop + .modal-card .emergency-contact-list {
+    height: auto;
+    max-height: 44vh;
+  }
+
+  /* Volunteer profile modal → bottom sheet (sibling card) */
+  .vol-modal {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    transform: none;
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 17px 17px 0 0;
+    animation-name: sheet-in;
+  }
+  .vol-modal .vol-modal-hero {
+    border-radius: 17px 17px 0 0;
+  }
+
+  /* Records table: delete-mode needs the 40px checkbox track added to the
+     680px mobile min-width so columns stay aligned while scrolling. */
+  .records-table-head:has(> span > input[type="checkbox"]),
+  .records-table-row.delete-mode {
+    min-width: 730px;
+  }
+  .records-pagination {
+    padding: 14px 10px;
+  }
+
+  /* Delete-selection bar — wrap instead of overflow */
+  .delete-selection-bar {
+    flex-wrap: wrap;
+    gap: 12px;
+    bottom: 12px;
+    padding: 12px 14px;
+  }
+
+  /* Audit log */
+  .audit-card {
+    padding: 16px 14px;
+  }
+  .audit-search {
+    max-width: none;
+  }
+  .audit-row {
+    gap: 10px;
+    padding: 11px 8px;
+    margin: 0 -8px;
+  }
+  .audit-row-icon {
+    width: 34px;
+    height: 34px;
+  }
+  .audit-row-detail {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    line-height: 1.4;
+  }
+  .audit-row-meta {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+  }
+  .audit-row-time {
+    min-width: 62px;
+    gap: 3px;
+  }
+  .audit-pagination {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  /* Staff list: comfortable Remove touch target */
+  .recent-row {
+    gap: 10px;
+  }
+  .recent-row .secondary-button {
+    min-height: 38px;
+  }
+
+  /* Admin shell polish + side-drawer backdrop active */
+  .admin-content {
+    padding: 24px 16px calc(48px + env(safe-area-inset-bottom));
+  }
+  .admin-card {
+    padding: 17px;
+  }
+  .sidebar-backdrop {
+    display: block;
+    animation: fade-in 0.2s ease-out;
+  }
+}
+
+/* ============================ ≤480px ============================ */
+@media (max-width: 480px) {
+  /* Delete-selection bar stacks; actions go full-width */
+  .delete-selection-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .delete-selection-actions {
+    display: flex;
+    gap: 10px;
+  }
+  .delete-selection-actions button {
+    flex: 1;
+  }
+
+  /* Donation record actions stack full-width */
+  .donation-record-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .donation-record-actions button {
+    width: 100%;
+  }
+
+  /* Audit toolbar: search full-width, actions row below */
+  .audit-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .audit-search {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+  }
+  .audit-toolbar-right {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+  .audit-row {
+    flex-wrap: wrap;
+  }
+  .audit-row-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .audit-row-time {
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    margin-left: 44px;
+  }
+
+  /* Staff rows: let the meta line wrap instead of ellipsis */
+  .recent-row span {
+    white-space: normal;
+    overflow: visible;
+  }
+
+  .admin-card {
+    padding: 14px;
+  }
+}
+
+/* ============================ ≤420px ============================ */
+@media (max-width: 420px) {
+  /* Two-column forms collapse to one column on very narrow phones */
+  .form-two-col {
+    grid-template-columns: 1fr;
+  }
+  .records-pagination-info {
+    width: 100%;
     justify-content: center;
   }
 }

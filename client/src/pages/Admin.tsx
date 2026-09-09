@@ -1221,6 +1221,9 @@ export default function Admin() {
 
   return !loggedIn ? <StaffLogin /> : (
     <div className="admin-shell">
+      {mobileNav && (
+        <div className="sidebar-backdrop" onClick={() => setMobileNav(false)} />
+      )}
       <aside className={`admin-sidebar ${mobileNav ? "open" : ""}`}>
         <div className="admin-sidebar-head">
           <a className="brand" href="/">
@@ -1748,14 +1751,7 @@ export default function Admin() {
                   </div>
                 )}
                 {totalPages > 1 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "10px",
-                      justifyContent: "center",
-                      padding: "20px",
-                    }}
-                  >
+                  <div className="records-pagination">
                     <button
                       className="secondary-button"
                       disabled={currentPage === 1}
@@ -1763,14 +1759,7 @@ export default function Admin() {
                     >
                       Previous
                     </button>
-                    <span
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        fontSize: "12px",
-                        color: "#666",
-                      }}
-                    >
+                    <span className="records-pagination-info">
                       Page {currentPage} of {totalPages}
                     </span>
                     <button

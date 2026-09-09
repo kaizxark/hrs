@@ -175,37 +175,14 @@ export function EmergencyDropup({
   onClose: () => void;
   clickPos?: { x: number; y: number } | null;
 }) {
-  const modalStyle = {
-    padding: "30px",
-    position: "fixed" as const,
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -50%)",
-    zIndex: 61,
-    margin: 0,
-  };
-
   return createPortal(
     <>
-      <style>
-        {`
-          .donor-modal-anim {
-            animation: donor-pop 0.15s ease-out forwards !important;
-          }
-          @keyframes donor-pop {
-            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
-            100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-          }
-        `}
-      </style>
       <div
         className="modal-backdrop emergency-modal-backdrop"
         onClick={onClose}
-        style={{ zIndex: 1000, background: "rgba(0,0,0,0.5)" }}
       />
       <div
-        className={`modal-card donor-modal-anim${requestDonor ? "" : " emergency-modal"}`}
-        style={{ ...modalStyle, zIndex: 1001 }}
+        className={`modal-card emergency-modal-fixed${requestDonor ? "" : " emergency-modal"}`}
       >
         <button className="modal-close" onClick={onClose} aria-label="Close">
           <X size={19} />
@@ -873,14 +850,7 @@ export default function Home() {
                 ))}
               </div>
               {totalPages > 1 && (
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "10px",
-                    justifyContent: "center",
-                    marginTop: "30px",
-                  }}
-                >
+                <div className="results-pagination">
                   <button
                     className="secondary-button"
                     disabled={currentPage === 1}
