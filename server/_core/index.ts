@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import { createServer } from "http";
+import { createServer, type Server } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
@@ -8,7 +8,11 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { startProfilePoller, addBroadcaster, removeBroadcaster } from "./googleSheetsApi";
+import {
+  startProfilePoller,
+  addBroadcaster,
+  removeBroadcaster,
+} from "./googleSheetsApi";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -29,11 +33,14 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
-async function startServer() {
-  // Start the Google Sheets profile poller in the background.
-  // First fetch is blocking; subsequent fetches run every 5 seconds.
-  await startProfilePoller();
-
+/**
+ * Build the Express app — body parsing, OAuth routes, the SSE sync channel,
+ * tRPC, and (in production) the static SPA fallback.
+ *
+ * Exported separately from boot so Vercel serverless functions can mount the
+ * exact same app without starting the in-process poller or binding a port.
+ */
+export async function createApp(): Promise<{ app: express.Express; server: Server }> {
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
@@ -43,7 +50,10 @@ async function startServer() {
   registerOAuthRoutes(app);
 
   // SSE endpoint — pushes a notification to admin clients every time the
-  // server's profile cache is refreshed (every ~6s by the background poller).
+  // server's profile cache is refreshed (by the background poller locally, or
+  // by lazy read-path top-ups on Vercel). On Vercel the broadcast only reaches
+  // clients connected to *this* function instance — the client falls back to
+  // polling (refetchInterval) so this is a latency bonus, not a dependency.
   app.get("/api/sync-events", (req, res) => {
     res.set({
       "Content-Type": "text/event-stream",
@@ -79,6 +89,21 @@ async function startServer() {
     serveStatic(app);
   }
 
+  return { app, server };
+}
+
+/** True when running under Vercel's serverless runtime (no port, no poller). */
+export const isServerless = process.env.VERCEL === "1";
+
+async function startLocalServer() {
+  // Start the Google Sheets profile poller in the background.
+  // First fetch is blocking; subsequent fetches run every poll interval.
+  // Skipped on Vercel — cold starts must stay fast and the lazy read-path
+  // top-ups (ensureFreshCache) keep the cache fresh per instance instead.
+  await startProfilePoller();
+
+  const { server } = await createApp();
+
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
 
@@ -87,4 +112,6 @@ async function startServer() {
   });
 }
 
-startServer().catch(console.error);
+if (!isServerless) {
+  startLocalServer().catch(console.error);
+}

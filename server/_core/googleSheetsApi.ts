@@ -429,6 +429,42 @@ export async function forceRefresh(): Promise<void> {
 }
 
 // -------------------------------------------------------------------------- //
+// Serverless-friendly freshness gate (Vercel)
+// -------------------------------------------------------------------------- //
+
+/**
+ * How stale the in-memory cache may be before a read tops it up from Google
+ * Sheets. Mirrors the local poll cadence (10-15s) so reads behave the same on
+ * Vercel, where no long-running background poller exists.
+ */
+export const READ_FRESHNESS_MS = 15_000;
+
+let inflightPoll: Promise<void> | null = null;
+
+/**
+ * Ensure the read cache is fresh before serving a request.
+ *
+ * On the long-running Node server this is a cheap no-op because the background
+ * poller keeps `cachedAt` recent. On serverless (Vercel) every cold instance
+ * starts with an empty cache, so the first read must perform a blocking fetch;
+ * the shared `inflightPoll` promise coalesces parallel requests (e.g. several
+ * tRPC queries fired by one page render) into a single CSV download.
+ */
+export async function ensureFreshCache(): Promise<void> {
+  if (cachedAt && Date.now() - cachedAt < READ_FRESHNESS_MS) {
+    return; // fresh enough — serve from memory
+  }
+  if (inflightPoll) {
+    await inflightPoll; // another request is already topping up the cache
+    return;
+  }
+  inflightPoll = pollSheet().finally(() => {
+    inflightPoll = null;
+  });
+  await inflightPoll;
+}
+
+// -------------------------------------------------------------------------- //
 // Public read helpers
 // -------------------------------------------------------------------------- //
 

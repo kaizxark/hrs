@@ -14,6 +14,7 @@ import {
 import * as gasApi from "./googleAppsScriptApi";
 import { logAudit, logProfileAudit, type AuditActor } from "./auditLogger";
 import {
+  ensureFreshCache,
   forceRefresh,
   getCachedAdminRecords,
   getCachedLocations,
@@ -43,6 +44,27 @@ function auditActor(
   };
 }
 
+/**
+ * Read procedure builders — top up the read cache before answering.
+ *
+ * On the long-running Node server this is a cheap no-op (the background poller
+ * keeps the cache fresh). On serverless (Vercel) there is no poller, so each
+ * read lazily re-fetches the Google Sheets CSV when the cache is older than
+ * READ_FRESHNESS_MS; `ensureFreshCache` coalesces parallel requests into one
+ * fetch per instance. Mutations are intentionally left on plain
+ * `publicProcedure` — they already round-trip through the Apps Script write
+ * path and never depend on the cache.
+ */
+const read = publicProcedure.use(async ({ next }) => {
+  await ensureFreshCache();
+  return next();
+});
+
+const readVolunteer = volunteerProcedure.use(async ({ next }) => {
+  await ensureFreshCache();
+  return next();
+});
+
 export const hrsRouter = router({
   // Health check
   health: publicProcedure.query(async () => {
@@ -52,7 +74,7 @@ export const hrsRouter = router({
 
   // Get admin records — pre-converted to the shape Admin.tsx uses.
   // Smaller payload, so SSE-triggered refetches land in <200ms.
-  profiles: publicProcedure.query(async () => {
+  profiles: read.query(async () => {
     return getCachedAdminRecords();
   }),
 
@@ -73,12 +95,12 @@ export const hrsRouter = router({
   }),
 
   // Get Tumkur locations with real-time stats and newly appeared areas
-  locations: publicProcedure.query(async () => {
+  locations: read.query(async () => {
     return getCachedLocations();
   }),
 
   // Live sync/cache diagnostics for the admin "Sync & Data" panel.
-  syncStatus: publicProcedure.query(async () => {
+  syncStatus: read.query(async () => {
     return getSyncStats();
   }),
 
@@ -104,7 +126,7 @@ export const hrsRouter = router({
     }),
 
   // Data-quality summary computed from the in-memory cache.
-  dataHealth: publicProcedure.query(async () => {
+  dataHealth: read.query(async () => {
     return getDataHealth();
   }),
 
@@ -129,12 +151,12 @@ export const hrsRouter = router({
   }),
 
   // Export the current directory as an Excel (.xlsx) file.
-  exportCsv: publicProcedure.query(async () => {
+  exportCsv: read.query(async () => {
     return buildDirectoryXlsx();
   }),
 
   // Get single profile by HRS ID
-  profile: publicProcedure
+  profile: read
     .input(z.object({ hrsId: z.string() }))
     .query(async ({ input }) => {
       const all = getCachedProfiles();
@@ -151,7 +173,7 @@ export const hrsRouter = router({
     }),
 
   // Get public profiles (public - filtered by backend)
-  publicProfiles: publicProcedure.query(async () => {
+  publicProfiles: read.query(async () => {
     return getCachedPublicProfiles();
   }),
 
@@ -160,7 +182,7 @@ export const hrsRouter = router({
   // `profiles` (admin panel), this includes *pending* records too, because a
   // volunteer helping people should be able to reach donors still awaiting
   // verification.
-  volunteerProfiles: volunteerProcedure.query(async () => {
+  volunteerProfiles: readVolunteer.query(async () => {
     const records = getCachedAdminRecords();
     if (!records.success || !records.data) {
       return { success: false, error: "Profiles not loaded yet" };
@@ -175,7 +197,7 @@ export const hrsRouter = router({
   }),
 
   // Single record with full contact details (volunteer/admin only).
-  volunteerProfile: volunteerProcedure
+  volunteerProfile: readVolunteer
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       const records = getCachedAdminRecords();
@@ -192,7 +214,7 @@ export const hrsRouter = router({
     }),
 
   // Get statistics
-  statistics: publicProcedure.query(async () => {
+  statistics: read.query(async () => {
     return getCachedStatistics();
   }),
 

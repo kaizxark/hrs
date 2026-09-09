@@ -715,10 +715,13 @@ export default function Admin() {
 
   // Fetch profiles — server keeps its memory cache fresh via a background poll.
   // Client subscribes to SSE so it refetches instantly the moment the cache updates
-  // (same as clicking the Sync button, but automatic and silent).
+  // (same as clicking the Sync button, but automatic and silent). The 15s
+  // refetchInterval is the fallback for serverless (Vercel), where SSE only
+  // broadcasts to clients connected to the same function instance.
   const profilesQuery = trpc.hrs.profiles.useQuery(undefined, {
     refetchOnWindowFocus: false,
     staleTime: Infinity,
+    refetchInterval: 15_000,
     retry: 2,
   });
 
@@ -726,6 +729,7 @@ export default function Admin() {
   const locationsQuery = trpc.hrs.locations.useQuery(undefined, {
     refetchOnWindowFocus: false,
     staleTime: Infinity,
+    refetchInterval: 15_000,
     retry: 2,
   });
 

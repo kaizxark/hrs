@@ -16,7 +16,7 @@ import {
   clearAuditLogs as clearSheetAuditLogs,
   type RawAuditLogEntry,
 } from "./googleAppsScriptApi";
-import { getCachedProfiles } from "./googleSheetsApi";
+import { ensureFreshCache, getCachedProfiles } from "./googleSheetsApi";
 import { publicProcedure, router } from "./trpc";
 
 /* ------------------------------------------------------------------ */
@@ -138,6 +138,9 @@ const SHEET_FETCH_POOL = 2000;
 export const auditRouter = router({
   list: publicProcedure.input(listInput).query(async ({ input }) => {
     const { limit = 50, offset = 0, action, search } = input;
+    // Top up the read cache so HRS-ID → name resolution works on cold
+    // serverless instances (no-op when the cache is already fresh).
+    await ensureFreshCache();
     const nameLookup = buildNameLookup();
 
     /* ----- Read from Google Sheets via Apps Script ----- */
