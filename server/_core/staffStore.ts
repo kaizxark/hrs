@@ -1,12 +1,27 @@
 /**
- * Staff Store — unified interface for staff accounts.
+ * Staff Store — Google Sheets is the sole source of truth.
  *
- * Uses the database when available (DATABASE_URL configured); falls back to an
- * in-memory Map so the feature works in no-DB environments (local dev, demo).
- * All operations are async for a uniform API.
+ * READS resolve from the published Google Sheets CSV caches (Volunteer +
+ * Admin tabs) via `staffCredentialCache`. No database, no `hasDb()` branch.
+ * If an account isn't in the sheet it doesn't exist.
+ *
+ * WRITES use an in-memory buffer as an ephemeral bridge: when the admin
+ * creates a volunteer account the mirror (Apps Script) writes to the
+ * Volunteer tab, but the published CSV may take up to 60 s to reflect the
+ * new row. The in-memory buffer lets the current serverless instance
+ * immediately resolve that account for login and list. It is never a
+ * source of truth — the Google Sheet is.
  */
-import * as db from "../db";
 import type { Staff, InsertStaff } from "../../drizzle/schema";
+import {
+  ensureFreshStaffCache,
+  findAdminFromCache,
+  findVolunteerFromCache,
+} from "./staffCredentialCache";
+
+/* ------------------------------------------------------------------ */
+/* Ephemeral write buffer (UI-created accounts awaiting sheet pickup)  */
+/* ------------------------------------------------------------------ */
 
 interface InMemoryStaff {
   id: number;
@@ -21,75 +36,112 @@ interface InMemoryStaff {
 
 let memoryStore: Map<string, InMemoryStaff> | null = null;
 let nextId = 1;
-let seeded = false;
 
 function getMemoryStore(): Map<string, InMemoryStaff> {
-  if (!memoryStore) {
-    memoryStore = new Map();
-  }
+  if (!memoryStore) memoryStore = new Map();
   return memoryStore;
 }
 
-/** Seed a default admin account the first time the in-memory store is used. */
-async function ensureSeeded(): Promise<void> {
-  // Disabled: rely solely on Google Sheets for authentication
-  return;
+/** Convert in-memory record to the Drizzle `Staff` shape. */
+function toStaff(entry: InMemoryStaff): Staff {
+  return {
+    id: entry.id,
+    username: entry.username,
+    passwordHash: entry.passwordHash,
+    displayName: entry.displayName,
+    role: entry.role,
+    active: entry.active,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  };
 }
 
-/** Check whether a real database connection is available. */
-async function hasDb(): Promise<boolean> {
-  const conn = await db.getDb();
-  return conn !== null;
-}
+/* ------------------------------------------------------------------ */
+/* READS — 100% Google Sheets (Volunteer + Admin tab CSV caches)      */
+/* ------------------------------------------------------------------ */
 
 /**
- * Get staff by username (lowercase normalized).
+ * Look up a staff member by username.
+ * Returns a Staff-shaped object derived from the Volunteer or Admin tab
+ * cache.  Google Sheets accounts carry id 0 (no numeric PK in the sheet).
+ * If the username isn't in any sheet cache, falls back to the ephemeral
+ * in-memory buffer for accounts created this instance before CSV pickup.
  */
-export async function getStaffByUsername(username: string): Promise<Staff | undefined> {
+export async function getStaffByUsername(
+  username: string
+): Promise<Staff | undefined> {
   const norm = username.trim().toLowerCase();
 
-  if (await hasDb()) {
-    return db.getStaffByUsername(norm);
+  // Google Sheets — the ONLY read source.
+  await ensureFreshStaffCache();
+
+  const vol = findVolunteerFromCache(norm);
+  if (vol) {
+    return {
+      id: 0,
+      username: vol.username,
+      displayName: vol.displayName,
+      passwordHash: vol.passwordHash,
+      role: "volunteer",
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
   }
 
-  await ensureSeeded();
+  const admin = findAdminFromCache(norm);
+  if (admin) {
+    return {
+      id: 0,
+      username: admin.username,
+      displayName: admin.displayName,
+      passwordHash: "", // admin passwords are plaintext in the sheet
+      role: "admin",
+      active: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  }
+
+  // Ephemeral write buffer (accounts created this instance, not yet in CSV cache).
   const entry = getMemoryStore().get(norm);
   return entry ? toStaff(entry) : undefined;
 }
 
-/** Get staff by numeric id. */
-export async function getStaffById(id: number): Promise<Staff | undefined> {
-  if (await hasDb()) {
-    return db.getStaffById(id);
-  }
-
-  await ensureSeeded();
+/**
+ * Get staff by numeric id.
+ * Only resolves against the ephemeral in-memory buffer (positive ids
+ * from UI creates). Google Sheets accounts always have id 0.
+ */
+export async function getStaffById(
+  id: number
+): Promise<Staff | undefined> {
   const entries = Array.from(getMemoryStore().values());
-  const found = entries.find(e => e.id === id);
+  const found = entries.find((e) => e.id === id);
   return found ? toStaff(found) : undefined;
 }
 
-/** List all staff accounts. */
+/**
+ * List all staff from the ephemeral write buffer only.
+ * In production the buffer is empty unless an account was created
+ * on this serverless instance. The Staff & Access view lists
+ * volunteers from the Google Sheets cache directly.
+ */
 export async function listStaff(): Promise<Staff[]> {
-  if (await hasDb()) {
-    return db.listStaff();
-  }
-
-  await ensureSeeded();
   return Array.from(getMemoryStore().values())
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .map(toStaff);
 }
 
-/** Insert a new staff account. */
-export async function createStaff(entry: InsertStaff): Promise<Staff | undefined> {
+/* ------------------------------------------------------------------ */
+/* WRITES — in-memory buffer (mirrors are handled by the caller)      */
+/* ------------------------------------------------------------------ */
+
+/** Insert a new staff account into the ephemeral write buffer. */
+export async function createStaff(
+  entry: InsertStaff
+): Promise<Staff | undefined> {
   const norm = entry.username.trim().toLowerCase();
-
-  if (await hasDb()) {
-    return db.createStaff({ ...entry, username: norm });
-  }
-
-  await ensureSeeded();
   const store = getMemoryStore();
   if (store.has(norm)) return undefined;
 
@@ -108,16 +160,10 @@ export async function createStaff(entry: InsertStaff): Promise<Staff | undefined
   return toStaff(record);
 }
 
-/** Delete a staff account by id. Returns rows deleted (0 or 1). */
+/** Delete a staff account from the ephemeral buffer by id. Returns 0 or 1. */
 export async function deleteStaff(id: number): Promise<number> {
-  if (await hasDb()) {
-    return db.deleteStaff(id);
-  }
-
-  await ensureSeeded();
   const store = getMemoryStore();
-  const entries = Array.from(store.entries());
-  for (const [key, entry] of entries) {
+  for (const [key, entry] of Array.from(store.entries())) {
     if (entry.id === id) {
       store.delete(key);
       return 1;
@@ -126,52 +172,28 @@ export async function deleteStaff(id: number): Promise<number> {
   return 0;
 }
 
-/** Update a staff account's display name. Returns the updated row or undefined. */
+/** Update a staff account's display name in the ephemeral buffer. */
 export async function updateStaffDisplayName(
   id: number,
   displayName: string
 ): Promise<Staff | undefined> {
-  if (await hasDb()) {
-    return db.updateStaffDisplayName(id, displayName);
-  }
-
-  await ensureSeeded();
   const entries = Array.from(getMemoryStore().values());
-  const entry = entries.find(e => e.id === id);
+  const entry = entries.find((e) => e.id === id);
   if (!entry) return undefined;
   entry.displayName = displayName;
   entry.updatedAt = new Date();
   return toStaff(entry);
 }
 
-/** Replace a staff account's password hash. Returns the updated row or undefined. */
+/** Replace a staff account's password hash in the ephemeral buffer. */
 export async function updateStaffPassword(
   id: number,
   passwordHash: string
 ): Promise<Staff | undefined> {
-  if (await hasDb()) {
-    return db.updateStaffPassword(id, passwordHash);
-  }
-
-  await ensureSeeded();
   const entries = Array.from(getMemoryStore().values());
-  const entry = entries.find(e => e.id === id);
+  const entry = entries.find((e) => e.id === id);
   if (!entry) return undefined;
   entry.passwordHash = passwordHash;
   entry.updatedAt = new Date();
   return toStaff(entry);
-}
-
-/** Convert in-memory record to the Drizzle `Staff` shape. */
-function toStaff(entry: InMemoryStaff): Staff {
-  return {
-    id: entry.id,
-    username: entry.username,
-    passwordHash: entry.passwordHash,
-    displayName: entry.displayName,
-    role: entry.role,
-    active: entry.active,
-    createdAt: entry.createdAt,
-    updatedAt: entry.updatedAt,
-  };
 }

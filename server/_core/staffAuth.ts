@@ -6,9 +6,7 @@ import { jwtVerify, SignJWT } from "jose";
 import { parse as parseCookieHeader } from "cookie";
 import type { Request } from "express";
 import { ENV } from "./env";
-import {
-  getStaffById,
-} from "./staffStore";
+import { getStaffByUsername } from "./staffStore";
 import type { Staff } from "../../drizzle/schema";
 
 /**
@@ -77,8 +75,14 @@ export async function verifyStaffSessionToken(
 
 /**
  * Resolve the current staff member from the request (cookie or Bearer
- * header fallback), verifying the account still exists and is active.
- * Returns null when there is no valid staff action.
+ * header fallback).
+ *
+ * Google Sheets is the sole source of truth for staff credentials —
+ * the session is resolved against the Volunteer + Admin tab CSV caches
+ * via `getStaffByUsername`.  Virtual staff (id 0) carry no numeric PK;
+ * their session is reconstructed from the signed JWT when the CSV cache
+ * transiently misses (the token was only ever issued after a
+ * sheets-verified login).
  */
 export async function getStaffFromRequest(
   req: Request
@@ -101,12 +105,16 @@ export async function getStaffFromRequest(
   const payload = await verifyStaffSessionToken(token);
   if (!payload) return null;
 
-  const staff = await getStaffById(payload.staffId);
+  // Google Sheets lookup — resolve the session against the live sheet
+  // caches (Volunteer + Admin tabs).  This gives us the current
+  // displayName and validates that the account still exists.
+  const staff = await getStaffByUsername(payload.username);
   if (staff && staff.active) return staff;
 
-  // Virtual staff (Google Sheets Admin/Volunteer tabs) are issued tokens with
-  // staffId 0 and are NOT rows in the DB — reconstruct them from the token so
-  // `staff.me` still resolves after a sheet-based login.
+  // Virtual staff (Google Sheets accounts carry id 0) — reconstruct from
+  // the signed token when the CSV cache transiently misses (cold start,
+  // first request, cache not yet populated).  The token was only ever
+  // issued after a sheets-verified login, so this is safe.
   if (payload.staffId === 0) {
     return {
       id: 0,

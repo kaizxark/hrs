@@ -1,0 +1,66 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../dist/public/assets/index-DnLDAmZm.css">
+</head><body>
+<section class="admin-modal profile-modal" style="max-width:390px;margin:0 auto;padding:0;font-family:system-ui,-apple-system,sans-serif">
+  <!-- Real consent markup from Admin.tsx line 3601 -->
+  <div class="profile-detail-section profile-consent-section">
+    <h3><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg> Consent</h3>
+    <div class="profile-consent-layout">
+      <div class="profile-consent-row">
+        <b class="profile-consent-icon">✓</b>
+        <span>
+          <small>Data storage consent</small>
+          <strong>Given</strong>
+          <em>Consent to store registration information</em>
+        </span>
+      </div>
+      <div class="profile-consent-row">
+        <b class="profile-consent-icon muted">✓</b>
+        <span>
+          <small>Blood donation consent</small>
+          <strong>Yes · willing to donate</strong>
+          <em>Can participate in blood donation</em>
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+<script>
+/* Wait for layout + animations, then measure everything */
+setTimeout(()=>{
+  const sec=document.querySelector('.profile-consent-section');
+  const h3=sec.querySelector('h3');
+  const layout=sec.querySelector('.profile-consent-layout');
+  const rows=sec.querySelectorAll('.profile-consent-row');
+  const icons=sec.querySelectorAll('.profile-consent-icon');
+  const spans=sec.querySelectorAll('.profile-consent-row > span');
+  const smls=sec.querySelectorAll('.profile-consent-row small');
+  const strs=sec.querySelectorAll('.profile-consent-row strong');
+  const ems=sec.querySelectorAll('.profile-consent-row em');
+  const r=(e)=>{if(!e)return null;const s=getComputedStyle(e);return{
+    d:s.display,p:s.padding,m:s.margin,bt:s.borderTopWidth,br:s.borderRightWidth,bb:s.borderBottomWidth,bl:s.borderLeftWidth,
+    brd:s.borderRadius,bc:s.backgroundColor,w:s.width,h:s.height,
+    fs:s.fontSize,fw:s.fontWeight,lh:s.lineHeight,c:s.color,
+    ji:s.justifyItems,ja:s.justifyContent,ai:s.alignItems,
+    gg:s.gridGap,gc:s.gridTemplateColumns,gr:s.gridTemplateColumns,
+    gap:s.gap,cw:s.columnGap,rowGap:s.rowGap
+  };};
+  const R=[];
+  R.push('section:'+JSON.stringify(r(sec)));
+  R.push('h3:'+JSON.stringify(r(h3)));
+  R.push('layout:'+JSON.stringify(r(layout)));
+  rows.forEach((r2,i)=>R.push('row'+i+':'+JSON.stringify(r(r2))));
+  icons.forEach((ic,i)=>R.push('icon'+i+':'+JSON.stringify(r(ic))));
+  spans.forEach((s,i)=>R.push('span'+i+':'+JSON.stringify(r(s))));
+  smls.forEach((s,i)=>R.push('small'+i+':'+JSON.stringify(r(s))));
+  strs.forEach((s,i)=>R.push('strong'+i+':'+JSON.stringify(r(s))));
+  ems.forEach((s,i)=>R.push('em'+i+':'+JSON.stringify(r(s))));
+  // Check mobile media query match
+  R.push('mobileMQ:'+window.matchMedia('(max-width:700px)').matches);
+  document.getElementById('RESULT').textContent=R.join('\n');
+},600);
+</script>
+<pre id="RESULT" style="display:none"></pre>
+</body></html>

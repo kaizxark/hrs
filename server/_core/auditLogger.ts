@@ -2,17 +2,18 @@
  * Audit Logger
  *
  * Central helper for recording privileged actions (directory mutations,
- * verifications, donations, etc.) into the `audit_logs` table so admins can
- * review everything that happens in the website.
+ * verifications, donations, etc.).
  *
  * Design notes:
- * - Writing a log entry NEVER throws / never breaks the caller's flow. If the
- *   database is unavailable the entry is dropped with a console warning.
+ * - The Google Sheets Audit Log tab is the source of truth for the audit
+ *   trail, written by the Apps Script on each mutation.  This module
+ *   exists to keep call sites compiling and logAudit is now a no-op
+ *   (the sheet is the only read and write path for audit data).
+ * - Writing a log entry NEVER throws / never breaks the caller's flow.
  * - The actor is taken from the authenticated request context (when present),
  *   so entries remain useful even for procedures that are technically public.
  */
 import type { User } from "../../drizzle/schema";
-import { insertAuditLog } from "../db";
 
 export type AuditActor = Pick<User, "id" | "openId" | "name" | "role"> | null;
 
@@ -31,27 +32,14 @@ export interface AuditLogEntry {
 }
 
 /**
- * Write one audit log entry. Safe to call from any mutation handler:
- * failures are logged, never thrown.
+ * Record one audit log entry.  The primary audit trail lives in the
+ * Google Sheets Audit Log tab (written by the Apps Script on each
+ * mutation).  This function is retained to keep all call sites compiling;
+ * in a sheets-only deployment the audit data is read from the sheet via
+ * `auditLogCache.ts`.
  */
-export async function logAudit(entry: AuditLogEntry): Promise<void> {
-  try {
-    await insertAuditLog({
-      action: entry.action,
-      actionLabel: entry.actionLabel,
-      actorId: entry.actor?.id ?? null,
-      actorOpenId: entry.actor?.openId ?? null,
-      actorName: entry.actor?.name ?? null,
-      actorRole: entry.actor?.role ?? "admin",
-      targetType: entry.targetType ?? null,
-      targetId: entry.targetId ?? null,
-      details: (entry.details as object) ?? null,
-      success: entry.success ?? true,
-      ipAddress: entry.ipAddress ?? null,
-    });
-  } catch (error) {
-    console.error("[Audit] Failed to record audit entry:", error);
-  }
+export async function logAudit(_entry: AuditLogEntry): Promise<void> {
+  // No-op — the Google Sheets Audit Log tab is the sole audit trail.
 }
 
 /**

@@ -10,9 +10,7 @@ import {
   History,
   Loader2,
   Search,
-  Shield,
   Trash2,
-  User,
   UserCheck,
   X,
 } from "lucide-react";
@@ -28,15 +26,7 @@ const ACTION_FILTERS: { value: string; label: string }[] = [
   { value: "all", label: "All actions" },
   { value: "profile.verify", label: "Verify" },
   { value: "profile.update", label: "Update" },
-  { value: "profile.delete", label: "Delete" },
   { value: "profile.donation", label: "Record donation" },
-  { value: "profile.send_email", label: "Send email" },
-  { value: "directory.sync", label: "Directory sync" },
-  { value: "audit.clear", label: "Clear audit log" },
-  { value: "system.notify_owner", label: "Notify owner" },
-  { value: "staff.create", label: "Create staff" },
-  { value: "staff.delete", label: "Delete staff" },
-  { value: "staff.update", label: "Update staff" },
 ];
 
 /** Elegant, muted palette — each action gets a sophisticated tone. */
@@ -54,50 +44,10 @@ const ACTION_META: Record<
     color: "#3a5a8c",
     bg: "#d4e4f7",
   },
-  "profile.delete": {
-    icon: <Trash2 size={15} />,
-    color: "#a4243b",
-    bg: "#f4d6d6",
-  },
   "profile.donation": {
     icon: <CheckCircle2 size={15} />,
     color: "#7b2d8b",
     bg: "#ece0f0",
-  },
-  "profile.send_email": {
-    icon: <User size={15} />,
-    color: "#b07d2b",
-    bg: "#f5ecd3",
-  },
-  "directory.sync": {
-    icon: <History size={15} />,
-    color: "#1a759f",
-    bg: "#d0eaf5",
-  },
-  "audit.clear": {
-    icon: <Trash2 size={15} />,
-    color: "#a4243b",
-    bg: "#f4d6d6",
-  },
-  "system.notify_owner": {
-    icon: <Shield size={15} />,
-    color: "#5c6370",
-    bg: "#e4e6e9",
-  },
-  "staff.create": {
-    icon: <UserCheck size={15} />,
-    color: "#2d6a4f",
-    bg: "#d8f3dc",
-  },
-  "staff.delete": {
-    icon: <Trash2 size={15} />,
-    color: "#a4243b",
-    bg: "#f4d6d6",
-  },
-  "staff.update": {
-    icon: <FileText size={15} />,
-    color: "#3a5a8c",
-    bg: "#d4e4f7",
   },
 };
 
@@ -199,25 +149,9 @@ function describeDetails(
     return `${details.blood_group}${consent}`;
   }
   if (action === "profile.update") {
-    // Server logs { changedFields: [...] }
-    if (Array.isArray(details.changedFields)) {
-      const fields = details.changedFields as string[];
-      if (fields.length === 0) return null;
-      const labels: Record<string, string> = {
-        name: "name",
-        dob: "date of birth",
-        gender: "gender",
-        mobile: "mobile",
-        email: "email",
-        city: "city",
-        area: "area",
-        bloodGroup: "blood group",
-        donorConsent: "consent",
-      };
-      return fields.map((f) => labels[f] || f).join(", ");
-    }
-    // Legacy sheet format
-    if (details.message) return String(details.message);
+    // Deliberately no field-by-field listing — the row just says the
+    // profile was updated (actionLabel "Updated profile").
+    return null;
   }
   if (action === "profile.donation" && details.donationTime) {
     return String(details.donationTime);
@@ -318,10 +252,30 @@ export default function AuditLog() {
     search: search || undefined,
   });
 
+  // Live updates — the server broadcasts /api/sync-events whenever the
+  // sheet cache refreshes, so refetch immediately instead of waiting for
+  // the fallback poll below. An audit entry becomes visible within a few
+  // seconds of the underlying action.
+  useEffect(() => {
+    const es = new EventSource("/api/sync-events");
+    es.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === "cache-update") {
+          query.refetch();
+        }
+      } catch {
+        /* heartbeat — ignore */
+      }
+    };
+    return () => es.close();
+  }, [query]);
+
+  // Fallback poll keeps entries fresh even when no sync event fires.
   useEffect(() => {
     const interval = setInterval(() => {
       query.refetch();
-    }, 15_000);
+    }, 5_000);
     return () => clearInterval(interval);
   }, [query]);
 
@@ -335,20 +289,49 @@ export default function AuditLog() {
     [query.data],
   );
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // Optimistic clear — the UI empties the moment you click "Clear logs";
+  // Google Sheets only reflects the clear 10–40 s later, so keep showing
+  // the cleared state until the server confirms the sheet is empty.
+  const [clearedOptimistic, setClearedOptimistic] = useState(false);
+
+  const visibleLogs = clearedOptimistic ? [] : logs;
+  const visibleTotal = clearedOptimistic ? 0 : total;
+
+  const totalPages = Math.max(1, Math.ceil(visibleTotal / PAGE_SIZE));
   const isEmpty = !query.isLoading && logs.length === 0;
 
   const clearMutation = trpc.audit.clear.useMutation({
     onSuccess: () => {
       query.refetch();
     },
+    onError: () => {
+      // Clear failed server-side — fall back to the live data.
+      setClearedOptimistic(false);
+    },
   });
+
+  // Safety net: if the server never reports 0 (the clear genuinely
+  // failed), fall back to the live data after a minute instead of
+  // staying stuck on the cleared screen.
+  useEffect(() => {
+    if (!clearedOptimistic) return;
+    const t = setTimeout(() => setClearedOptimistic(false), 60_000);
+    return () => clearTimeout(t);
+  }, [clearedOptimistic]);
+
+  // Once the server confirms the sheet is actually empty, drop the
+  // optimistic view and show the normal empty state.
+  useEffect(() => {
+    if (clearedOptimistic && query.data && query.data.total === 0) {
+      setClearedOptimistic(false);
+    }
+  }, [clearedOptimistic, query.data]);
 
   // Group logs by date
   const grouped = useMemo(() => {
     const groups: { date: string; entries: AuditLogEntry[] }[] = [];
     let currentDate = "";
-    for (const log of logs) {
+    for (const log of visibleLogs) {
       try {
         const d = new Date(log.createdAt);
         const label = d.toLocaleDateString("en-IN", {
@@ -372,7 +355,7 @@ export default function AuditLog() {
       }
     }
     return groups;
-  }, [logs]);
+  }, [visibleLogs]);
 
   return (
     <section className="audit-card">
@@ -408,14 +391,30 @@ export default function AuditLog() {
             className="audit-clear-btn"
             onClick={() => {
               if (confirm("Clear all audit log entries? This cannot be undone.")) {
+                setClearedOptimistic(true);
+                setPage(0);
                 clearMutation.mutate();
               }
             }}
-            disabled={clearMutation.isPending}
-            title="Clear all audit logs"
+            disabled={clearMutation.isPending || clearedOptimistic}
+            title={
+              clearedOptimistic
+                ? "Cleared — waiting for Google Sheets to sync"
+                : "Clear all audit logs"
+            }
           >
-            {clearMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-            {clearMutation.isPending ? "Clearing…" : "Clear logs"}
+            {clearMutation.isPending ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : clearedOptimistic ? (
+              <CheckCircle2 size={13} />
+            ) : (
+              <Trash2 size={13} />
+            )}
+            {clearMutation.isPending
+              ? "Clearing…"
+              : clearedOptimistic
+                ? "Cleared"
+                : "Clear logs"}
           </button>
 
           <select
@@ -431,7 +430,7 @@ export default function AuditLog() {
           </select>
 
           <span className="audit-count-badge">
-            {total} {total === 1 ? "entry" : "entries"}
+            {visibleTotal} {visibleTotal === 1 ? "entry" : "entries"}
           </span>
         </div>
       </div>
@@ -455,12 +454,24 @@ export default function AuditLog() {
         </div>
       )}
 
+      {/* Cleared — reflecting immediately, sheet still syncing */}
+      {clearedOptimistic && (
+        <div className="audit-status-box audit-status-empty">
+          <CheckCircle2 size={36} strokeWidth={1} />
+          <h3>Audit log cleared</h3>
+          <p>
+            Entries are being removed from Google Sheets — this can take a few
+            moments.
+          </p>
+        </div>
+      )}
+
       {/* Empty */}
-      {isEmpty && (
+      {!clearedOptimistic && isEmpty && (
         <div className="audit-status-box audit-status-empty">
           <History size={36} strokeWidth={1} />
           <h3>No audit entries yet</h3>
-          <p>Actions like verify, update, delete, and sync will appear here.</p>
+          <p>Actions like verify, update, and record donation will appear here.</p>
         </div>
       )}
 

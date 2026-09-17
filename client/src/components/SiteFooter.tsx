@@ -50,7 +50,15 @@ export default function SiteFooter() {
       </div>
       <div className="footer-bottom">
         <span>© 2026 Humanitarian Relief Society. All rights reserved.</span>
-        <span>Made for the people of Tumkur.</span>
+        <span className="footer-credit">
+          Built with{" "}<span className="footer-heart">♥</span>{" "}by{" "}<a
+            href="https://shaik0.netlify.app"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Ehtesham
+          </a>
+        </span>
       </div>
     </footer>
   );

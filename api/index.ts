@@ -17,17 +17,36 @@
  *            (Apps Script round-trips, 10–40s) run long
  * The default 10s limit is NOT enough for the write path.
  */
-import { createApp } from "../dist/index.js";
 
 export const maxDuration = 60;
 
 type NodeReq = import("node:http").IncomingMessage;
 type NodeRes = import("node:http").ServerResponse;
 
-let appPromise: ReturnType<typeof createApp> | undefined;
+let appPromise: any;
+
+async function loadApp() {
+  try {
+    const mod = await import("../dist/index.js");
+    return await mod.createApp();
+  } catch (err: any) {
+    console.error("[api/index] Failed to load app:", err?.message ?? err);
+    console.error("[api/index] Stack:", err?.stack?.substring(0, 1000));
+    throw err;
+  }
+}
 
 export default async function handler(req: NodeReq, res: NodeRes): Promise<void> {
-  const promise = appPromise ?? (appPromise = createApp());
-  const { app } = await promise;
-  (app as unknown as (req: NodeReq, res: NodeRes) => void)(req, res);
+  try {
+    const promise = appPromise ?? (appPromise = loadApp());
+    const { app } = await promise;
+    (app as unknown as (req: NodeReq, res: NodeRes) => void)(req, res);
+  } catch (err: any) {
+    console.error("[api/index] Handler error:", err?.message ?? err);
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.setHeader("Content-Type", "text/plain");
+      res.end(`Internal Server Error: ${err?.message ?? "unknown"}`);
+    }
+  }
 }

@@ -12,6 +12,7 @@ import {
   volunteerProcedure,
 } from "./trpc";
 import * as gasApi from "./googleAppsScriptApi";
+import * as emailService from "./emailService";
 import { logAudit, logProfileAudit, type AuditActor } from "./auditLogger";
 import {
   ensureFreshCache,
@@ -30,6 +31,10 @@ import {
   setPollInterval,
   getPollerState,
 } from "./googleSheetsApi";
+import {
+  triggerPendingFormSync,
+  getPendingFormSyncStatus,
+} from "./pendingFormSync";
 
 /** Build the standard audit actor payload from the tRPC context user. */
 function auditActor(
@@ -124,6 +129,37 @@ export const hrsRouter = router({
       }
       return getPollerState();
     }),
+
+  // --------------------------------------------------------------------------
+  // Pending Google Form → Profiles sync (R9)
+  //
+  // On Vercel serverless there are no persistent background timers, so the
+  // pending-form import is triggered on-demand via this procedure.  On local
+  // dev it also runs automatically every 5 min via startPendingFormSync().
+  // --------------------------------------------------------------------------
+
+  /** Status of the pending-form auto-sync (diagnostic). */
+  pendingFormStatus: read.query(async () => {
+    return getPendingFormSyncStatus();
+  }),
+
+  /** Manually trigger a pending-form → Profiles sync cycle. */
+  syncPendingForms: publicProcedure.mutation(async ({ ctx }) => {
+    const result = await triggerPendingFormSync();
+    await logAudit({
+      action: "pending_forms.sync",
+      actionLabel: "Synced pending form submissions",
+      actor: auditActor(ctx.user),
+      targetType: "system",
+      details: {
+        imported: result.imported,
+        skipped: result.skipped,
+        errorCount: result.errors.length,
+      },
+      ipAddress: ctx.req.ip,
+    });
+    return result;
+  }),
 
   // Data-quality summary computed from the in-memory cache.
   dataHealth: read.query(async () => {
@@ -220,17 +256,36 @@ export const hrsRouter = router({
 
   // Send verification email to a donor
   sendVerificationEmail: publicProcedure
-    .input(z.object({ hrsId: z.string() }))
+    .input(
+      z.object({
+        hrsId: z.string(),
+        bloodGroup: z.string().optional(),
+        donorConsent: z.string().optional(),
+      })
+    )
     .mutation(async ({ input, ctx }) => {
-      const result = await gasApi.sendVerificationEmail(input.hrsId);
+      const { response, via } = await emailService.sendVerificationEmail(
+        input.hrsId,
+        {
+          bloodGroup: input.bloodGroup,
+          donorConsent: input.donorConsent,
+        }
+      );
       await logProfileAudit(input.hrsId, {
         action: "profile.send_email",
         actionLabel: "Sent verification email",
         actor: auditActor(ctx.user),
-        success: result.success,
+        success: response.success,
+        details: input.bloodGroup
+          ? {
+              bloodGroup: input.bloodGroup,
+              donorConsent: input.donorConsent,
+              channel: via,
+            }
+          : { channel: via },
         ipAddress: ctx.req.ip,
       });
-      return result;
+      return response;
     }),
 
   // Verify profile
@@ -259,6 +314,41 @@ export const hrsRouter = router({
       return result;
     }),
 
+  // Add a brand-new person and verify them immediately (admin "Add Person"
+  // modal). Apps Script appends a full row with the next HRS ID and
+  // Verification Status=VERIFIED, so the profile skips Pending entirely.
+  addPerson: publicProcedure
+    .input(
+      z.object({
+        fullName: z.string().min(1),
+        bloodGroup: z.string(),
+        donorConsent: z.enum(["YES", "NO"]),
+        dateOfBirth: z.string().optional(),
+        gender: z.string().optional(),
+        phoneNumber: z.string().optional(),
+        email: z.string().optional(),
+        city: z.string().optional(),
+        area: z.string().optional(),
+        dataStorageConsent: z.enum(["YES", "NO"]).optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const result = await gasApi.addPerson(input);
+      await logProfileAudit(result.data?.hrs_id ?? input.fullName, {
+        action: "profile.add_person",
+        actionLabel: "Added and verified new profile",
+        actor: auditActor(ctx.user),
+        success: result.success,
+        details: {
+          fullName: input.fullName,
+          bloodGroup: input.bloodGroup,
+          donorConsent: input.donorConsent,
+        },
+        ipAddress: ctx.req.ip,
+      });
+      return result;
+    }),
+
   // Record blood donation
   recordDonation: publicProcedure
     .input(
@@ -278,6 +368,47 @@ export const hrsRouter = router({
         actor: auditActor(ctx.user),
         success: result.success,
         details: { donationTime: input.donationTime },
+        ipAddress: ctx.req.ip,
+      });
+      return result;
+    }),
+
+  // Reset all profiles (destructive, requires password). Erases every profile
+  // row in the sheet, then re-appends them with fresh sequential HRS IDs
+  // starting from HRS-0001. Password is verified server-side by Apps Script.
+  resetProfiles: publicProcedure
+    .input(
+      z.object({
+        password: z.string().min(1),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      let result: Awaited<ReturnType<typeof gasApi.resetProfiles>>;
+      try {
+        result = await gasApi.resetProfiles(input.password);
+      } catch (err) {
+        await logAudit({
+          action: "profile.reset",
+          actionLabel: "Reset all profiles",
+          actor: auditActor(ctx.user),
+          targetType: "profile",
+          targetId: "ALL",
+          success: false,
+          details: { error: err instanceof Error ? err.message : String(err) },
+          ipAddress: ctx.req.ip,
+        });
+        throw err;
+      }
+      await logAudit({
+        action: "profile.reset",
+        actionLabel: "Reset all profiles",
+        actor: auditActor(ctx.user),
+        targetType: "profile",
+        targetId: "ALL",
+        success: result.success,
+        details: result.success
+          ? { count: result.data?.count }
+          : { error: result.error },
         ipAddress: ctx.req.ip,
       });
       return result;

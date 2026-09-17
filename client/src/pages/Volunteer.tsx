@@ -271,9 +271,14 @@ function ProfileModal({
             </div>
           )}
           {canCall && (
-            <div className="vol-modal-row">
+            <div className="vol-modal-row vol-modal-phone-row">
               <PhoneCall size={16} />
-              <a href={`tel:${phoneClean(profile.mobile)}`}>{profile.mobile}</a>
+              <a href={`tel:${phoneClean(profile.mobile)}`} className="vol-modal-tel-link">
+                <span className="vol-modal-tel-text">{profile.mobile}</span>
+                <span className="vol-modal-call-icon" aria-hidden="true">
+                  <PhoneCall size={20} />
+                </span>
+              </a>
               <button
                 className="vol-modal-copy"
                 onClick={() => {
@@ -286,22 +291,26 @@ function ProfileModal({
               </button>
             </div>
           )}
-          {canEmail && (
-            <div className="vol-modal-row">
-              <Mail size={16} />
-              <a href={`mailto:${profile.email}`}>{profile.email}</a>
-              <button
-                className="vol-modal-copy"
-                onClick={() => {
-                  navigator.clipboard.writeText(profile.email);
-                  toast.success("Email copied.");
-                }}
-                aria-label="Copy email address"
-              >
-                Copy
-              </button>
-            </div>
-          )}
+          <div className="vol-modal-row">
+            <Mail size={16} />
+            {canEmail ? (
+              <>
+                <a href={`mailto:${profile.email}`}>{profile.email}</a>
+                <button
+                  className="vol-modal-copy"
+                  onClick={() => {
+                    navigator.clipboard.writeText(profile.email);
+                    toast.success("Email copied.");
+                  }}
+                  aria-label="Copy email address"
+                >
+                  Copy
+                </button>
+              </>
+            ) : (
+              <span className="vol-modal-muted">(not provided)</span>
+            )}
+          </div>
 
           <div className="vol-modal-stats-grid">
             <div className="vol-modal-stat-box">
@@ -424,7 +433,11 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
   const sendVerification = trpc.hrs.sendVerificationEmail.useMutation({
     onSuccess: (res) => {
       if (res?.success) {
-        toast.success("Verification email sent to the donor.");
+        if ((res.data as { skipped?: boolean } | undefined)?.skipped) {
+          toast.info("This donor has no email on file — nothing was sent.");
+        } else {
+          toast.success("Verification email sent to the donor.");
+        }
         refetch();
       } else {
         toast.error((res as { error?: string })?.error || "Could not send the email. Try again.");

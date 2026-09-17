@@ -124,6 +124,7 @@ export function usePublicProfiles() {
   return trpc.hrs.publicProfiles.useQuery(undefined, {
     refetchOnWindowFocus: false,
     staleTime: 30000,
+    refetchInterval: 30000,
   });
 }
 
@@ -252,13 +253,17 @@ export function convertApiProfileToAdminRecord(profile: Profile): {
   const nextEligibleAt =
     parseSheetDate(nextEligibleTime)?.toISOString() ?? null;
 
-  // Collect all donation dates dynamically
+  // Collect all donation dates dynamically. Values are IST wall-clock strings
+  // in the CSV — normalize them through the same IST parse as the other
+  // timestamp columns so they carry the correct absolute instant.
   const donationDates: string[] = [];
   for (let i = 1; i <= 20; i++) {
     const dateKey = `Donation ${i} Date`;
     const dateValue = profile[dateKey];
     if (dateValue && dateValue.trim()) {
-      donationDates.push(dateValue.trim());
+      donationDates.push(
+        parseSheetDate(dateValue)?.toISOString() ?? dateValue.trim()
+      );
     }
   }
 
@@ -278,7 +283,8 @@ export function convertApiProfileToAdminRecord(profile: Profile): {
       donorConsent === true &&
       bloodGroup &&
       bloodGroup !== "—" &&
-      publicVisibility.toUpperCase() === "YES"
+      publicVisibility.toUpperCase() === "YES" &&
+      isEligibleNow
   );
 
   // Initials
@@ -290,9 +296,9 @@ export function convertApiProfileToAdminRecord(profile: Profile): {
       .slice(0, 2)
       .toUpperCase() || "?";
 
-  // Last donation
+  // Last donation (normalized through the IST parse like donationDates)
   const lastDonationAt =
-    lastDonationTime?.trim() ||
+    parseSheetDate(lastDonationTime)?.toISOString() ??
     (donationDates.length > 0 ? donationDates[donationDates.length - 1] : null);
 
   return {

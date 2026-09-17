@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
@@ -51,6 +51,12 @@ export function StaffLogin() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const { login, isLoggingIn } = useStaffAuth();
+  // Once credentials are accepted, lock the form into "signing in" state
+  // until the component unmounts (parent switches to dashboard).  This
+  // avoids a visible flicker where the spinner reverts to the idle button
+  // while the session refetch completes.
+  const submitted = useRef(false);
+  const busy = isLoggingIn || submitted.current;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -61,10 +67,12 @@ export function StaffLogin() {
 
     try {
       const result = await login(username.trim(), password);
-      if (!result.success) {
+      if (result.success) {
+        // Lock the form — it will unmount once staff.me resolves
+        submitted.current = true;
+      } else {
         toast.error(result.error || "Invalid username or password");
       }
-      // Navigation handled by useStaffAuth onSuccess
     } catch (error) {
       console.error("Login error:", error);
       toast.error("An unexpected error occurred during login.");
@@ -130,7 +138,7 @@ export function StaffLogin() {
                   onChange={event => setUsername(event.target.value)}
                   placeholder="Enter username"
                   autoComplete="off"
-                  disabled={isLoggingIn}
+                  disabled={busy}
                 />
               </div>
             </Field>
@@ -143,13 +151,13 @@ export function StaffLogin() {
                   onChange={event => setPassword(event.target.value)}
                   placeholder="Enter password"
                   autoComplete="off"
-                  disabled={isLoggingIn}
+                  disabled={busy}
                 />
                 <button
                   type="button"
                   className="input-icon-button"
                   onClick={() => setShowPassword(value => !value)}
-                  disabled={isLoggingIn}
+                  disabled={busy}
                 >
                   {showPassword ? "Hide" : "Show"}
                 </button>
@@ -158,10 +166,10 @@ export function StaffLogin() {
             <button
               className="primary-button wide-button"
               type="submit"
-              disabled={isLoggingIn}
-              style={{ gap: isLoggingIn ? "10px" : "6px" }}
+              disabled={busy}
+              style={{ gap: busy ? "10px" : "6px" }}
             >
-              {isLoggingIn ? (
+              {busy ? (
                 <>
                   Signing in...{" "}
                   <span

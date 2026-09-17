@@ -1,10 +1,11 @@
 /**
- * Google Apps Script API Service
- * Handles all communication with the HRS Google Apps Script backend.
+ * Google Apps Script API Service (write-path only)
  *
- * Reads (profiles, statistics) now go through googleSheetsApi which polls the
- * public CSV export directly. This file is left as the write-path only:
- * verify, updateProfile, recordDonation, deleteProfiles, sendVerificationEmail, ping.
+ * All reads (profiles, staff credentials, audit logs) now go through the
+ * published Google Sheet CSV export via `googleSheetsApi.ts` (fast, no cold
+ * start). This file is left for WRITE operations only:
+ *   verify, updateProfile, recordDonation, deleteProfiles,
+ *   sendVerificationEmail, createVolunteer, clearAuditLogs, ping.
  */
 import { ENV } from "./env";
 
@@ -84,7 +85,7 @@ export interface Statistics {
 export async function callApi<T>(
   action: string,
   params: Record<string, string> = {},
-  timeoutMs = 8000
+  timeoutMs = 30000
 ): Promise<ApiResponse<T>> {
   try {
     const url = new URL(API_BASE_URL);
@@ -233,47 +234,12 @@ export async function testWritePath(): Promise<{
 }
 
 // ---------------------------------------------------------------------------
-// Audit log (read from Google Sheet "Audit Logs" tab)
+// Audit log — clear only (read path moved to auditLogCache.ts via CSV)
 // ---------------------------------------------------------------------------
 
-/** Raw shape returned by the Apps Script `getAuditLogs` helper (sheet columns). */
-export interface RawAuditLogEntry {
-  "Timestamp"?: string;
-  "Action Type"?: string;
-  "Action"?: string;
-  "Actor Name"?: string;
-  "Actor Role"?: string;
-  "Actor OpenID"?: string;
-  "Target Type"?: string;
-  "Target ID"?: string;
-  "Details"?: string;
-  "Success"?: string;
-  "IP Address"?: string;
-}
-
-/**
- * Fetch audit log entries from the Google Sheet via Apps Script.
- * Returns newest-first rows from the "Audit Logs" sheet.
- */
 /** Clear all audit entries from the Google Sheet "Audit Log" tab. */
 export async function clearAuditLogs(): Promise<ApiResponse<{ removed: number; message: string }>> {
   return callApi<{ removed: number; message: string }>("clear_audit");
-}
-
-export async function fetchAuditLogs(
-  limit = 500,
-  offset = 0,
-): Promise<ApiResponse<RawAuditLogEntry[]>> {
-  // Audit log reads can be slow (Apps Script cold start / sheet reads), so use
-  // a generous timeout instead of the 8s default.
-  return callApi<RawAuditLogEntry[]>(
-    "audit_logs",
-    {
-      limit: String(limit),
-      offset: String(offset),
-    },
-    30000
-  );
 }
 
 // Verify profile (admin only - requires secret)
@@ -340,6 +306,23 @@ export async function deleteProfiles(
   });
 }
 
+// Reset all profiles (destructive, requires password). Erases every profile
+// row from the sheet, then re-appends the same profiles with fresh sequential
+// HRS IDs starting from HRS-0001. The password protects against accidental use.
+export async function resetProfiles(
+  password: string
+): Promise<ApiResponse<{ count: number; message: string }>> {
+  if (!ENV.googleAppsScriptSecret) {
+    return { success: false, error: "API secret not configured" };
+  }
+
+  return postApi<{ count: number; message: string }>("reset_profiles", {
+    action: "reset_profiles",
+    api_secret: ENV.googleAppsScriptSecret,
+    password,
+  });
+}
+
 // Update an existing profile (admin only). The Apps Script action is `update_profile`
 // and accepts the editable fields: name, dob, gender, mobile, email, city, area,
 // blood_group, donor_consent. Storage consent is intentionally not editable here —
@@ -383,9 +366,12 @@ export async function updateProfile(
   return postApi<{ message: string }>("update_profile", body);
 }
 
-// Send verification email to a donor after they are verified
+// Send verification email to a donor after they are verified.
+// `extras.bloodGroup` / `extras.donorConsent` are passed through so the Apps
+// Script handler can build the email without racing the slower verify write.
 export async function sendVerificationEmail(
-  hrsId: string
+  hrsId: string,
+  extras?: { bloodGroup?: string; donorConsent?: string }
 ): Promise<ApiResponse<{ sent: boolean; skipped?: boolean; reason?: string; to?: string }>> {
   if (!ENV.googleAppsScriptSecret) {
     return {
@@ -394,12 +380,212 @@ export async function sendVerificationEmail(
     };
   }
 
+  const body: Record<string, string> = {
+    action: "send_verification_email",
+    api_secret: ENV.googleAppsScriptSecret,
+    hrs_id: hrsId,
+  };
+  if (extras?.bloodGroup) body.blood_group = extras.bloodGroup;
+  if (extras?.donorConsent) body.donor_consent = extras.donorConsent;
+
   return postApi<{ sent: boolean; skipped?: boolean; reason?: string; to?: string }>(
     "send_verification_email",
-    {
-      action: "send_verification_email",
-      api_secret: ENV.googleAppsScriptSecret,
-      hrs_id: hrsId,
-    }
+    body
   );
+}
+
+// ---------------------------------------------------------------------------
+// Assign an auto-generated HRS-ID back to a pending row in the sheet.
+//
+// When the portal auto-assigns HRS-0001, HRS-0002 etc. to rows that were
+// appended without an ID, this action writes the ID into column A of the
+// matching row. The Apps Script `assign_hrs_id` handler locates the row
+// by phone number + registration time (unique per submission).
+// ---------------------------------------------------------------------------
+
+export async function assignHrsId(
+  hrsId: string,
+  rawPhone: string,
+  registrationTime: string,
+  retries = 1
+): Promise<ApiResponse<{ message: string; hrs_id: string }>> {
+  if (!ENV.googleAppsScriptSecret) {
+    return { success: false, error: "API secret not configured" };
+  }
+
+  const body: Record<string, string> = {
+    action: "assign_hrs_id",
+    api_secret: ENV.googleAppsScriptSecret,
+    hrs_id: hrsId,
+    phone_number: rawPhone,
+    registration_time: registrationTime,
+  };
+
+  let lastResult: ApiResponse<{ message: string; hrs_id: string }>;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    lastResult = await postApi<{ message: string; hrs_id: string }>(
+      "assign_hrs_id",
+      body
+    );
+    if (lastResult.success) {
+      // The Apps Script wraps every outcome as {success:true}; only a
+      // "written to row" (or "already assigned") message is a real success.
+      // "No matching row found" / ambiguity means the row is still pending,
+      // so report failure to keep the write tracker retrying on cooldown
+      // instead of marking it Infinity (never retry again).
+      const msg = lastResult.data?.message ?? "";
+      if (
+        !/written to row/i.test(msg) &&
+        !/already assigned/i.test(msg)
+      ) {
+        return { success: false, error: `assign_hrs_id: ${msg || "no message"}` };
+      }
+      return lastResult;
+    }
+    if (lastResult.error && !lastResult.error.includes("status 404")) {
+      return lastResult;
+    }
+    if (attempt < retries) {
+      const delayMs = 2000 * (attempt + 1);
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return lastResult!;
+}
+
+// ---------------------------------------------------------------------------
+// Add a brand-new profile and verify it in one write (admin panel "Add
+// Person"). Sends every form detail to the Apps Script `add_person` action,
+// which assigns the next HRS ID, appends a full row to the Profiles tab and
+// marks it VERIFIED immediately, so the profile never enters Pending.
+// ---------------------------------------------------------------------------
+
+export interface AddPersonInput {
+  fullName: string;
+  bloodGroup: string;
+  donorConsent: "YES" | "NO";
+  dateOfBirth?: string;
+  gender?: string;
+  phoneNumber?: string;
+  email?: string;
+  city?: string;
+  area?: string;
+  dataStorageConsent?: "YES" | "NO";
+}
+
+export async function addPerson(
+  input: AddPersonInput,
+  retries = 2
+): Promise<
+  ApiResponse<{
+    message: string;
+    hrs_id: string;
+    blood_group: string;
+    donor_consent: string;
+    verification_status: string;
+    verification_time: string;
+  }>
+> {
+  if (!ENV.googleAppsScriptSecret) {
+    return { success: false, error: "API secret not configured" };
+  }
+
+  const body: Record<string, string> = {
+    action: "add_person",
+    api_secret: ENV.googleAppsScriptSecret,
+    full_name: input.fullName,
+    blood_group: input.bloodGroup,
+    donor_consent: input.donorConsent,
+  };
+  if (input.dateOfBirth) body.date_of_birth = input.dateOfBirth;
+  if (input.gender) body.gender = input.gender;
+  if (input.phoneNumber) body.phone_number = input.phoneNumber;
+  if (input.email) body.email = input.email;
+  if (input.city) body.city = input.city;
+  if (input.area) body.area = input.area;
+  if (input.dataStorageConsent) body.data_storage_consent = input.dataStorageConsent;
+
+  // Retry transient errors (404, network) up to `retries` times with
+  // exponential backoff — Apps Script endpoints are flaky on cold starts.
+  let lastResult: ApiResponse<{
+    message: string;
+    hrs_id: string;
+    blood_group: string;
+    donor_consent: string;
+    verification_status: string;
+    verification_time: string;
+  }>;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    lastResult = await postApi<{
+      message: string;
+      hrs_id: string;
+      blood_group: string;
+      donor_consent: string;
+      verification_status: string;
+      verification_time: string;
+    }>("add_person", body);
+    if (lastResult.success || (lastResult.error && !lastResult.error.includes("status 404"))) {
+      return lastResult; // success or non-retryable error
+    }
+    // Transient 404 — wait before retrying.
+    if (attempt < retries) {
+      const delayMs = 2000 * (attempt + 1);
+      console.log(
+        `[addPerson] Attempt ${attempt + 1} failed (${lastResult.error}), retrying in ${delayMs}ms…`,
+      );
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return lastResult!;
+}
+
+// ---------------------------------------------------------------------------
+// Import a new profile from Google Form pending submissions.
+// Sends all profile fields as form-urlencoded body; the Apps Script action
+// `import_profile` appends a new row to the Profiles tab.
+// ---------------------------------------------------------------------------
+
+export async function importProfile(
+  profile: Record<string, string>,
+  retries = 2
+): Promise<ApiResponse<{ message: string; hrs_id?: string }>> {
+  if (!ENV.googleAppsScriptSecret) {
+    return { success: false, error: "API secret not configured" };
+  }
+
+  // The Apps Script handleImportProfile converts sheet header names to
+  // snake_case keys via `h.toLowerCase().replace(/ /g, "_")` and looks up
+  // those snake_case keys in e.parameter.  So we must send the fields
+  // using snake_case keys that match what the handler expects.
+  const body: Record<string, string> = {
+    action: "import_profile",
+    api_secret: ENV.googleAppsScriptSecret,
+  };
+
+  for (const [headerKey, value] of Object.entries(profile)) {
+    const snakeKey = headerKey.toLowerCase().replace(/ /g, "_");
+    body[snakeKey] = value;
+  }
+
+  // Retry transient errors (404, network) up to `retries` times with
+  // exponential backoff — Apps Script endpoints are flaky on cold starts.
+  let lastResult: ApiResponse<{ message: string; hrs_id?: string }>;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    lastResult = await postApi<{ message: string; hrs_id?: string }>(
+      "import_profile",
+      body,
+    );
+    if (lastResult.success || (lastResult.error && !lastResult.error.includes("status 404"))) {
+      return lastResult; // success or non-retryable error
+    }
+    // Transient 404 — wait before retrying.
+    if (attempt < retries) {
+      const delayMs = 2000 * (attempt + 1);
+      console.log(
+        `[importProfile] Attempt ${attempt + 1} failed (${lastResult.error}), retrying in ${delayMs}ms…`,
+      );
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return lastResult!;
 }

@@ -39,7 +39,7 @@ export default function SiteHeader() {
         >
           <LogoMark />
           <span>
-            <strong>HRS</strong>
+            <strong>Humanitarian Relief Society</strong>
             <small>Blood Donor Portal</small>
           </span>
         </Link>

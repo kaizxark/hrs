@@ -1,10 +1,11 @@
 /**
  * Staff Router — admin-created accounts (volunteers + the admin themselves).
  *
- * - `login` / `logout` / `me` — username+password session management (public
- *   for login/logout, guarded for me).
- * - `list` / `create` / `delete` — admin-only account management, surfaced in
- *   the admin "Staff & Access" view.
+ * Every read resolves from the Google Sheets Volunteer + Admin tab CSV
+ * caches. No database. No MySQL. The sheet is the sole source of truth.
+ *
+ * - `login` / `logout` / `me` — username+password session management.
+ * - `list` / `create` / `delete` / `update` — account management.
  *
  * Passwords are hashed with scrypt (see password.ts) and never stored in
  * plaintext. Sessions use a dedicated JWT cookie separate from OAuth.
@@ -18,11 +19,17 @@ import {
   deleteStaff,
   getStaffById,
   getStaffByUsername,
-  listStaff,
   updateStaffDisplayName,
   updateStaffPassword,
 } from "./staffStore";
 import { logAudit } from "./auditLogger";
+import {
+  adminCountFromCache,
+  ensureFreshStaffCache,
+  findVolunteerFromCache,
+  findAdminFromCache,
+  listVolunteersFromCache,
+} from "./staffCredentialCache";
 
 /** Strip the password hash before returning a staff row to clients. */
 function toPublicStaff(staff: {
@@ -45,19 +52,13 @@ function toPublicStaff(staff: {
   };
 }
 
-/** Audit actor payload for a staff member.
- *  Maps to the AuditActor type (role must be "user"|"admin" for the User
- *  pick), so we map volunteer → "user" for audit purposes only.
- */
+/** Audit actor payload for a staff member. */
 function staffAuditActor(actor: { id: number; username: string; displayName: string; role: "volunteer" | "admin" } | null) {
   if (!actor) return null;
   return {
     id: actor.id,
     openId: `staff:${actor.username}`,
     name: actor.displayName,
-    // AuditActor.role is Pick<User, "role"> = "user"|"admin".
-    // Map volunteer → "user" for audit storage; the audit entry's action
-    // string already distinguishes staff operations.
     role: actor.role === "admin" ? "admin" as const : "user" as const,
   };
 }
@@ -74,116 +75,92 @@ export const staffRouter = router({
     .mutation(async ({ input, ctx }) => {
       const username = input.username.trim();
 
-      // 1) Check Google Sheets — Volunteer tab
-      try {
-        const { getVolunteerFromSheet } = await import("./volunteerSheet");
-        const vol = await getVolunteerFromSheet(username);
-        if (vol) {
-          const valid = await verifyPassword(input.password, vol.passwordHash);
-          if (valid) {
-            const virtualStaff = {
-              id: 0,
-              username: vol.username,
-              displayName: vol.displayName,
-              role: "volunteer" as const,
-              active: true,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-              passwordHash: vol.passwordHash,
-            };
-            const token = await createStaffSessionToken(virtualStaff);
-            const cookieOptions = getStaffSessionCookieOptions(ctx.req);
-            ctx.res.cookie(STAFF_COOKIE_NAME, token, {
-              ...cookieOptions,
-              maxAge: 60 * 60 * 24 * 365 * 1000,
-            });
-            return { success: true, staff: toPublicStaff(virtualStaff) } as const;
-          }
-        }
-      } catch {}
+      // Ensure the staff credential cache is fresh (stale-while-revalidate).
+      await ensureFreshStaffCache();
 
-      // 2) Hardcoded admin credentials (fast, no API call) — don't block on Google Sheets.
-      // The display name mirrors the Admin tab's Name column (see kaizxark row).
-      if (username === "admin" && input.password === "admin123") {
-        const virtualAdmin = {
-          id: 0,
-          username: "admin",
-          displayName: "Ehtesham",
-          role: "admin" as const,
-          active: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          passwordHash: "",
-        };
-        const token = await createStaffSessionToken(virtualAdmin);
-        const cookieOptions = getStaffSessionCookieOptions(ctx.req);
-        ctx.res.cookie(STAFF_COOKIE_NAME, token, {
-          ...cookieOptions,
-          maxAge: 60 * 60 * 24 * 365 * 1000,
-        });
-        return { success: true, staff: toPublicStaff(virtualAdmin) } as const;
-      }
-
-      // 3) Check Google Sheets — Admin tab (sheet-based credentials)
-      try {
-        const { getAdminFromSheet } = await import("./adminSheet");
-        const adminSheet = await getAdminFromSheet(username);
-        if (adminSheet && adminSheet.username === username && adminSheet.password === input.password) {
-          const virtualAdmin = {
-            id: 0,
-            username: adminSheet.username,
-            displayName: adminSheet.name || adminSheet.username,
-            role: "admin" as const,
-            active: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            passwordHash: "",
-          };
-          const token = await createStaffSessionToken(virtualAdmin);
-          const cookieOptions = getStaffSessionCookieOptions(ctx.req);
-          ctx.res.cookie(STAFF_COOKIE_NAME, token, {
-            ...cookieOptions,
-            maxAge: 60 * 60 * 24 * 365 * 1000,
-          });
-          return { success: true, staff: toPublicStaff(virtualAdmin) } as const;
-        }
-      } catch {}
-
-      // 3b) Hardcoded kaizxark credentials (backup for unreliable Apps Script)
-      if (username === "kaizxark" && input.password === "Aliza@015") {
-        const virtualAdmin = {
-          id: 0,
-          username: "kaizxark",
-          displayName: "Ehtesham",
-          role: "admin" as const,
-          active: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          passwordHash: "",
-        };
-        const token = await createStaffSessionToken(virtualAdmin);
-        const cookieOptions = getStaffSessionCookieOptions(ctx.req);
-        ctx.res.cookie(STAFF_COOKIE_NAME, token, {
-          ...cookieOptions,
-          maxAge: 60 * 60 * 24 * 365 * 1000,
-        });
-        return { success: true, staff: toPublicStaff(virtualAdmin) } as const;
-      }
-
-      // 4) Fall back to DB staff table
-      let staff = await getStaffByUsername(username);
-      if (staff && staff.active) {
-        const valid = await verifyPassword(input.password, staff.passwordHash);
-        if (!valid) {
-          return { success: false, error: "Invalid username or password" } as const;
-        }
-        const token = await createStaffSessionToken(staff);
+      // Helper to set the session cookie and return the success payload.
+      const issueSession = async (staff: { id: number; username: string; displayName: string; role: "volunteer" | "admin"; active: boolean; createdAt: Date; updatedAt: Date; passwordHash: string }) => {
+        const token = await createStaffSessionToken(staff as any);
         const cookieOptions = getStaffSessionCookieOptions(ctx.req);
         ctx.res.cookie(STAFF_COOKIE_NAME, token, {
           ...cookieOptions,
           maxAge: 60 * 60 * 24 * 365 * 1000,
         });
         return { success: true, staff: toPublicStaff(staff) } as const;
+      };
+
+      // 1) Check Volunteer credential cache (Google Sheets Volunteer tab).
+      const vol = findVolunteerFromCache(username);
+      if (vol) {
+        try {
+          const valid = await verifyPassword(input.password, vol.passwordHash);
+          if (valid) {
+            return issueSession({
+              id: 0,
+              username: vol.username,
+              displayName: vol.displayName,
+              role: "volunteer",
+              active: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              passwordHash: vol.passwordHash,
+            });
+          }
+        } catch {}
+      }
+
+      // 2) Check Admin credential cache (Google Sheets Admin tab).
+      const adminSheet = findAdminFromCache(username);
+      if (adminSheet && adminSheet.username === username && adminSheet.password === input.password) {
+        return issueSession({
+          id: 0,
+          username: adminSheet.username,
+          displayName: adminSheet.displayName || adminSheet.username,
+          role: "admin",
+          active: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          passwordHash: "",
+        });
+      }
+
+      // 3) The Volunteer/Admin tabs are the ONLY credential store.  Accounts
+      //    just mirrored to the sheet by the UI (or edited directly in the
+      //    sheet) may still be inside the 60 s cache TTL — retry once with a
+      //    forced refresh.  Still 100% Google Sheets.
+      await ensureFreshStaffCache(true);
+
+      const freshVol = findVolunteerFromCache(username);
+      if (freshVol) {
+        try {
+          const valid = await verifyPassword(input.password, freshVol.passwordHash);
+          if (valid) {
+            return issueSession({
+              id: 0,
+              username: freshVol.username,
+              displayName: freshVol.displayName,
+              role: "volunteer",
+              active: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              passwordHash: freshVol.passwordHash,
+            });
+          }
+        } catch {}
+      }
+
+      const freshAdmin = findAdminFromCache(username);
+      if (freshAdmin && freshAdmin.username === username && freshAdmin.password === input.password) {
+        return issueSession({
+          id: 0,
+          username: freshAdmin.username,
+          displayName: freshAdmin.displayName || freshAdmin.username,
+          role: "admin",
+          active: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          passwordHash: "",
+        });
       }
 
       return { success: false, error: "Invalid username or password" } as const;
@@ -198,7 +175,6 @@ export const staffRouter = router({
   logout: publicProcedure.mutation(({ ctx }) => {
     const cookieOptions = getStaffSessionCookieOptions(ctx.req);
     ctx.res.clearCookie(STAFF_COOKIE_NAME, cookieOptions);
-    // Defensively also clear with opposite SameSite/Secure settings (old cookie variants)
     ctx.res.cookie(STAFF_COOKIE_NAME, "", {
       ...cookieOptions,
       sameSite: "lax",
@@ -214,24 +190,69 @@ export const staffRouter = router({
     return { success: true } as const;
   }),
 
-  /** List all staff accounts (admin only). */
+  /** Public emergency contacts — volunteers with a mobile number.
+   *  No auth required. Returns {name, phone}[] for the Home page popup.
+   */
+  emergencyContacts: publicProcedure.query(async () => {
+    await ensureFreshStaffCache();
+    const volunteers = listVolunteersFromCache();
+    return volunteers
+      .filter(v => v.mobile && v.mobile.trim().length > 0)
+      .map(v => ({ name: v.displayName || v.username, phone: v.mobile }));
+  }),
+
+  /** List all staff accounts (admin only).
+   *  100% Google Sheets: reads volunteers from the Volunteer tab CSV cache.
+   *  Every account shown is a sheet-managed account (source: "sheet").
+   */
   list: adminProcedure.query(async ({ ctx }) => {
-    const all = await listStaff();
+    // Google Sheets Volunteer tab — the sole source of staff accounts.
+    await ensureFreshStaffCache();
+    const sheetVolunteers = listVolunteersFromCache();
+
+    type StaffListRow = ReturnType<typeof toPublicStaff> & { source: "sheet"; mobile: string };
+    const merged = new Map<string, StaffListRow>();
+
+    let sheetId = -1;
+    for (const v of sheetVolunteers) {
+      const key = v.username.trim().toLowerCase();
+      if (!key || merged.has(key)) continue;
+      merged.set(key, {
+        id: sheetId--,
+        username: v.username,
+        displayName: v.displayName || v.username,
+        role: "volunteer" as const,
+        active: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        source: "sheet",
+        mobile: v.mobile || "",
+      });
+    }
+
+    const all = Array.from(merged.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
     const actor = ctx.staff ?? null;
     await logAudit({
       action: "staff.list",
       actionLabel: "Viewed staff & access",
       actor: staffAuditActor(actor),
       targetType: "system",
-      details: { count: all.length },
+      details: {
+        count: all.length,
+        sheetVolunteers: sheetVolunteers.length,
+      },
       ipAddress: ctx.req.ip,
     });
-    return all.map(toPublicStaff);
+    return all;
   }),
 
   /**
-   * Create a volunteer account with a username + password (admin only).
-   * Usernames are unique — a duplicate returns an error.
+   * Create a volunteer account (admin only).
+   * Writes to the Google Sheet first via Apps Script, then warms the
+   * credential cache so login/list pick up the new account immediately.
    */
   create: adminProcedure
     .input(
@@ -239,19 +260,40 @@ export const staffRouter = router({
         username: z.string().min(3).max(64).regex(/^[a-zA-Z0-9_.-]+$/, "Username may only contain letters, numbers, dots, dashes and underscores."),
         displayName: z.string().min(1).max(128),
         password: z.string().min(6).max(200),
+        mobile: z.string().max(20).optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
       const username = input.username.trim().toLowerCase();
+
+      // Uniqueness check — resolves against both sheet caches + the
+      // ephemeral write buffer (covers the 60 s CSV-cache lag window).
       const existing = await getStaffByUsername(username);
       if (existing) {
-        return {
-          success: false,
-          error: "That username is already taken.",
-        } as const;
+        return { success: false, error: "That username is already taken." } as const;
       }
 
       const passwordHash = await hashPassword(input.password);
+
+      // Mirror to Google Sheets FIRST — the sheet is the source of truth.
+      try {
+        const { createVolunteerSheet } = await import("./volunteerSheet");
+        const sheetResult = await createVolunteerSheet({ username, displayName: input.displayName.trim(), password: input.password, mobile: input.mobile?.trim() || "" });
+        if (!sheetResult.success) {
+          return { success: false, error: `Failed to write to Google Sheets: ${sheetResult.error ?? "unknown error"}` } as const;
+        }
+      } catch (err) {
+        console.error(`[Staff] Error mirroring volunteer "${username}" to Google Sheets:`, err);
+        return { success: false, error: "Failed to write to Google Sheets. The account was not created." } as const;
+      }
+
+      // Force-refresh the staff cache so the new volunteer appears in
+      // login/list on this instance immediately (Google CSV lag can be
+      // several seconds after Apps Script append).
+      await ensureFreshStaffCache(true);
+
+      // Ephemeral write buffer — bridges the gap until the published CSV
+      // reflects the new row (up to 60 s).
       const created = await createStaff({
         username,
         passwordHash,
@@ -259,16 +301,6 @@ export const staffRouter = router({
         role: "volunteer",
         active: true,
       });
-      // Mirror volunteer to Google Sheets
-      try {
-        const { createVolunteerSheet } = await import("./volunteerSheet");
-        const sheetResult = await createVolunteerSheet({ username, displayName: input.displayName.trim(), password: input.password });
-        if (!sheetResult.success) {
-          console.warn(`[Staff] Failed to mirror volunteer "${username}" to Google Sheets:`, sheetResult.error);
-        }
-      } catch (err) {
-        console.warn(`[Staff] Error mirroring volunteer "${username}" to Google Sheets:`, err);
-      }
 
       if (!created) {
         return { success: false, error: "Failed to create account." } as const;
@@ -280,29 +312,114 @@ export const staffRouter = router({
         actor: staffAuditActor(ctx.staff ?? null),
         targetType: "staff",
         targetId: String(created.id),
-        details: { username, displayName: created.displayName, role: created.role },
+        details: { username, displayName: created.displayName, role: created.role, mobile: input.mobile?.trim() || "" },
         ipAddress: ctx.req.ip,
       });
 
-      return {
-        success: true,
-        staff: toPublicStaff(created),
-      } as const;
+      return { success: true, staff: toPublicStaff(created) } as const;
     }),
 
   /**
-   * Delete a volunteer account (admin only). The admin cannot delete
-   * themselves — prevent locking yourself out.
+   * Delete a volunteer account (admin only).
+   * All accounts live in the Google Sheet. The row is removed from the
+   * Volunteer tab via Apps Script, then the cache is force-refreshed
+   * so the deletion is reflected immediately in the UI.
    */
   delete: adminProcedure
-    .input(z.object({ id: z.number() }))
+    .input(
+      z.object({
+        id: z.number(),
+        // Optional stable identifier passed by the client so deletes survive
+        // cache-order shifts (sheet ids are positional and can move while the
+        // CSV refreshes); used only for resolution, ignored beyond it.
+        username: z.string().trim().toLowerCase().optional(),
+      })
+    )
     .mutation(async ({ input, ctx }) => {
-      const target = await getStaffById(input.id);
+      // TEMP instrumentation (volunteer-delete diagnosis) — remove after RCA.
+      console.log(`[staff.delete] arrived`, {
+        id: input.id,
+        username: input.username ?? null,
+        actor: ctx.staff?.username ?? "UNAUTHED",
+        origin:
+          (ctx.req.headers as Record<string, string> | undefined)?.origin ??
+          (ctx.req.headers as Record<string, string> | undefined)?.referer ??
+          "unknown",
+      });
+
+      // Resolve the account.  Username is the preferred, stable key (sheet ids
+      // are positional and shift whenever the cache order changes).  Negative
+      // ids are sheet-native rows assigned in `list` order (id -1 = first
+      // volunteer in the cache, -2 = second, ...); positive ids are ephemeral
+      // write-buffer rows from UI creates (also mirrored to the sheet).
+      let target: { id: number; username: string; displayName: string; role: "volunteer" | "admin" } | undefined;
+
+      if (input.username) {
+        // Preferred path — the client passes the exact username it displayed,
+        // so the delete hits the right account even if the cache reordered.
+        const buffered = await getStaffByUsername(input.username);
+        if (buffered) {
+          target = {
+            id: buffered.id,
+            username: buffered.username,
+            displayName: buffered.displayName,
+            role: buffered.role,
+          };
+        } else {
+          const volunteers = listVolunteersFromCache();
+          const v = volunteers.find(
+            (vol: { username: string }) => vol.username.toLowerCase() === input.username
+          );
+          if (v) {
+            target = {
+              id: input.id,
+              username: v.username,
+              displayName: v.displayName || v.username,
+              role: "volunteer",
+            };
+          }
+        }
+      } else if (input.id < 0) {
+        // Sheet-native row — replicate the exact id ordering from `list`.
+        const volunteers = listVolunteersFromCache();
+        let sheetId = -1;
+        for (const v of volunteers) {
+          if (sheetId === input.id) {
+            target = {
+              id: input.id,
+              username: v.username,
+              displayName: v.displayName || v.username,
+              role: "volunteer",
+            };
+            break;
+          }
+          sheetId--;
+        }
+      } else {
+        // Ephemeral write-buffer row from a UI create.
+        const buffered = await getStaffById(input.id);
+        if (buffered) {
+          target = {
+            id: buffered.id,
+            username: buffered.username,
+            displayName: buffered.displayName,
+            role: buffered.role,
+          };
+        }
+      }
+
       if (!target) {
         return { success: false, error: "Account not found." } as const;
       }
 
-      if (ctx.staff && ctx.staff.id === target.id) {
+      // Prevent an admin from deleting their own account.  Compare by
+      // username — NOT by id: Google Sheets accounts (admin + volunteers)
+      // all carry id 0, so an id comparison is always 0 === 0 and wrongly
+      // blocks deletion of every sheet volunteer.
+      if (
+        ctx.staff &&
+        ctx.staff.username.toLowerCase() === target.username.toLowerCase()
+      ) {
         return {
           success: false,
           error: "You cannot delete your own account.",
@@ -311,8 +428,7 @@ export const staffRouter = router({
 
       // Prevent deleting the last remaining admin account.
       if (target.role === "admin") {
-        const all = await listStaff();
-        const adminCount = all.filter((s: { role: string }) => s.role === "admin").length;
+        const adminCount = adminCountFromCache();
         if (adminCount <= 1) {
           return {
             success: false,
@@ -321,7 +437,32 @@ export const staffRouter = router({
         }
       }
 
-      await deleteStaff(target.id);
+      // Remove the row from the Google Sheet Volunteer tab (source of truth).
+      try {
+        const { deleteVolunteerSheet } = await import("./volunteerSheet");
+        const sheetResult = await deleteVolunteerSheet(target.username);
+        if (!sheetResult.success) {
+          return {
+            success: false,
+            error: `Failed to delete from Google Sheets: ${sheetResult.error ?? "unknown error"}`,
+          } as const;
+        }
+      } catch (err) {
+        console.error(`[Staff] Error deleting volunteer "${target.username}" from Google Sheets:`, err);
+        return {
+          success: false,
+          error: "Failed to delete from Google Sheets. The account was not removed.",
+        } as const;
+      }
+
+      // Drop the ephemeral buffer row (if any) for positive ids.
+      if (input.id >= 0) {
+        await deleteStaff(target.id);
+      }
+
+      // Force-refresh the staff cache so login/list reflect the removal
+      // immediately (Google CSV lag can be several seconds).
+      await ensureFreshStaffCache(true);
 
       await logAudit({
         action: "staff.delete",
@@ -332,6 +473,8 @@ export const staffRouter = router({
         details: { username: target.username, role: target.role },
         ipAddress: ctx.req.ip,
       });
+
+      console.log(`[staff.delete] SUCCESS`, { id: target.id, username: target.username });
 
       return { success: true, id: target.id } as const;
     }),

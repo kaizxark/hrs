@@ -126,3 +126,12 @@ client/public/__manus__/version.json
 # Exported data files
 files.zip
 hrs-directory-*.xlsx
+.vercel
+
+# Exported data and backups
+*.csv
+Fillout HRS results*
+HRS_Blood_Group_Directory*
+# Vercel environment files
+.env.*
+!/client/.env.example

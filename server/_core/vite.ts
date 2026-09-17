@@ -3,10 +3,22 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
-import { createServer as createViteServer } from "vite";
-import viteConfig from "../../vite.config";
 
+/**
+ * Dev-only: dynamically imports `vite` and the project config so esbuild
+ * never bundles them into the production `dist/index.js` bundle (which would
+ * drag in Rollup/lightningcss native binaries that are unavailable on Vercel).
+ *
+ * The config path is referenced through a variable so esbuild cannot statically
+ * resolve and inline `vite.config.ts` (relative imports are bundled even when
+ * wrapped in `import()`). This file never runs in production — `serveStatic`
+ * is used instead — so the runtime `import()` only ever executes under tsx.
+ */
 export async function setupVite(app: Express, server: Server) {
+  const { createServer: createViteServer } = await import("vite");
+  const viteConfigPath = "../../vite.config";
+  const { default: viteConfig } = await import(viteConfigPath);
+
   const serverOptions = {
     middlewareMode: true,
     hmr: { server },

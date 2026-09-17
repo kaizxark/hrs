@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import SiteFooter from "@/components/SiteFooter";
+import { usePublicProfiles } from "@/lib/api";
 import { trpc } from "@/lib/trpc";
 import {
   Activity,
@@ -13,6 +14,7 @@ import {
   ChevronDown,
   Clock3,
   House,
+  Info,
   LockKeyhole,
   MapPin,
   MessageCircle,
@@ -50,17 +52,6 @@ const bloodGroups = [
   "O+",
   "O-",
 ];
-const tumkurAreas = [
-  "All areas",
-  "Tumkur City",
-  "Ashok Nagar",
-  "SIT",
-  "Kyathsandra",
-  "Gulur",
-  "Gubbi Gate",
-  "SS Puram",
-];
-const cities = ["Tumkur", "Bangalore", "Hassan", "Other"];
 
 function FieldLabel({
   children,
@@ -137,7 +128,7 @@ function DonorCard({
             />
           </div>
           <p style={{ fontSize: "13px" }}>
-            ({donor.age}) · {donor.gender}
+            {donor.age} years · {donor.gender}
           </p>
         </div>
         <div
@@ -166,6 +157,10 @@ function DonorCard({
   );
 }
 
+// Emergency volunteer contacts — fetched live from the Volunteer sheet cache.
+// Falls back to an empty array while loading; the popup shows a loading state.
+type EmergencyContact = { name: string; phone: string };
+
 export function EmergencyDropup({
   requestDonor,
   onClose,
@@ -175,6 +170,14 @@ export function EmergencyDropup({
   onClose: () => void;
   clickPos?: { x: number; y: number } | null;
 }) {
+  // Fetch real emergency volunteers from the Volunteer sheet cache.
+  const { data: contactsData, isLoading: contactsLoading } =
+    trpc.staff.emergencyContacts.useQuery(undefined, {
+      enabled: !requestDonor,
+      staleTime: 60_000,
+    });
+  const emergencyVolunteers: EmergencyContact[] =
+    (contactsData as EmergencyContact[] | undefined) ?? [];
   return createPortal(
     <>
       <div
@@ -189,89 +192,42 @@ export function EmergencyDropup({
         </button>
         {requestDonor ? (
           <>
-            <div
-              className="donor-card-top"
-              style={{
-                alignItems: "center",
-                marginBottom: "20px",
-                marginTop: "25px",
-              }}
-            >
-              <div
-                className={`avatar avatar-${requestDonor.tone}`}
-                style={{ width: "56px", height: "56px", fontSize: "20px" }}
-              >
+            <div className="donor-card-top em-donor-top">
+              <div className={`avatar avatar-${requestDonor.tone}`}>
                 {requestDonor.initials}
               </div>
               <div className="donor-identity">
                 <div className="donor-name-row">
-                  <h3 style={{ fontSize: "22px" }}>{requestDonor.name}</h3>
+                  <h3>{requestDonor.name}</h3>
                   <BadgeCheck
                     size={22}
                     className="verified-icon"
                     aria-label="Verified donor"
                   />
                 </div>
-                <p style={{ fontSize: "14px", marginTop: "4px" }}>
-                  ({requestDonor.age}) · {requestDonor.gender}
-                </p>
+                <p>{requestDonor.age} years · {requestDonor.gender}</p>
               </div>
               <div
                 className="blood-chip"
-                style={{ fontSize: "20px", padding: "12px 16px" }}
                 aria-label={`Blood group ${requestDonor.bloodGroup}`}
               >
                 {requestDonor.bloodGroup}
               </div>
             </div>
 
-            <div
-              style={{
-                fontSize: "15px",
-                paddingBottom: "20px",
-                borderBottom: "1px solid #edf0ed",
-                marginBottom: "20px",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                color: "#636c63",
-              }}
-            >
-              <MapPin size={18} /> {requestDonor.area}, {requestDonor.city}
+            <div className="em-loc-row">
+              <MapPin size={16} /> {requestDonor.area}, {requestDonor.city}
             </div>
 
-            <div
-              style={{
-                background: "#f8fae5",
-                border: "1px solid #e4e9b9",
-                borderRadius: "10px",
-                padding: "14px",
-                margin: "20px 0",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  gap: "10px",
-                  marginBottom: "10px",
-                  fontSize: "13px",
-                  color: "#5a621e",
-                }}
-              >
-                <Check size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
+            <div className="em-consent-box">
+              <div className="em-consent-row">
+                <Check size={16} />
                 <span>
                   <strong>Data recorded with consent</strong>
                 </span>
               </div>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "10px",
-                  fontSize: "13px",
-                  color: "#5a621e",
-                }}
-              >
-                <Check size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
+              <div className="em-consent-row">
+                <Check size={16} />
                 <span>
                   <strong>Voluntary blood donor</strong> – agreed to be
                   contacted by HRS when blood is needed.
@@ -279,24 +235,8 @@ export function EmergencyDropup({
               </div>
             </div>
 
-            <div
-              style={{
-                background: "#eef3ed",
-                border: "1px solid #dbe6da",
-                borderRadius: "10px",
-                padding: "14px",
-                fontSize: "12px",
-                color: "#415343",
-                marginBottom: 0,
-                display: "flex",
-                gap: "10px",
-                lineHeight: 1.5,
-              }}
-            >
-              <ShieldCheck
-                size={16}
-                style={{ flexShrink: 0, marginTop: "2px", color: "#4c7652" }}
-              />
+            <div className="em-privacy-box">
+              <ShieldCheck size={16} />
               <span>
                 <strong>Privacy protected.</strong> Contact details are not
                 publicly shared. The HRS relief team coordinates all
@@ -309,64 +249,43 @@ export function EmergencyDropup({
             <div className="modal-kicker">
               <BellRing size={15} /> Emergency Contacts
             </div>
-            <h2 style={{ fontSize: "24px", marginTop: "6px" }}>
-              HRS Volunteers
-            </h2>
-            <p className="modal-copy" style={{ marginBottom: 18 }}>
+            <h2>HRS Volunteers</h2>
+            <p className="modal-copy">
               Contact our on-call volunteers for immediate assistance.
             </p>
             <div className="emergency-contact-list">
-              {Array.from({ length: 15 }, (_, index) => index + 1).map(
-                volunteer => {
-                  const number = `+91 90000 000${volunteer}`;
-                  const telHref = `tel:${number.replace(/\s+/g, "")}`;
-                  const whatsappHref = `https://wa.me/${number.replace(/\s+/g, "").replace("+", "")}`;
-                  return (
-                    <div
-                      key={volunteer}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                        width: "100%",
-                        padding: "8px 0",
-                      }}
-                    >
-                      <div
-                        style={{
-                          flex: 1,
-                          fontSize: "22px",
-                          color: "#2f332f",
-                          fontWeight: 800,
-                          letterSpacing: "0.02em",
-                        }}
-                      >
-                        {number}
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                        }}
-                      >
+              {contactsLoading && (
+                <div style={{ padding: "1rem", textAlign: "center", color: "#9ca3af" }}>
+                  Loading volunteers…
+                </div>
+              )}
+              {!contactsLoading && emergencyVolunteers.length === 0 && (
+                <div style={{ padding: "1rem", textAlign: "center", color: "#9ca3af" }}>
+                  No emergency contacts available right now.
+                </div>
+              )}
+              {emergencyVolunteers.map(volunteer => {
+                const number = volunteer.phone;
+                const telHref = `tel:${number.replace(/\s+/g, "")}`;
+                const whatsappHref = `https://wa.me/${number
+                  .replace(/\s+/g, "")
+                  .replace("+", "")}`;
+                const initials = volunteer.name
+                  .split(" ")
+                  .map(part => part[0] ?? "")
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase();
+                return (
+                  <div key={volunteer.phone} className="em-contact-row">
+                    {/* Mobile sheet layout — name with calling icons beside it */}
+                    <div className="em-contact-mobile">
+                      <div className="em-contact-name">{volunteer.name}</div>
+                      <div className="em-contact-actions">
                         <a
                           href={telHref}
-                          aria-label={`Call volunteer ${volunteer}`}
-                          className="primary-button"
-                          style={{
-                            width: "42px",
-                            height: "32px",
-                            minWidth: "42px",
-                            minHeight: "32px",
-                            padding: 0,
-                            borderRadius: "10px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            textDecoration: "none",
-                            boxShadow: "0 4px 12px rgba(201,47,59,.18)",
-                          }}
+                          aria-label={`Call volunteer ${volunteer.name}`}
+                          className="primary-button em-call-btn"
                         >
                           <PhoneCall size={16} />
                         </a>
@@ -374,31 +293,42 @@ export function EmergencyDropup({
                           href={whatsappHref}
                           target="_blank"
                           rel="noopener noreferrer"
-                          aria-label={`Chat on WhatsApp with volunteer ${volunteer}`}
-                          className="secondary-button"
-                          style={{
-                            width: "42px",
-                            height: "32px",
-                            minWidth: "42px",
-                            minHeight: "32px",
-                            padding: 0,
-                            borderRadius: "10px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            textDecoration: "none",
-                            background: "#e4f3e7",
-                            color: "#128c7e",
-                            borderColor: "#d1e8d6",
-                          }}
+                          aria-label={`Chat on WhatsApp with volunteer ${volunteer.name}`}
+                          className="secondary-button em-wa-btn"
                         >
                           <MessageCircle size={16} />
                         </a>
                       </div>
                     </div>
-                  );
-                }
-              )}
+                    {/* Desktop directory layout */}
+                    <div className="em-contact-desktop">
+                      <div className="em-contact-avatar">{initials}</div>
+                      <div className="em-contact-main">
+                        <div className="em-contact-name">{volunteer.name}</div>
+                        <div className="em-contact-num">{number}</div>
+                      </div>
+                      <div className="em-contact-actions">
+                        <a
+                          href={telHref}
+                          aria-label={`Call volunteer ${volunteer.name}`}
+                          className="em-call-btn"
+                        >
+                          <PhoneCall size={15} /> Call
+                        </a>
+                        <a
+                          href={whatsappHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Chat on WhatsApp with volunteer ${volunteer.name}`}
+                          className="em-wa-btn"
+                        >
+                          <MessageCircle size={15} /> Message
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </>
         )}
@@ -478,8 +408,6 @@ function FloatingScrollbar() {
 }
 
 export default function Home() {
-  const [donors, setDonors] = useState<Donor[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [bloodGroup, setBloodGroup] = useState("All Groups");
   const [city, setCity] = useState("Tumkur");
   const [area, setArea] = useState("All areas");
@@ -510,124 +438,112 @@ export default function Home() {
     };
   }, [emergencyOpen]);
 
-  useEffect(() => {
-    let active = true;
-    async function fetchData() {
-      try {
-        const sheetUrl =
-          "https://docs.google.com/spreadsheets/d/e/2PACX-1vQlyH9ped9Y7wb_QwvGBPiMkmqew4Ulu_DLjzvyO0V01tzxv1QCQBb6zAoz5kpFbwvFCFhMDSOsNpzy/pub?output=csv";
-        const response = await fetch(`${sheetUrl}&t=${Date.now()}`, {
-          cache: "no-store",
-        });
-        if (!response.ok)
-          throw new Error(`Google Sheets responded with ${response.status}`);
-        const text = await response.text();
-        const rows = text
-          .replace(/^﻿/, "")
-          .split(/\r?\n/)
-          .filter(row => row.trim());
-        const tones = [
-          "coral",
-          "plum",
-          "blue",
-          "sage",
-          "sand",
-          "rose",
-          "gold",
-          "lavender",
-        ];
-        const parsedDonors: Donor[] = [];
+  const publicProfilesQuery = usePublicProfiles();
 
-        for (const row of rows) {
-          const cols = row
-            .split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
-            .map(c => c.trim().replace(/^"|"$/g, ""));
-          if (cols.length < 20) continue;
+  // Donor directory comes from the server (single source of truth = the real
+  // Google Sheet). The server already filters to VERIFIED + Donor Consent YES +
+  // blood group + Public Directory Visibility YES.
+  const donors = useMemo<Donor[]>(() => {
+    const profiles = publicProfilesQuery.data?.data?.profiles ?? [];
+    const tones = [
+      "coral",
+      "plum",
+      "blue",
+      "sage",
+      "sand",
+      "rose",
+      "gold",
+      "lavender",
+    ];
+    return profiles.map((p, index) => {
+      const safeName = p["Full Name"] || "Unknown";
+      const initials = safeName
+        .split(" ")
+        .map((n: string) => n[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
+      const tone = tones[index % tones.length];
+      const mappedStatus =
+        (p["Availability Status"] ?? "").trim().toUpperCase() === "AVAILABLE"
+          ? "Available"
+          : (p["Availability Status"] ?? "")
+                .trim()
+                .toUpperCase() === "TEMPORARILY UNAVAILABLE"
+            ? "Recently contacted"
+            : "Available";
+      const parsedDonationCount = Number.parseInt(
+        p["Blood Donation Count"] ?? "",
+        10
+      );
 
-          const id = cols[0];
-          const name = cols[1];
-          const dob = cols[2];
-          const gender = cols[3];
-          const city = cols[6];
-          const area = cols[7];
-          const bloodGroup = cols[9];
-          const donorConsent = cols[12];
-          const verificationStatus = cols[13];
-          const verifiedTime = cols[14];
-          const donationCount = cols[15];
-          const availabilityStatus = cols[18];
-          const publicVisibility = cols[19];
-
-          if (
-            !id ||
-            verificationStatus?.trim().toUpperCase() !== "VERIFIED" ||
-            donorConsent?.trim().toUpperCase() !== "YES" ||
-            !bloodGroup ||
-            publicVisibility?.trim().toUpperCase() !== "YES"
-          )
-            continue;
-
-          const safeName = name || "Unknown";
-          const initials = safeName
-            .split(" ")
-            .map((n: string) => n[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase();
-          const tone = tones[parsedDonors.length % tones.length];
-          const mappedStatus =
-            availabilityStatus?.trim().toUpperCase() === "AVAILABLE"
-              ? "Available"
-              : availabilityStatus?.trim().toUpperCase() ===
-                  "TEMPORARILY UNAVAILABLE"
-                ? "Recently contacted"
-                : "Available";
-          const parsedDonationCount = Number.parseInt(donationCount, 10);
-
-          // Calculate age from DOB
-          let age = 0;
-          if (dob) {
-            const birthDate = new Date(dob);
-            if (!Number.isNaN(birthDate.getTime())) {
-              age = Math.floor(
-                (Date.now() - birthDate.getTime()) /
-                  (365.25 * 24 * 60 * 60 * 1000)
-              );
-            }
-          }
-
-          parsedDonors.push({
-            id,
-            name: safeName,
-            age,
-            gender: gender || "Unknown",
-            bloodGroup,
-            city: city || "Unknown",
-            area: area || "Unknown",
-            status: mappedStatus,
-            verified: verifiedTime || "Verified",
-            initials: initials || "?",
-            tone,
-            donationsCount: Number.isNaN(parsedDonationCount)
-              ? 0
-              : parsedDonationCount,
-          });
+      // Calculate age from DOB
+      let age = 0;
+      const dob = p["Date of Birth"];
+      if (dob) {
+        const birthDate = new Date(dob);
+        if (!Number.isNaN(birthDate.getTime())) {
+          age = Math.floor(
+            (Date.now() - birthDate.getTime()) /
+              (365.25 * 24 * 60 * 60 * 1000)
+          );
         }
-        if (active) setDonors(parsedDonors);
-      } catch (e) {
-        console.error("Failed to fetch donor data:", e);
-      } finally {
-        if (active) setIsLoading(false);
       }
-    }
 
-    fetchData();
-    const refreshTimer = window.setInterval(fetchData, 30_000);
-    return () => {
-      active = false;
-      window.clearInterval(refreshTimer);
-    };
-  }, []);
+      return {
+        id: p["HRS ID"] || "",
+        name: safeName,
+        age,
+        gender: p["Gender"] || "Unknown",
+        bloodGroup: p["Blood Group"] || "",
+        city: p["City"] || "Unknown",
+        area: p["Area"] || "Unknown",
+        status: mappedStatus,
+        verified: p["Verification Time"] || "Verified",
+        initials: initials || "?",
+        tone,
+        donationsCount: Number.isNaN(parsedDonationCount)
+          ? 0
+          : parsedDonationCount,
+      };
+    });
+  }, [publicProfilesQuery.data]);
+
+  const isLoading = publicProfilesQuery.isLoading && donors.length === 0;
+
+  // City & area filter options are extracted from the live records only —
+  // a new city/area in the sheet appears here automatically.
+  const cityOptions = useMemo(() => {
+    const seen = new Set<string>();
+    for (const donor of donors) {
+      const c = donor.city?.trim();
+      if (c && c !== "Unknown") seen.add(c);
+    }
+    return Array.from(seen).sort((a, b) => a.localeCompare(b));
+  }, [donors]);
+
+  const areaOptions = useMemo(() => {
+    const seen = new Set<string>();
+    for (const donor of donors) {
+      if (city !== "All cities" && donor.city !== city) continue;
+      const a = donor.area?.trim();
+      if (a && a !== "Unknown") seen.add(a);
+    }
+    return Array.from(seen).sort((a, b) => a.localeCompare(b));
+  }, [donors, city]);
+
+  // If the currently selected city no longer exists in the records
+  // (e.g. data refreshed and it disappeared), fall back to first available city.
+  useEffect(() => {
+    if (
+      cityOptions.length > 0 &&
+      city !== "All cities" &&
+      !cityOptions.includes(city)
+    ) {
+      setCity(cityOptions[0]);
+      setArea("All areas");
+    }
+  }, [cityOptions, city]);
 
   const filteredDonors = useMemo(
     () =>
@@ -636,9 +552,10 @@ export default function Home() {
           if (donor.status === "Recently contacted") return false;
           const matchesGroup =
             bloodGroup === "All Groups" || donor.bloodGroup === bloodGroup;
-          const matchesCity = donor.city === city;
+          const matchesCity =
+            city === "All cities" || donor.city === city;
           const matchesArea =
-            city !== "Tumkur" || area === "All areas" || donor.area === area;
+            area === "All areas" || donor.area === area;
           return matchesGroup && matchesCity && matchesArea;
         })
         .sort((a, b) => b.donationsCount - a.donationsCount),
@@ -672,11 +589,6 @@ export default function Home() {
     setEmergencyOpen(true);
   };
 
-  /* ------------------------------------------------------------------ */
-/*  Public home page: volunteer login takes them straight to the      */
-/*  admin-style read-only dashboard at /admin.                         */
-/* ------------------------------------------------------------------ */
-
   return (
     <div className="portal-shell">
       <main id="top">
@@ -702,7 +614,6 @@ export default function Home() {
                   marginTop: "20px",
                   display: "flex",
                   flexDirection: "column",
-                  width: "fit-content",
                 }}
               >
                 <style>{`.hero-dropdown-btn:active { transform: none !important; opacity: 0.85; }`}</style>
@@ -727,7 +638,6 @@ export default function Home() {
                     width: "100%",
                     borderRadius: "12px",
                     transition: "border-radius 0.2s ease",
-                    minWidth: "360px",
                   }}
                 >
                   <div
@@ -782,32 +692,17 @@ export default function Home() {
                         setCity(value);
                         setArea("All areas");
                       }}
-                      options={cities}
+                      options={["All cities", ...cityOptions]}
                     />
-                    {city === "Tumkur" ? (
-                      <SelectField
-                        id="area"
-                        label="Area"
-                        value={area}
-                        onChange={setArea}
-                        options={tumkurAreas}
-                      />
-                    ) : (
-                      <div className="field-wrap">
-                        <FieldLabel htmlFor="other-area">Enter area</FieldLabel>
-                        <input
-                          className="plain-input"
-                          id="other-area"
-                          placeholder="Type an area"
-                          value={area === "All areas" ? "" : area}
-                          onChange={event =>
-                            setArea(event.target.value || "All areas")
-                          }
-                        />
-                      </div>
-                    )}
+                    <SelectField
+                      id="area"
+                      label="Area"
+                      value={area}
+                      onChange={setArea}
+                      options={["All areas", ...areaOptions]}
+                    />
                   </div>
-                </div>
+                  </div>
               </form>
               <div className="panel-footnote">
                 <span className="sheet-status">
@@ -901,32 +796,24 @@ export default function Home() {
 
       {/* Floating emergency button removed */}
       <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-        <a className="selected" href="#top">
-          <House size={19} />
-          <span>Home</span>
-        </a>
-        <a href="#find">
-          <Search size={20} />
-          <span>Find Donors</span>
-        </a>
+        <Link className="nav-slot nav-left" href="/about">
+          <Info size={20} />
+          <span>About</span>
+        </Link>
         <button
-          className="emergency-tab"
+          className="nav-slot emergency-tab"
           onClick={() => setEmergencyOpen(true)}
           aria-label="Open emergency help"
         >
           <span className="emergency-tab-icon">
-            <PhoneCall size={22} />
+            <PhoneCall size={28} />
           </span>
           <span>Emergency</span>
         </button>
-        <button
-          className="nav-btn"
-          onClick={() => window.location.assign("/admin")}
-          aria-label="Login to staff workspace"
-        >
-          <LockKeyhole size={19} />
+        <Link className="nav-slot nav-right" href="/admin">
+          <LockKeyhole size={20} />
           <span>Login</span>
-        </button>
+        </Link>
       </nav>
 
       {emergencyOpen && (

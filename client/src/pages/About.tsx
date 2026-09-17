@@ -74,10 +74,14 @@ const doesNotItems = [
 ];
 
 function LetterReveal({ text }: { text: string }) {
+  let runningOffset = 0;
+  const segments = text.split(/(\s+)/);
   return (
     <span className="about-letter-reveal" aria-hidden="true">
-      {text.split(/(\s+)/).map((word, wordIndex) =>
-        word.trim() ? (
+      {segments.map((word, wordIndex) => {
+        const wordStart = runningOffset;
+        runningOffset += word.length;
+        return word.trim() ? (
           <span className="about-letter-word" key={`${word}-${wordIndex}`}>
             {Array.from(word).map((character, characterIndex) => (
               <span
@@ -85,10 +89,7 @@ function LetterReveal({ text }: { text: string }) {
                 key={`${character}-${characterIndex}`}
                 style={
                   {
-                    "--letter-index": text.slice(
-                      0,
-                      text.indexOf(word) + characterIndex
-                    ).length,
+                    "--letter-index": wordStart + characterIndex,
                   } as React.CSSProperties
                 }
               >
@@ -98,8 +99,8 @@ function LetterReveal({ text }: { text: string }) {
           </span>
         ) : (
           word
-        )
-      )}
+        );
+      })}
     </span>
   );
 }
@@ -412,26 +413,22 @@ export default function About() {
 
       <SiteFooter />
       <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-        <Link href="/">
-          <House size={19} />
+        <Link className="nav-slot nav-left" href="/">
+          <House size={20} />
           <span>Home</span>
         </Link>
-        <Link href="/#find">
-          <Search size={20} />
-          <span>Find Donors</span>
-        </Link>
         <button
-          className="emergency-tab"
+          className="nav-slot emergency-tab"
           onClick={() => setEmergencyOpen(true)}
           aria-label="Open emergency help"
         >
           <span className="emergency-tab-icon">
-            <PhoneCall size={22} />
+            <PhoneCall size={28} />
           </span>
           <span>Emergency</span>
         </button>
-        <Link href="/admin">
-          <LockKeyhole size={19} />
+        <Link className="nav-slot nav-right" href="/admin">
+          <LockKeyhole size={20} />
           <span>Login</span>
         </Link>
       </nav>

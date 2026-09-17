@@ -157,7 +157,7 @@ h3 {
 .logo-mark {
   width: 34px;
   height: 34px;
-  border-radius: 10px;
+  border-radius: 50%;
   background: var(--primary);
   color: white;
   display: grid;
@@ -175,6 +175,7 @@ h3 {
   font-family: "Manrope", sans-serif;
   font-size: 15px;
   letter-spacing: 0.08em;
+  white-space: nowrap;
 }
 .brand small {
   color: var(--muted-foreground);
@@ -1021,7 +1022,7 @@ textarea:focus,
 .footer-brand .logo-mark {
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: 50%;
 }
 .footer-brand small {
   color: #9fa89f;
@@ -1406,7 +1407,7 @@ textarea:focus,
 .admin-sidebar .logo-mark {
   width: 31px;
   height: 31px;
-  border-radius: 9px;
+  border-radius: 50%;
 }
 .admin-sidebar-head {
   display: flex;
@@ -1963,6 +1964,187 @@ textarea:focus,
 .recent-row small {
   font-size: 13px;
   color: #a0a7a0;
+}
+/* Staff & Access — card design */
+.staff-access-card .staff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+.staff-access-card .staff-member {
+  border: 1px solid #e6eae5;
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 14px 16px 12px;
+  box-shadow: 0 1px 2px rgba(20, 30, 20, 0.04);
+}
+.staff-access-card .staff-member.role-admin {
+  background: #fffaf1;
+  border-color: #f1e3c3;
+}
+.staff-access-card .staff-member.is-inactive {
+  opacity: 0.72;
+}
+.staff-access-card .staff-member-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.staff-access-card .staff-member-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #ffffff;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #53a06b, #2f7a4c);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+.staff-access-card .role-admin .staff-member-avatar {
+  background: linear-gradient(135deg, #e8a13c, #c92f3b);
+}
+.staff-access-card .is-inactive .staff-member-avatar {
+  background: linear-gradient(135deg, #b7c0b7, #8f9a8f);
+}
+.staff-access-card .staff-member-info {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.staff-access-card .staff-member-info strong {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f241f;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.staff-access-card .staff-member-info span {
+  font-size: 12.5px;
+  color: #7c857c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.staff-access-card .staff-status-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.staff-access-card .staff-status-chip.is-on {
+  color: #2f7a4c;
+  background: #e9f4ec;
+}
+.staff-access-card .staff-status-chip.is-off {
+  color: #b02a33;
+  background: #fbecec;
+}
+.staff-access-card .staff-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.staff-access-card .staff-member-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.055);
+}
+.staff-access-card .staff-member-access {
+  font-size: 13px;
+  color: #5c645c;
+  min-width: 0;
+}
+.staff-access-card .staff-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #c92a37;
+  background: #fff4f4;
+  border: 1px solid #f3d4d6;
+  border-radius: 10px;
+  padding: 7px 13px;
+  transition: background 0.15s ease;
+}
+.staff-access-card .staff-remove-btn:active {
+  background: #fbe4e5;
+}
+.staff-access-card .staff-remove-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.staff-access-card .staff-create-form {
+  max-width: 420px;
+  margin: 18px 0 0;
+  background: #f7f9f6;
+  border: 1px solid #e3e8e2;
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.staff-access-card .staff-create-buttons {
+  display: flex;
+  gap: 10px;
+}
+.staff-access-card .staff-create-buttons .primary-button {
+  flex: 1;
+  min-height: 42px;
+}
+.staff-access-card .staff-create-buttons .secondary-button {
+  min-height: 42px;
+  padding: 0 18px;
+}
+.staff-access-card .staff-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #f3d4d6;
+  border-radius: 50%;
+  background: #fdf1f2;
+  color: #b92b37;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.08s ease;
+}
+.staff-access-card .staff-add-btn:hover {
+  background: #fbe1e4;
+  border-color: #eec2c7;
+}
+.staff-access-card .staff-add-btn:active {
+  transform: scale(0.96);
+}
+.staff-access-card .staff-add-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .workflow-note {
   display: flex;
@@ -2830,7 +3012,7 @@ textarea:focus,
   .logo-mark {
     width: 31px;
     height: 31px;
-    border-radius: 9px;
+    border-radius: 50%;
   }
   .brand strong {
     font-size: 14px;
@@ -3117,6 +3299,10 @@ textarea:focus,
   .admin-sidebar.open {
     transform: translateX(0);
   }
+  /* Mobile: hide the bottom "Administrator" profile chip in the sidebar drawer. */
+  .sidebar-bottom {
+    display: none;
+  }
   .mobile-close-sidebar {
     display: grid;
     place-items: center;
@@ -3227,6 +3413,13 @@ textarea:focus,
   .records-table-row {
     min-width: 680px;
   }
+  /* Donations/Pending empty state: the paragraph wraps on phones, and its
+     left-aligned lines made the message look shoved to the left even though
+     the flex column is centered. Center the text within the box so wrapped
+     lines read centered on mobile. Desktop untouched. */
+  .admin-empty {
+    text-align: center;
+  }
   .record-toolbar {
     flex-direction: column;
   }
@@ -3312,6 +3505,24 @@ textarea:focus,
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+@keyframes sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -4040,6 +4251,9 @@ textarea:focus,
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+.profile-public-status.hidden {
+  color: #aa9169;
+}
 .profile-history {
   display: grid;
   gap: 8px;
@@ -4220,13 +4434,22 @@ textarea:focus,
 .profile-history-section.open .profile-history-panel > .profile-history-inner {
   transform: translateY(0);
 }
-.profile-history-footer {
-  padding-top: 14px;
+.profile-history .profile-history-footer {
+  display: block;
+  grid-column: 1 / -1;
+  min-height: auto;
+  padding: 14px 0 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  align-items: initial;
+  justify-content: initial;
+  gap: initial;
 }
-.profile-history-footer .profile-donation-button {
+.profile-history .profile-history-footer .profile-donation-button {
   margin-top: 0;
 }
-.profile-history-footer .profile-action-hint {
+.profile-history .profile-history-footer .profile-action-hint {
   display: block;
   margin-top: 8px;
   color: #8793a4;
@@ -4368,9 +4591,9 @@ textarea:focus,
 .profile-donation-button {
   display: inline-flex;
   width: auto;
-  min-width: 190px;
+  min-width: 280px;
   font-size: 14px;
-  padding: 10px 16px;
+  padding: 10px 24px;
   gap: 10px;
   white-space: nowrap;
   align-items: center;
@@ -5182,6 +5405,9 @@ textarea:focus,
   color: #39825d;
   font-size: 13px;
 }
+.profile-public-status.hidden {
+  color: #aa9169;
+}
 .profile-history {
   border-top: 1px solid #f0f1f2;
   gap: 0;
@@ -5229,6 +5455,9 @@ textarea:focus,
 }
 .profile-history > div > small {
   color: #9ba4a9;
+}
+.profile-history > div > em {
+  display: none;
 }
 .profile-history-status {
   display: flex;
@@ -5434,7 +5663,6 @@ textarea:focus,
     grid-template-columns: 110px 1fr 70px;
   }
   .profile-donation-button {
-    min-width: 190px;
     font-size: 13px;
   }
 }
@@ -6071,108 +6299,50 @@ textarea:focus,
   gap: 7px;
   color: #667267;
   font: inherit;
+  cursor: pointer;
 }
 .metric-period-select > span {
   font-size: 14px;
   font-weight: 700;
   color: #879087;
 }
-.metric-period-menu-wrap {
-  position: relative;
-}
-.metric-period-trigger {
+.metric-period-native {
   min-height: 30px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
   border: 1px solid #d5dfd4;
   border-radius: 8px;
-  background: #f4f8f3;
+  background-color: #f4f8f3;
   color: #48624c;
   cursor: pointer;
   font:
     800 10px/1 "Manrope",
     sans-serif;
-  padding: 0 9px 0 10px;
+  padding: 0 24px 0 10px;
   box-shadow: 0 1px 2px rgba(41, 49, 42, 0.04);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2348624c' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 10px;
   transition:
-    transform 0.2s var(--ease-out),
     border-color 0.2s ease,
     background-color 0.2s ease,
-    box-shadow 0.2s ease;
+    box-shadow 0.2s ease,
+    transform 0.2s var(--ease-out);
 }
-.metric-period-trigger svg {
-  transition: transform 0.25s var(--ease-out);
-}
-.metric-period-select.open .metric-period-trigger svg {
-  transform: rotate(180deg);
-}
-.metric-period-trigger:hover,
-.metric-period-trigger:focus-visible {
+.metric-period-native:hover,
+.metric-period-native:focus-visible {
   border-color: #9fba9f;
-  background: #edf5ed;
+  background-color: #edf5ed;
   outline: 0;
   box-shadow:
     0 0 0 3px rgba(111, 148, 111, 0.12),
     0 4px 10px rgba(76, 108, 78, 0.1);
-  transform: translateY(-1px);
 }
-.metric-period-trigger:active {
-  transform: translateY(0) scale(0.98);
-}
-.metric-period-menu {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + 7px);
-  right: 0;
-  min-width: 116px;
-  padding: 5px;
-  border: 1px solid #d5dfd4;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 12px 24px rgba(41, 49, 42, 0.14);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: translateY(-6px) scale(0.97);
-  transform-origin: top right;
-  transition:
-    opacity 0.2s ease,
-    visibility 0.2s ease,
-    transform 0.25s var(--ease-out);
-}
-.metric-period-menu.open {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: translateY(0) scale(1);
-}
-.metric-period-menu button {
-  width: 100%;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: #647064;
-  cursor: pointer;
-  font:
-    700 10px/1 "Manrope",
-    sans-serif;
-  padding: 9px 10px;
-  text-align: left;
-  transition:
-    background-color 0.16s ease,
-    color 0.16s ease,
-    transform 0.16s var(--ease-out);
-}
-.metric-period-menu button:hover,
-.metric-period-menu button:focus-visible,
-.metric-period-menu button.selected {
-  background: #edf5ed;
-  color: #48624c;
-  outline: 0;
-}
-.metric-period-menu button:active {
-  transform: scale(0.97);
+.metric-period-native:active {
+  transform: scale(0.98);
 }
 .dashboard-record-section {
   padding: 0;
@@ -9399,6 +9569,24 @@ body::-webkit-scrollbar {
 .donation-record-form {
   margin-bottom: 20px;
 }
+.donation-record-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 11px 13px;
+  background: #fff9ee;
+  border: 1px solid #f0d9a0;
+  border-radius: 8px;
+  color: #7a5a1e;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.donation-record-warning svg {
+  flex-shrink: 0;
+  color: #ba8c47;
+  margin-top: 1px;
+}
 .donation-record-form input[type="datetime-local"] {
   width: 100%;
   min-height: 44px;
@@ -10621,33 +10809,17 @@ body::-webkit-scrollbar {
     flex-direction: column;
     align-items: center;
   }
+  /* Column layout turns the 180px flex-basis into height, so the chart's
+     width collapses to ~0 and the pie disappears. Give it an explicit,
+     measurable width for ResponsiveContainer. */
+  .loc-pie-chart {
+    flex: none;
+    width: 100%;
+    max-width: 260px;
+  }
   .loc-leader-row {
     grid-template-columns: 24px 1fr 60px 32px;
     gap: 8px;
-  }
-
-  /* ── Sync & Data responsive ── */
-  .sync-grid {
-    grid-template-columns: 1fr;
-  }
-  .sync-controls-row {
-    grid-template-columns: 1fr;
-  }
-  .sync-health-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-  .sync-metrics {
-    grid-template-columns: 1fr 1fr;
-  }
-  .sync-data-health-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-  .sync-interval-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
   }
 }
 
@@ -10660,11 +10832,16 @@ body::-webkit-scrollbar {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  margin-bottom: 24px;
 }
 .sync-controls-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  margin-bottom: 24px;
+}
+.sync-controls-row:last-child {
+  margin-bottom: 0;
 }
 .sync-health-grid {
   display: grid;
@@ -11140,6 +11317,118 @@ body::-webkit-scrollbar {
   background: #fceaea;
   color: #a4333b;
   border: 1px solid #f5d5d5;
+}
+
+/* ── Danger Zone (Reset All Profiles) ─────────────────────────────── */
+.sync-danger-card {
+  border-color: #f1d3d3;
+  background: linear-gradient(180deg, #fffafa 0%, #ffffff 100%);
+}
+.sync-danger-title {
+  color: #a4333b;
+}
+.sync-danger-btn {
+  border-color: #e0b4b4;
+  background: #fdeaec;
+  color: #a4333b;
+}
+.sync-danger-btn:hover:not(:disabled) {
+  border-color: #c98a8a;
+  background: #fbdadd;
+  box-shadow: var(--shadow-sm);
+}
+.sync-danger-confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #f1d3d3;
+  background: #fffafa;
+}
+.sync-danger-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+.sync-danger-input {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--foreground);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.sync-danger-input:focus {
+  border-color: #c98a8a;
+  box-shadow: 0 0 0 3px rgba(164, 51, 59, 0.12);
+}
+.sync-danger-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+/* ── Sync & Data responsive ──────────────────────────────────────────
+   Declared AFTER the base rules so these actually win the cascade
+   (the earlier copy buried inside the Locations media block was dead
+   code the base 2-column rules overrode on every screen size). ── */
+@media (max-width: 640px) {
+  .sync-grid {
+    grid-template-columns: 1fr;
+  }
+  .sync-controls-row {
+    grid-template-columns: 1fr;
+  }
+  .sync-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+  .sync-interval-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .sync-manual-meta {
+    flex-wrap: wrap;
+    gap: 8px 18px;
+  }
+  .sync-status-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+/* ── Sync & Data — extra-narrow phones ─────────────────────────────── */
+@media (max-width: 400px) {
+  .sync-metrics {
+    gap: 10px;
+  }
+  .sync-card-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .sync-controls-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+}
+
+/* ── Sync & Data — mid band between stacked and 2-up (tablet portrait /
+      large phones in landscape): cards are ~300px wide, so let the
+      interval label + pills wrap instead of spilling past the card. ── */
+@media (min-width: 641px) and (max-width: 768px) {
+  .sync-interval-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -12331,6 +12620,7 @@ a.vol-contact-row:hover {
     flex: 1 1 100%;
   }
 }
+@media (max-width: 720px) {
   .vol-hero-copy h1 {
     font-size: clamp(34px, 9vw, 44px);
   }
@@ -12371,6 +12661,7 @@ a.vol-contact-row:hover {
   .vol-action-verify {
     grid-column: auto;
   }
+}
 @media (max-width: 460px) {
   .vol-modal {
     width: calc(100vw - 24px);
@@ -12667,6 +12958,40 @@ html {
     overflow: visible;
   }
 
+  /* Staff & Access cards — mobile polish */
+  .staff-access-card .staff-member {
+    padding: 12px 14px 10px;
+  }
+  .staff-access-card .staff-member-main {
+    gap: 10px;
+  }
+  .staff-access-card .staff-status-chip {
+    padding: 4px 9px;
+  }
+  .staff-access-card .staff-member-foot {
+    align-items: flex-end;
+    gap: 8px;
+  }
+  .staff-access-card .staff-member-access {
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
+  .staff-access-card .staff-remove-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+  .staff-access-card .staff-create-buttons {
+    flex-direction: column;
+  }
+  .staff-access-card .staff-create-buttons .primary-button,
+  .staff-access-card .staff-create-buttons .secondary-button {
+    width: 100%;
+  }
+  .staff-access-card .staff-add-btn {
+    width: 40px;
+    height: 40px;
+  }
+
   .admin-card {
     padding: 14px;
   }
@@ -12681,5 +13006,3469 @@ html {
   .records-pagination-info {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* ==========================================================================
+   PREMIUM MOBILE OVERHAUL
+   Single consolidated pass, appended last so it wins the cascade.
+   Desktop (>960px) is untouched. Fixes: residual zoom inflation on
+   tablets, oversized mobile type, loose paddings, plain bottom bar and
+   generic surfaces → fluid clamp() scale, glassy header/topbar, floating
+   pill bottom navigation, gradient primary CTAs, refined cards/inputs.
+   ========================================================================== */
+
+/* ── 1) Kill residual desktop zoom inflation on tablets (701–960px) ── */
+@media (max-width: 960px) {
+  body {
+    zoom: 1;
+  }
+}
+
+/* ── 2) Tablet tuning (701–900px) ── */
+@media (min-width: 701px) and (max-width: 900px) {
+  .hero-copy h1 {
+    font-size: clamp(32px, 4.9vw, 46px);
+    line-height: 1;
+  }
+  .about-hero h1 {
+    font-size: clamp(30px, 5vw, 44px);
+  }
+  .about-section h2 {
+    font-size: 26px;
+  }
+  .section-heading-row h2,
+  .workflow-strip h2 {
+    font-size: 24px;
+  }
+  .admin-page-heading h1 {
+    font-size: 26px;
+  }
+  .metric-card > strong {
+    font-size: 22px;
+  }
+  .login-side h1 {
+    font-size: clamp(30px, 4vw, 40px);
+  }
+}
+
+/* ── 3) Phones (≤700px): fluid scale + premium chrome ── */
+@media (max-width: 700px) {
+  body {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+
+  /* ── Glassy sticky header ── */
+  .site-header {
+    height: calc(54px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+    background: rgba(250, 251, 248, 0.82);
+    border-bottom-color: rgba(214, 220, 214, 0.55);
+    box-shadow: 0 8px 28px rgba(28, 39, 31, 0.06);
+  }
+  .header-inner {
+    padding: 0 16px;
+  }
+  .logo-mark {
+    width: 30px;
+    height: 30px;
+    box-shadow: 0 4px 10px rgba(201, 47, 59, 0.24);
+  }
+  .brand strong {
+    font-size: 13.5px;
+  }
+  .brand small {
+    font-size: 12px;
+  }
+  .desktop-nav {
+    top: calc(100% + 8px);
+  }
+  .mobile-menu-button {
+    min-width: 42px;
+    min-height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 11px;
+    background: #fff;
+    border: 1px solid var(--border);
+    box-shadow: 0 3px 10px rgba(28, 39, 31, 0.06);
+  }
+
+  /* ── Fluid type scale (the "text too big" fix) ── */
+  .eyebrow {
+    font-size: 12px;
+    letter-spacing: 0.12em;
+  }
+  .hero-copy h1 {
+    font-size: clamp(29px, 8.2vw, 38px);
+    line-height: 1.03;
+    margin: 14px 0 14px;
+    letter-spacing: -0.04em;
+  }
+  .hero-copy > p {
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+  .trust-row {
+    margin-top: 20px;
+    gap: 14px;
+    font-size: 13px;
+    font-weight: 700;
+    flex-wrap: wrap;
+  }
+  .section-heading-row h2 {
+    font-size: 21px;
+  }
+  .workflow-strip h2 {
+    font-size: 21px;
+  }
+  .workflow-step h3 {
+    font-size: 15px;
+  }
+  .search-panel h2 {
+    font-size: 19px;
+  }
+  .about-hero h1 {
+    font-size: clamp(27px, 7.6vw, 36px);
+    line-height: 1.04;
+  }
+  .about-section h2 {
+    font-size: 23px;
+  }
+  .about-cta-section h2 {
+    font-size: 21px;
+  }
+  .admin-page-heading h1 {
+    font-size: 22px;
+    margin-top: 6px;
+  }
+  .admin-page-heading p {
+    font-size: 13.5px;
+  }
+  .metric-card-head {
+    font-size: 13px;
+  }
+  .metric-card > strong {
+    font-size: 19px;
+    margin: 13px 0 7px;
+  }
+  .metric-card small {
+    font-size: 12px;
+  }
+  .login-side h1 {
+    font-size: clamp(22px, 6.4vw, 30px);
+    line-height: 1.05;
+    margin: 13px 0 14px;
+  }
+  .login-side-content > p {
+    font-size: 14px;
+  }
+  .login-form-wrap h2 {
+    font-size: 24px;
+  }
+  .login-copy {
+    font-size: 13.5px;
+  }
+  .modal-card h2,
+  .admin-modal h2 {
+    font-size: 21px;
+  }
+  .modal-copy {
+    font-size: 15px;
+  }
+  .vol-hero-copy h1 {
+    font-size: clamp(26px, 7.4vw, 34px);
+    line-height: 1.05;
+  }
+
+  /* ── Loose paddings tightened ── */
+  .hero-section {
+    padding: 26px 16px 10px;
+  }
+  .hero-section::after {
+    width: 230px;
+    height: 230px;
+    right: -140px;
+    top: -80px;
+  }
+  .results-section {
+    padding: 0 16px 42px;
+  }
+  .workflow-strip {
+    padding: 34px 16px;
+    gap: 24px;
+  }
+  .about-main {
+    padding: 0 16px 64px;
+  }
+  .about-hero {
+    padding: 30px 0 38px;
+    gap: 26px;
+  }
+  .about-section {
+    padding: 38px 0;
+  }
+  .site-footer {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+
+  /* ── Premium cards & surfaces ── */
+  .search-panel {
+    padding: 20px 16px 14px;
+    border-radius: 16px;
+    border: 1px solid rgba(228, 233, 227, 0.9);
+    box-shadow:
+      0 1px 2px rgba(28, 39, 31, 0.05),
+      0 16px 36px -14px rgba(28, 39, 31, 0.16);
+  }
+  .donor-grid {
+    gap: 10px;
+  }
+  .donor-card {
+    padding: 15px;
+    border-radius: 16px;
+    border: 1px solid rgba(226, 232, 225, 0.95);
+    box-shadow:
+      0 1px 2px rgba(28, 39, 31, 0.04),
+      0 12px 26px -16px rgba(28, 39, 31, 0.14);
+  }
+  .privacy-banner {
+    border-radius: 11px;
+  }
+  .result-search,
+  .admin-search {
+    border-radius: 11px;
+    min-height: 44px;
+  }
+  .metric-grid {
+    gap: 10px;
+  }
+  .metric-card {
+    padding: 14px;
+    border-radius: 14px;
+    border-color: rgba(226, 232, 225, 0.95);
+    box-shadow:
+      0 1px 2px rgba(28, 39, 31, 0.04),
+      0 10px 22px -16px rgba(28, 39, 31, 0.12);
+  }
+  .admin-card {
+    padding: 15px;
+    border-radius: 16px;
+    box-shadow:
+      0 1px 2px rgba(28, 39, 31, 0.04),
+      0 12px 26px -18px rgba(28, 39, 31, 0.16);
+  }
+  .admin-two-col {
+    gap: 12px;
+  }
+
+  /* ── Premium buttons ── */
+  .primary-button,
+  .search-button {
+    min-height: 50px;
+    border-radius: 13px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #d8414d 0%, #b02633 100%);
+    box-shadow: 0 10px 22px -8px rgba(201, 47, 59, 0.4);
+  }
+  .secondary-button,
+  .filter-button,
+  .clear-button {
+    min-height: 44px;
+    border-radius: 12px;
+  }
+  .filter-toggle {
+    min-height: 44px;
+  }
+
+  /* ── Premium inputs ── */
+  .plain-input,
+  .input-shell input,
+  .select-shell select,
+  .admin-input input {
+    min-height: 50px;
+    border-radius: 12px;
+    border-color: #dde3dd;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(28, 39, 31, 0.05);
+  }
+  .plain-input:focus,
+  .input-shell input:focus,
+  .select-shell select:focus,
+  .admin-input input:focus {
+    border-color: rgba(201, 47, 59, 0.45);
+    box-shadow: 0 0 0 3px rgba(201, 47, 59, 0.13);
+  }
+
+  /* ── Premium admin chrome ── */
+  .admin-topbar {
+    height: calc(56px + env(safe-area-inset-top));
+    padding: 0 14px;
+    background: rgba(255, 255, 255, 0.86);
+    backdrop-filter: blur(18px) saturate(1.3);
+    border-bottom-color: rgba(226, 231, 225, 0.85);
+    box-shadow: 0 6px 22px -12px rgba(28, 39, 31, 0.18);
+  }
+  .mobile-admin-menu {
+    min-width: 42px;
+    min-height: 42px;
+  }
+  .admin-content {
+    padding: 22px 14px calc(86px + env(safe-area-inset-bottom));
+  }
+  .admin-sidebar {
+    width: min(292px, 86vw);
+    border-radius: 0 22px 22px 0;
+    box-shadow: 26px 0 70px -20px rgba(16, 24, 18, 0.45);
+  }
+
+  /* ── Floating pill bottom navigation ── */
+  .mobile-bottom-nav {
+    left: 12px;
+    right: 12px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    height: 58px;
+    border-radius: 20px;
+    border: 1px solid rgba(215, 222, 215, 0.9);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(22px) saturate(1.5);
+    box-shadow: 0 14px 34px -10px rgba(28, 39, 31, 0.32);
+  }
+  .mobile-bottom-nav a,
+  .mobile-bottom-nav button {
+    font-size: 11.5px;
+    font-weight: 700;
+    gap: 3px;
+    color: #6a736a;
+  }
+  .mobile-bottom-nav a svg,
+  .mobile-bottom-nav button svg {
+    stroke-width: 2;
+  }
+  .mobile-bottom-nav a.selected {
+    color: var(--primary);
+  }
+  .mobile-bottom-nav .emergency-tab {
+    color: var(--primary);
+  }
+  .mobile-bottom-nav .emergency-tab-icon {
+    width: 40px;
+    height: 40px;
+    margin-top: -15px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, #d8414d 0%, #a92531 100%);
+    color: #fff;
+    border: 3px solid #fff;
+    box-shadow: 0 8px 18px -4px rgba(201, 47, 59, 0.5);
+  }
+
+  /* ── Bottom sheets: taller radius + grab handle ── */
+  .modal-card,
+  .admin-modal {
+    position: relative;
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -16px 46px -12px rgba(20, 28, 22, 0.3);
+  }
+  .vol-modal {
+    border-radius: 22px 22px 0 0;
+  }
+  .admin-modal::before,
+  .modal-backdrop.emergency-modal-backdrop + .modal-card::before {
+    content: "";
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    border-radius: 99px;
+    background: rgba(28, 39, 31, 0.14);
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* ── Login page polish ── */
+  .login-side {
+    background: linear-gradient(158deg, #2e3a31 0%, #242c26 65%, #1f2621 100%);
+    min-height: 236px;
+    padding: 24px 20px 26px;
+  }
+  .login-side::after {
+    width: 300px;
+    height: 300px;
+    right: -170px;
+    bottom: -120px;
+    border-color: rgba(218, 234, 217, 0.14);
+  }
+  .login-symbol {
+    width: 46px;
+    height: 46px;
+    border-radius: 13px;
+    margin-bottom: 22px;
+  }
+  .login-form-area {
+    padding: 26px 18px calc(64px + env(safe-area-inset-bottom));
+  }
+  .login-form {
+    gap: 14px;
+  }
+  .input-icon-button {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* ── 4) Small phones (≤480px) ── */
+@media (max-width: 480px) {
+  .hero-copy h1 {
+    font-size: clamp(26px, 8.2vw, 32px);
+  }
+  .hero-section {
+    padding: 24px 14px 8px;
+  }
+  .hero-section::after {
+    width: 200px;
+    height: 200px;
+    right: -130px;
+    top: -70px;
+  }
+  .search-panel {
+    padding: 18px 14px 14px;
+    border-radius: 15px;
+  }
+  .donor-card {
+    padding: 14px;
+    border-radius: 15px;
+  }
+  .metric-grid {
+    gap: 8px;
+  }
+  .metric-card {
+    padding: 12px 12px 13px;
+    border-radius: 13px;
+  }
+  .metric-card > strong {
+    font-size: 18px;
+  }
+  .admin-card {
+    padding: 13px;
+    border-radius: 15px;
+  }
+  .about-main {
+    padding: 0 14px 56px;
+  }
+  .workflow-strip {
+    padding: 28px 14px;
+  }
+  .site-header {
+    height: calc(52px + env(safe-area-inset-top));
+  }
+  .mobile-bottom-nav {
+    left: 10px;
+    right: 10px;
+    height: 56px;
+  }
+  .login-form-area {
+    padding: 22px 16px calc(60px + env(safe-area-inset-bottom));
+  }
+  .results-section {
+    padding: 0 14px 36px;
+  }
+}
+
+/* ── 5) Very narrow (≤380px) ── */
+@media (max-width: 380px) {
+  .brand strong {
+    font-size: 12.5px;
+    letter-spacing: 0.04em;
+  }
+  .brand small {
+    display: none;
+  }
+  .hero-copy h1 {
+    font-size: 27px;
+  }
+  .about-hero h1 {
+    font-size: 26px;
+  }
+  .trust-row {
+    gap: 10px;
+    font-size: 12px;
+  }
+  .mobile-bottom-nav a,
+  .mobile-bottom-nav button {
+    font-size: 11px;
+  }
+}
+
+/* =====================================================================
+   MOBILE UI REDESIGN — round 2 (final mobile treatment)
+   The round-1 pass fixed structure; this pass removes the remaining
+   desktop furniture, kills every horizontal overflow, and makes the
+   phone experience feel deliberately designed (full-width CTAs,
+   larger touch targets, one-thumb-friendly layouts).
+   ===================================================================== */
+
+/* ---- Global overflow guard (never ship a horizontally scrolling page) ---- */
+html,
+body {
+  overflow-x: hidden;
+}
+html,
+body,
+.portal-shell,
+.admin-shell,
+.login-page {
+  overflow-x: clip;
+}
+img {
+  max-width: 100%;
+}
+
+/* The search CTA now lives inside .search-form-layout; drop the stale
+   standalone margin so the layout gap governs spacing. */
+.search-form-layout > .search-button {
+  margin-top: 0;
+  min-height: 54px;
+  border-radius: 15px;
+  font-size: 15px;
+  justify-content: center;
+}
+.search-form-layout > .search-button svg {
+  margin-left: auto;
+  transition: transform 0.2s ease;
+}
+.search-form-layout > .search-button:active svg {
+  transform: translateX(2px);
+}
+
+/* Desktop keeps the original wide hero CTA */
+@media (min-width: 701px) {
+  .hero-dropdown-btn {
+    min-width: 360px;
+  }
+}
+
+/* ============================ ≤960px ============================ */
+@media (max-width: 960px) {
+  /* The clock is desktop furniture — removed from every mobile size */
+  .top-clock {
+    display: none !important;
+  }
+}
+
+/* ============================ ≤700px ============================ */
+@media (max-width: 700px) {
+  /* ---- Hero: edge-to-edge, full-width CTA ---- */
+  .hero-section {
+    padding: 26px 14px 0;
+  }
+  .hero-copy h1 {
+    margin: 13px 0 12px;
+    letter-spacing: -0.03em;
+  }
+  .hero-copy > p {
+    font-size: 14.5px;
+    line-height: 1.55;
+    max-width: none;
+  }
+  .hero-dropdown-wrapper {
+    width: 100%;
+  }
+  .hero-dropdown-btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 54px;
+    font-size: 15px;
+  }
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.11em;
+  }
+
+  /* ---- Search panel: bigger targets, editorial type ---- */
+  .search-panel {
+    padding: 18px 14px 13px;
+    border-radius: 20px;
+    box-shadow: 0 7px 24px rgba(23, 34, 26, 0.09);
+  }
+  .search-panel-top {
+    margin-bottom: 16px;
+  }
+  .search-panel-top h2 {
+    font-size: 20px;
+    letter-spacing: -0.03em;
+  }
+  .panel-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+  }
+  .panel-label {
+    font-size: 10px;
+  }
+  .search-form-layout {
+    gap: 16px;
+  }
+  .field-label {
+    font-size: 13px;
+    margin-bottom: 7px;
+  }
+  .blood-group-grid {
+    gap: 8px;
+  }
+  .blood-group-btn {
+    min-height: 46px;
+    border-radius: 13px;
+    font-size: 15px;
+    font-weight: 800;
+  }
+  .select-shell select,
+  .plain-input,
+  .input-shell input {
+    min-height: 50px;
+    border-radius: 13px;
+    font-size: 16px;
+  }
+  .panel-footnote {
+    margin-top: 13px;
+    justify-content: flex-start;
+    font-size: 12px;
+    gap: 8px;
+  }
+
+  /* ---- Results: generous cards, thumb-friendly pagination ---- */
+  .results-section {
+    padding: 0 14px 44px;
+  }
+  .section-heading-row h2 {
+    font-size: 24px;
+    letter-spacing: -0.02em;
+  }
+  .donor-grid {
+    gap: 11px;
+  }
+  .donor-card {
+    padding: 15px 14px;
+    border-radius: 18px;
+  }
+  .donor-card h3 {
+    font-size: 16.5px !important;
+    letter-spacing: -0.01em;
+  }
+  .donor-card-meta {
+    padding-top: 13px;
+    margin-top: 13px;
+  }
+  .results-pagination {
+    gap: 8px;
+    margin-top: 26px;
+  }
+  .results-pagination .secondary-button {
+    flex: 1;
+    min-height: 46px;
+    font-size: 14px;
+    border-radius: 13px;
+  }
+  .results-pagination > span {
+    padding: 0 4px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  /* ---- Admin: scrollable tab strip, wrapped toolbar, tidy radio ---- */
+  .admin-topbar {
+    padding: 0 12px;
+  }
+  .admin-breadcrumb {
+    font-size: 13px;
+    gap: 6px;
+  }
+  .admin-page-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .admin-page-heading > .primary-button {
+    flex: 1 1 100%;
+  }
+  .record-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin-inline: -14px;
+    padding-inline: 14px;
+    padding-bottom: 3px; /* keep the pill ring crisp under the scroll */
+  }
+  .record-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .record-tab {
+    flex: 0 0 auto;
+    min-height: 40px;
+  }
+  .record-toolbar {
+    flex-wrap: wrap;
+    gap: 9px;
+  }
+  .record-toolbar .admin-search {
+    flex: 1 1 100%;
+    max-width: none;
+    min-height: 48px;
+    border-radius: 13px;
+  }
+  .record-toolbar .filter-button {
+    flex: 1;
+    min-height: 46px;
+    border-radius: 13px;
+  }
+  .admin-card-heading h2 {
+    font-size: 18px;
+  }
+  .admin-card-heading p {
+    font-size: 12.5px;
+  }
+  .admin-card-heading svg {
+    flex-shrink: 0;
+  }
+  .admin-nav button {
+    min-height: 44px;
+  }
+  .dashboard-record-section .records-table-card {
+    margin-inline: 0;
+    border-radius: 15px;
+  }
+
+  /* ---- Volunteer: hero CTA full-width, tighter header copy ---- */
+  .vol-hero-inner {
+    padding: 30px 14px 28px;
+  }
+  .vol-hero-copy h1 {
+    font-size: clamp(30px, 8.2vw, 40px);
+  }
+  .vol-hero-cta {
+    width: 100%;
+  }
+  .vol-hero-cta a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 52px;
+    border-radius: 15px;
+    font-size: 15px;
+  }
+  .vol-directory {
+    padding: 26px 14px 44px;
+  }
+  .vol-search input {
+    min-height: 48px;
+    border-radius: 13px;
+  }
+  .vol-refresh {
+    min-height: 46px;
+  }
+
+  /* ---- Login: one-thumb form ---- */
+  .login-form {
+    gap: 12px;
+  }
+  .login-form-wrap .wide-button {
+    min-height: 54px;
+    font-size: 15px;
+  }
+  .admin-input {
+    min-height: 50px;
+    border-radius: 13px;
+    font-size: 16px;
+  }
+  .login-copy {
+    font-size: 13.5px;
+  }
+
+  /* ---- About: breathe, no edge bleed ---- */
+  .about-main {
+    padding: 0 14px 56px;
+  }
+  .about-copy-stack p {
+    font-size: 14.5px;
+  }
+  .about-consent-card {
+    padding: 17px 15px;
+  }
+  .about-timeline {
+    gap: 14px;
+    padding-left: 4px;
+  }
+
+  /* The draggable scroll bar is a desktop gadget — remove on touch */
+  .floating-scrollbar {
+    display: none;
+  }
+}
+
+/* ============================ ≤480px ============================ */
+@media (max-width: 480px) {
+  .admin-breadcrumb > span:first-child,
+  .admin-breadcrumb > svg {
+    display: none;
+  }
+  .admin-page-heading h1 {
+    font-size: 21px;
+  }
+  .metric-card {
+    padding: 14px 13px;
+    border-radius: 15px;
+  }
+  .donor-card h3 {
+    font-size: 16px !important;
+  }
+  .donor-card .blood-chip {
+    padding: 7px 11px !important;
+    font-size: 14px !important;
+  }
+  .search-panel-top h2 {
+    font-size: 18px;
+  }
+  .results-tools {
+    gap: 8px;
+  }
+  .results-tools .result-search {
+    flex: 1 1 calc(100% - 52px);
+  }
+  .login-side h1 {
+    font-size: clamp(21px, 6.4vw, 26px);
+  }
+  .hero-dropdown-btn {
+    padding: 13px 17px;
+    font-size: 14.5px;
+  }
+  .mobile-menu-button {
+    min-width: 40px;
+    min-height: 40px;
+    border-radius: 11px;
+    display: grid;
+    place-items: center;
+  }
+  .stats-grid,
+  .admin-two-col {
+    gap: 14px;
+  }
+}
+
+/* ============================ ≤380px ============================ */
+@media (max-width: 380px) {
+  .hero-dropdown-btn {
+    font-size: 13.5px;
+    padding: 12px 15px;
+  }
+  .hero-copy h1 {
+    font-size: clamp(24px, 8.4vw, 30px);
+  }
+  .search-panel-top h2 {
+    font-size: 17px;
+  }
+  .blood-group-btn {
+    font-size: 14px;
+  }
+  .results-pagination > span {
+    display: none; /* just Previous / Next on the narrowest screens */
+  }
+  .record-tab {
+    font-size: 14px;
+    padding: 0 12px;
+  }
+}
+
+/* =====================================================================
+   HOME + MOBILE NAV REDESIGN — round 3
+   1) Hamburger menu: from a plain white card to a glass sheet with
+      icon rows, active-state tint and a slide-down animation.
+   2) Bottom bar: collapse the layered leftovers (5-col grid for 4
+      items, 62px icon hovering at top:-25px, a stray red 2nd item)
+      into one coherent 4-slot glass pill with a contained red
+      emergency circle.
+   3) Home flow: tighter hero rhythm, full-width CTA, refined card.
+   ===================================================================== */
+
+/* ---- 1) Hamburger menu → glass sheet ---- */
+@media (max-width: 700px) {
+  .desktop-nav {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 10px;
+    right: 10px;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(24px) saturate(1.4);
+    border: 1px solid rgba(214, 220, 214, 0.9);
+    border-radius: 18px;
+    box-shadow: 0 18px 44px -14px rgba(20, 28, 22, 0.3);
+    flex-direction: column;
+    gap: 2px;
+    transform-origin: top center;
+    animation: nav-sheet-in 0.19s ease-out;
+  }
+  @keyframes nav-sheet-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .desktop-nav > a,
+  .desktop-nav > button {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-height: 48px;
+    padding: 0 14px;
+    border-radius: 13px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #39423a;
+  }
+  .desktop-nav > a.nav-icon-link.active {
+    background: rgba(201, 47, 59, 0.1);
+    color: var(--primary);
+  }
+  .desktop-nav .nav-divider {
+    display: none;
+  }
+  .desktop-nav .admin-link {
+    margin-top: 4px;
+    border-top: 1px solid var(--border);
+    color: var(--primary);
+  }
+}
+
+/* ---- 2) Bottom bar: one coherent floating pill ---- */
+@media (max-width: 700px) {
+  .mobile-bottom-nav {
+    grid-template-columns: repeat(4, 1fr);
+    height: 58px;
+    align-items: stretch;
+    padding: 0;
+    left: 12px;
+    right: 12px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    border-radius: 20px;
+    border: 1px solid rgba(215, 222, 215, 0.9);
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(22px) saturate(1.5);
+    box-shadow: 0 14px 34px -10px rgba(28, 39, 31, 0.32);
+    overflow: visible;
+  }
+  .mobile-bottom-nav a,
+  .mobile-bottom-nav button {
+    height: auto;
+    min-width: 0;
+    min-height: 0;
+    gap: 3px;
+    padding: 5px 2px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #6a736a;
+  }
+  .mobile-bottom-nav a svg,
+  .mobile-bottom-nav button svg {
+    stroke-width: 2;
+  }
+  /* Cancel the stale "2nd item is red" rule — only the selected tab is red */
+  .mobile-bottom-nav a:nth-child(2) {
+    color: #6a736a;
+  }
+  .mobile-bottom-nav a.selected {
+    color: var(--primary);
+    background: rgba(201, 47, 59, 0.1);
+    border-radius: 13px;
+  }
+  .mobile-bottom-nav a.selected svg {
+    color: var(--primary);
+    fill: rgba(201, 47, 59, 0.18);
+  }
+  /* Emergency: a red circle seated INSIDE the pill, not hovering above it */
+  .mobile-bottom-nav .emergency-tab {
+    position: relative;
+    height: auto;
+    justify-content: center;
+    padding-bottom: 0;
+    color: var(--primary);
+  }
+  .mobile-bottom-nav .emergency-tab-icon {
+    position: static;
+    top: auto;
+    margin-top: 0;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #d8414d 0%, #a92531 100%);
+    box-shadow: 0 6px 14px -4px rgba(201, 47, 59, 0.55);
+  }
+  .mobile-bottom-nav .emergency-tab-icon svg {
+    color: #fff;
+  }
+}
+
+/* ---- 3) Home flow: tighter, calmer, premium ---- */
+@media (max-width: 700px) {
+  .hero-grid {
+    gap: 26px;
+  }
+  .hero-section {
+    padding: 24px 14px 0;
+  }
+  .hero-copy h1 {
+    font-size: clamp(28px, 8.4vw, 36px);
+    line-height: 1.05;
+  }
+  .hero-copy > p {
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .hero-dropdown-btn {
+    min-height: 56px;
+    border-radius: 16px;
+    padding: 14px 18px;
+  }
+  .search-panel {
+    border-radius: 22px;
+    padding: 20px 16px 15px;
+  }
+  .search-panel h2 {
+    font-size: 20px;
+  }
+  .search-form-layout > .search-button {
+    min-height: 56px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-copy h1 {
+    font-size: clamp(26px, 8.6vw, 32px);
+    margin: 12px 0 10px;
+  }
+  .hero-dropdown-btn {
+    padding: 13px 16px;
+    font-size: 14.5px;
+  }
+  .search-panel {
+    padding: 18px 14px 14px;
+  }
+  .section-heading-row h2 {
+    font-size: 22px;
+  }
+  .donor-card {
+    padding: 14px 13px;
+  }
+  .results-section {
+    padding-bottom: 40px;
+  }
+}
+
+@media (max-width: 380px) {
+  .hero-copy h1 {
+    font-size: clamp(24px, 8.4vw, 29px);
+  }
+  .hero-dropdown-btn {
+    font-size: 13.5px;
+    padding: 12px 14px;
+  }
+  .desktop-nav {
+    left: 8px;
+    right: 8px;
+  }
+  .mobile-bottom-nav {
+    left: 8px;
+    right: 8px;
+    border-radius: 18px;
+  }
+}
+
+/* =====================================================================
+   MOBILE NAV ROUND 4 — 3-slot bottom bar (raised center emergency)
+   1) Hamburger (3-line) menu removed entirely on mobile; desktop un-
+      touched (its nav only ever existed in desktop media queries).
+   2) Bottom bar: left slot = About (Home page) / Home (About page),
+      raised red Emergency call button dead center, right slot = Login.
+   3) "Find donors" submit button removed from the search panel — the
+      list already filters live as you tap a blood group or pick a
+      city. No desktop rules touched.
+   ===================================================================== */
+
+@media (max-width: 700px) {
+  /* No hamburger / no dropdown on mobile at all */
+  .mobile-menu-button {
+    display: none !important;
+  }
+  .desktop-nav {
+    display: none !important;
+  }
+
+  /* Room for the raised emergency circle above the bar */
+  body {
+    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+  }
+
+  /* ── 3-slot glass pill ── */
+  .mobile-bottom-nav {
+    grid-template-columns: repeat(5, 1fr);
+    height: 64px;
+    align-items: end;
+    padding: 0;
+    left: 10px;
+    right: 10px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    border-radius: 24px;
+    border: 1px solid rgba(215, 222, 215, 0.9);
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(22px) saturate(1.5);
+    box-shadow: 0 14px 34px -10px rgba(28, 39, 31, 0.32);
+  }
+
+  .mobile-bottom-nav .nav-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    color: #6a736a;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+  }
+  .mobile-bottom-nav .nav-slot svg {
+    stroke-width: 2;
+  }
+
+  .mobile-bottom-nav .nav-left {
+    grid-column: 1;
+    justify-self: center;
+    width: 100%;
+  }
+  .mobile-bottom-nav .nav-right {
+    grid-column: 5;
+    justify-self: center;
+    width: 100%;
+  }
+
+  /* No fixed selected-state styling exists in the 3-slot bar */
+  .mobile-bottom-nav a.selected {
+    background: transparent;
+    border-radius: 0;
+  }
+
+  /* ── Raised center emergency call button ── */
+  .mobile-bottom-nav .emergency-tab {
+    grid-column: 3;
+    justify-self: center;
+    position: relative;
+    height: 100%;
+    padding: 0;
+    justify-content: center;
+    color: var(--primary);
+  }
+  .mobile-bottom-nav .emergency-tab-icon {
+    position: relative;
+    top: auto;
+    margin-top: -26px;
+    width: 58px;
+    height: 58px;
+    display: grid;
+    place-items: center;
+    border: 4px solid #f7f8f5;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #d8414d 0%, #a92531 100%);
+    color: #fff;
+    box-shadow: 0 10px 22px -6px rgba(201, 47, 59, 0.6);
+  }
+  .mobile-bottom-nav .emergency-tab-icon svg {
+    color: #fff;
+    width: 27px;
+    height: 27px;
+    stroke-width: 2.4;
+  }
+  .mobile-bottom-nav .emergency-tab > span:last-child {
+    margin-top: -1px;
+    color: var(--primary);
+  }
+}
+
+/* =====================================================================
+   BOTTOM BAR ROUND 5 — narrower centered pill, icons pulled together
+   The 5-col grid put slots at 10% / 50% / 90% of the screen. A 3-col
+   grid in a centered ~340px pill puts them side by side: About | big
+   Emergency | Login.
+   ===================================================================== */
+
+@media (max-width: 700px) {
+  .mobile-bottom-nav {
+    grid-template-columns: repeat(3, 1fr);
+    width: min(340px, calc(100% - 36px));
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+  }
+  .mobile-bottom-nav .nav-left {
+    grid-column: 1;
+  }
+  .mobile-bottom-nav .nav-right {
+    grid-column: 3;
+  }
+  .mobile-bottom-nav .emergency-tab {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 380px) {
+  .mobile-bottom-nav {
+    width: min(300px, calc(100% - 32px));
+  }
+}
+
+/* ── About page: override `.about-page > * { position: relative }` so
+   the mobile bottom nav keeps position:fixed and stays pinned ── */
+.about-page > .mobile-bottom-nav {
+  position: fixed !important;
+}
+
+/* ── About page (04 · How privacy is protected): collapse the two-column
+   grid to a single stacked column on small screens so the section reads
+   cleanly on mobile instead of squeezing into a cramped side-by-side ── */
+@media (max-width: 900px) {
+  .about-privacy-grid {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+}
+
+/* ── Footer credit line — right-aligned ── */
+.footer-credit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-size: 13px;
+  color: #6a746a;
+  padding-top: 0;
+  margin-top: 0;
+  letter-spacing: 0.01em;
+}
+@media (max-width: 700px) {
+  .footer-bottom { gap: 7px; }
+}
+.footer-heart {
+  color: #c94444;
+  font-size: 14px;
+}
+.footer-credit a {
+  color: #8fa98f;
+  text-decoration: none;
+  font-weight: 700;
+  transition: color 0.2s;
+}
+.footer-credit a:hover {
+  color: #c8d8c8;
+  text-decoration: underline;
+}
+
+/* ── Mobile bottom nav: fully rounded pill shape ── */
+.mobile-bottom-nav {
+  border-radius: 9999px !important;
+}
+
+/* ── Mobile: move nav clearance from body to footer so scroll ends at footer ── */
+@media (max-width: 700px) {
+  body { padding-bottom: 0 !important; }
+  .site-footer { padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   R7 — Dashboard mobile: horizontal scroll + centered record-modal popup
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── A. Dashboard record sections — horizontal scroll like coverage matrix ── */
+@media (max-width: 700px) {
+  /* full-bleed card, no rounded corners — scroll like the statistics matrix */
+  .dashboard-record-section.records-table-card {
+    margin-left: -16px;
+    margin-right: -16px;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+    padding: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .dashboard-record-section .admin-card-heading {
+    /* pin the card title + "View all" button while the 680px-wide rows
+       scroll horizontally beneath them */
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--card);
+    padding: 14px 16px 11px;
+    box-shadow: 0 8px 10px -10px rgba(41, 49, 42, 0.35);
+  }
+  /* keep the column heads visible — they scroll with the rows */
+  .dashboard-record-section .records-table-head {
+    display: grid;
+    min-width: 680px;
+    grid-template-columns: 1.7fr 0.75fr 1.1fr 0.8fr;
+    gap: 12px;
+    padding: 10px 16px 6px;
+    border-bottom: 1px solid #f0f1f2;
+    font-size: 11.5px;
+    color: #8f9a9e;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    font-weight: 600;
+  }
+  /* keep rows tabular with min-width so they scroll horizontally */
+  .dashboard-record-section .records-table-row {
+    grid-template-columns: 1.7fr 0.75fr 1.1fr 0.8fr;
+    min-width: 680px;
+    gap: 12px;
+    padding: 10px 16px;
+  }
+  /* small-empty state */
+  .dashboard-record-section .small-empty {
+    padding: 20px 16px;
+    font-size: 13px;
+  }
+}
+
+/* ── B. Record modal — centered popup on mobile (NOT bottom sheet) ── */
+@media (max-width: 700px) {
+  /* center the backdrop when it contains a record modal (not donation detail) */
+  .modal-backdrop:has(.profile-modal:not(.donation-detail-modal)) {
+    place-items: center;
+    padding: 20px;
+  }
+  /* small centered popup — not full-width bottom sheet */
+  .profile-modal:not(.donation-detail-modal) {
+    width: min(100%, 420px);
+    max-height: calc(100vh - 60px);
+    border-radius: 17px;
+    padding: 0 0 20px;
+    overscroll-behavior: contain;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    animation-name: modal-in;
+    box-shadow: 0 25px 70px rgba(25, 32, 26, 0.22);
+  }
+  /* compact topline */
+  .profile-modal:not(.donation-detail-modal) .profile-topline {
+    height: 46px;
+    padding: 0 14px;
+  }
+  /* compact header */
+  .profile-modal:not(.donation-detail-modal) .profile-header {
+    padding: 14px 16px 16px;
+    gap: 12px 10px;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-avatar {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+    border-radius: 11px;
+    font-size: 14px;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-header h2 {
+    font-size: 18px;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-id-block {
+    margin-top: 10px;
+    padding-left: 52px;
+    font-size: 12px;
+  }
+  /* overview strip → compact single-row horizontal layout */
+  .profile-modal:not(.donation-detail-modal) .profile-overview-strip {
+    grid-template-columns: repeat(3, 1fr);
+    margin: 0 16px 4px;
+    gap: 0;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-overview-strip > div {
+    padding: 8px 6px;
+    border-right: 1px solid #eef0f1;
+    border-bottom: 0;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-overview-strip > div:last-child {
+    border-right: 0;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-overview-strip > div span {
+    font-size: 10.5px;
+    gap: 3px;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-overview-strip > div span svg {
+    display: none;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-overview-strip > div strong {
+    font-size: 11.5px;
+    margin-top: 2px;
+  }
+  /* section spacing — tighter */
+  .profile-modal:not(.donation-detail-modal) .profile-detail-section,
+  .profile-modal:not(.donation-detail-modal) .profile-consent-section {
+    margin-left: 16px;
+    margin-right: 16px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-detail-section h3,
+  .profile-modal:not(.donation-detail-modal) .profile-consent-section h3 {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+  /* personal info — 2-col grid */
+  .profile-modal:not(.donation-detail-modal) .profile-personal-section .profile-detail-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 12px;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-personal-section .profile-detail-row > div {
+    padding: 6px 0;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-personal-section .profile-detail-row > div span {
+    font-size: 11px;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-personal-section .profile-detail-row > div strong {
+    font-size: 13px;
+  }
+  /* consent section — compact */
+  .profile-modal:not(.donation-detail-modal) .profile-consent-layout {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-consent-row {
+    padding: 6px 0;
+    gap: 8px;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-consent-row em {
+    display: none;
+  }
+  /* donation summary — compact */
+  .profile-modal:not(.donation-detail-modal) .profile-donation-section {
+    margin-left: 16px;
+    margin-right: 16px;
+    padding-top: 12px;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-donation-summary {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+  /* history section — compact */
+  .profile-modal:not(.donation-detail-modal) .profile-history-section {
+    margin-left: 16px;
+    margin-right: 16px;
+    padding-top: 12px;
+  }
+  /* verification/edit section — compact */
+  .profile-modal:not(.donation-detail-modal) .profile-verification-section {
+    margin-left: 16px;
+    margin-right: 16px;
+    padding-top: 12px;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-verification-heading h3 {
+    font-size: 15px;
+  }
+  /* activity section — compact */
+  .profile-modal:not(.donation-detail-modal) .profile-activity-section {
+    margin-left: 16px;
+    margin-right: 16px;
+    padding-top: 12px;
+  }
+  /* action bar — compact */
+  .profile-modal:not(.donation-detail-modal) .profile-action-bar {
+    margin-left: 16px;
+    margin-right: 16px;
+    padding-top: 14px;
+  }
+  /* back button — hide text, keep icon */
+  .profile-modal:not(.donation-detail-modal) .profile-back-button {
+    gap: 0;
+    min-height: 32px;
+    padding: 0 10px;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-back-button span {
+    display: none;
+  }
+  /* call button — compact */
+  .profile-modal:not(.donation-detail-modal) .profile-call-button {
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 13px;
+  }
+  .profile-modal:not(.donation-detail-modal) .profile-call-button span {
+    display: none;
+  }
+  /* edit button — compact */
+  .profile-modal:not(.donation-detail-modal) .profile-top-edit {
+    min-height: 32px;
+    padding: 0 10px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   R10 — Dashboard mobile: record cards keep margins + rounded corners
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── A. "Needs your attention" / "Recent additions" — stop full-bleed.
+      The 680px-wide table still scrolls horizontally INSIDE the rounded
+      card (overflow-x stays on the card) instead of touching screen edges.
+      .margined-table-card applies the same rounded box to the standalone
+      Records and Donations section cards on mobile. ── */
+@media (max-width: 700px) {
+  .dashboard-record-section.records-table-card,
+  .margined-table-card.records-table-card {
+    margin-left: 0;
+    margin-right: 0;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   R11 — Records section mobile: Sync button sits right next to the Filters
+   button. The tabs-row Sync scrolls out of view inside the full-bleed pill
+   row, so on phones we hide it there and show a twin in the toolbar instead:
+   search takes its own full-width row, then [Sync | Filters] share a row.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Desktop keeps the tabs-row Sync; the toolbar twin stays hidden. */
+.sync-in-toolbar {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .sync-in-tabs {
+    display: none;
+  }
+  .sync-in-toolbar {
+    display: inline-flex;
+    flex: 1;
+    justify-content: center;
+    align-items: center;
+    min-height: 46px;
+    border-radius: 13px;
+  }
+  .record-toolbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+  .record-toolbar .filter-button {
+    flex: 1;
+    min-height: 46px;
+    border-radius: 13px;
+  }
+}
+
+/* ── R11-B. Records section mobile: Delete button moves LEFT into the tabs
+      row — the row now reads "All Records · Pending · Delete" instead of the
+      Delete pill being pushed to the far edge (and cut off on narrow phones).
+      It is sticky so it stays visible inside the scrollable pill strip while
+      the tabs scroll underneath, and gets pill styling to match the tabs. ── */
+@media (max-width: 700px) {
+  .record-delete-toggle {
+    margin-left: 0;
+    margin-right: 0;
+    position: sticky;
+    right: 14px;
+    z-index: 1;
+    flex: 0 0 auto;
+    min-height: 40px;
+    border-radius: 99px;
+    box-shadow: -12px 0 16px -12px rgba(60, 72, 60, 0.28);
+  }
+}
+
+/* ── R18. Records section mobile: the tab pills (All Records · Pending) and
+      the Delete toggle stretch to cover the whole row width, matching the
+      blocky full-width Sync / Filters buttons in the toolbar below. All three
+      sit on one line and split the width evenly (flex: 1 each). ── */
+@media (max-width: 700px) {
+  .record-tabs {
+    flex-direction: row;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    overflow: visible;
+    margin-inline: 0;
+    padding-inline: 0;
+    padding-bottom: 0;
+    gap: 9px;
+  }
+  .record-tab {
+    flex: 1;
+    justify-content: center;
+    min-height: 46px;
+    border-radius: 13px;
+  }
+  .record-delete-toggle {
+    position: static;
+    flex: 1;
+    justify-content: center;
+    margin-left: 0;
+    margin-right: 0;
+    min-height: 46px;
+    border-radius: 13px;
+    box-shadow: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   R16 — Desktop: hide mobile-only call icon (universal)
+   ═══════════════════════════════════════════════════════════════════════ */
+.vol-modal-call-icon {
+  display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   R17 — Mobile popup redesign (≤700px)
+   Premium glass-sheet bottom-sheet system. Zero desktop impact.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 700px) {
+
+  /*─────────────────────────────────────────────
+     1. SHEET FRAME — generic modals → pin to bottom
+     ───────────────────────────────────────────── */
+  .modal-backdrop:not(.emergency-modal-backdrop):not(.vol-modal-backdrop) {
+    place-items: center;
+    padding: 0;
+    animation-name: backdrop-in;
+    animation-duration: 0.3s;
+    animation-timing-function: ease-out;
+    animation-fill-mode: both;
+  }
+  .modal-backdrop:not(.emergency-modal-backdrop) > .modal-card,
+  .modal-backdrop:not(.emergency-modal-backdrop) > .admin-modal {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 88vh;
+    border-radius: 26px 26px 0 0;
+    padding: 0;
+    animation-name: sheet-up;
+    animation-duration: 0.42s;
+    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+    animation-fill-mode: both;
+    box-shadow:
+      0 -1px 3px rgba(0, 0, 0, 0.03),
+      0 -4px 12px rgba(0, 0, 0, 0.06),
+      0 -12px 40px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Grabber handle */
+  .modal-backdrop:not(.emergency-modal-backdrop) > .modal-card::before,
+  .modal-backdrop:not(.emergency-modal-backdrop) > .admin-modal::before {
+    content: "";
+    display: block;
+    width: 40px;
+    height: 5px;
+    border-radius: 99px;
+    background: rgba(0, 0, 0, 0.12);
+    margin: 10px auto 4px;
+    flex-shrink: 0;
+  }
+
+  /* Close button */
+  .modal-backdrop > .modal-card .modal-close,
+  .modal-backdrop > .admin-modal .modal-close {
+    top: 14px;
+    right: 16px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.05);
+    color: #6b7280;
+  }
+
+  /* ─────────────────────────────────────────────
+     2. CONFIRM-DELETE MODAL — red danger sheet
+     ───────────────────────────────────────────── */
+  .modal-card.confirm-delete-modal::before {
+    display: none !important;
+  }
+  .modal-card.confirm-delete-modal .modal-card-header {
+    position: relative;
+    padding: 18px 20px 14px;
+    background: linear-gradient(135deg, #fef2f2, #fee2e2);
+    border-bottom: none;
+  }
+  .modal-card.confirm-delete-modal .modal-card-header::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #f87171, #dc2626);
+    border-radius: 26px 26px 0 0;
+  }
+  .modal-card.confirm-delete-modal .modal-card-header h2 {
+    font-size: 18px;
+    color: #b91c1c;
+  }
+  .modal-card.confirm-delete-modal .modal-card-header .modal-close {
+    background: rgba(185, 28, 28, 0.08);
+    color: #991b1b;
+  }
+  .modal-card.confirm-delete-modal .modal-card-body {
+    padding: 16px 20px;
+    max-height: 50vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  .modal-card.confirm-delete-modal .modal-card-body p {
+    font-size: 14.5px;
+    line-height: 1.6;
+    color: #525252;
+    margin: 0;
+  }
+  .modal-card.confirm-delete-modal .confirm-delete-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 14px;
+  }
+  .modal-card.confirm-delete-modal .confirm-delete-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 14px;
+  }
+  .modal-card.confirm-delete-modal .confirm-delete-item strong {
+    font-size: 14.5px;
+    display: block;
+    color: #1f2937;
+  }
+  .modal-card.confirm-delete-modal .confirm-delete-item span {
+    font-size: 12.5px;
+    color: #9ca3af;
+  }
+  .modal-card.confirm-delete-modal .confirm-delete-more {
+    text-align: center;
+    padding: 8px 12px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #9ca3af;
+    background: #f9fafb;
+    border-radius: 10px;
+    border: 1px dashed #e5e7eb;
+  }
+  .modal-card.confirm-delete-modal .modal-card-footer {
+    padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    gap: 12px;
+  }
+  .modal-card.confirm-delete-modal .modal-card-footer .secondary-button {
+    flex: 1;
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 14.5px;
+    font-weight: 600;
+  }
+  .modal-card.confirm-delete-modal .modal-card-footer .primary-button,
+  .modal-card.confirm-delete-modal .modal-card-footer .danger-button {
+    flex: 1.4;
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 14.5px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+    border-color: transparent !important;
+    color: #fff !important;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.3);
+  }
+
+  /* ─────────────────────────────────────────────
+     3. RECORD-DONATION MODAL — green accent
+     ───────────────────────────────────────────── */
+  .modal-card.donation-record-modal .donation-record-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .modal-card.donation-record-modal .donation-record-header h2 {
+    font-size: 18px;
+    font-weight: 800;
+    color: #1f2937;
+  }
+  .modal-card.donation-record-modal .donation-record-header .modal-close {
+    background: rgba(0, 0, 0, 0.05);
+  }
+  .modal-card.donation-record-modal .donation-record-content {
+    padding: 16px 20px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  .modal-card.donation-record-modal .donation-record-donor {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    background: #f8faf8;
+    border: 1px solid #eef0f0;
+    border-radius: 14px;
+    margin-bottom: 14px;
+  }
+  .modal-card.donation-record-modal .donation-record-donor strong {
+    font-size: 15px;
+    display: block;
+    color: #1f2937;
+  }
+  .modal-card.donation-record-modal .donation-record-donor span {
+    font-size: 13px;
+    color: #9ca3af;
+  }
+  .modal-card.donation-record-modal .donor-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    flex-shrink: 0;
+  }
+  .modal-card.donation-record-modal .donation-record-form .admin-field span {
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #9ca3af;
+  }
+  .modal-card.donation-record-modal .plain-input {
+    height: 48px;
+    border-radius: 12px;
+    font-size: 15px;
+    border: 1px solid #e5e7eb;
+    background: #fafafa;
+  }
+  .modal-card.donation-record-modal .plain-input:focus {
+    border-color: #16a34a;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+    background: #fff;
+  }
+  .modal-card.donation-record-modal .donation-record-actions {
+    padding: 12px 20px calc(14px + env(safe-area-inset-bottom));
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    gap: 12px;
+  }
+  .modal-card.donation-record-modal .donation-record-actions .secondary-button {
+    flex: 1;
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 14.5px;
+    font-weight: 600;
+  }
+  .modal-card.donation-record-modal .donation-record-actions .primary-button {
+    flex: 1.4;
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 14.5px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+    border-color: transparent !important;
+    color: #fff !important;
+    box-shadow: 0 4px 14px rgba(22, 163, 74, 0.3);
+  }
+
+  /* ─────────────────────────────────────────────
+     4. ADD-PERSON MODAL
+     ───────────────────────────────────────────── */
+  .admin-modal:not(.profile-modal) {
+    padding: 0;
+  }
+  .admin-modal:not(.profile-modal) > .modal-kicker {
+    padding: 20px 20px 0;
+    font-size: 12px;
+  }
+  .admin-modal:not(.profile-modal) > h2 {
+    font-size: 21px;
+    font-weight: 800;
+    color: #1a1d1a;
+    padding: 6px 20px 0;
+    letter-spacing: -0.02em;
+  }
+  .admin-modal:not(.profile-modal) > .modal-copy {
+    padding: 4px 20px 0;
+    font-size: 14px;
+    max-width: none;
+    color: #7c857c;
+    line-height: 1.5;
+  }
+  .admin-modal:not(.profile-modal) .add-form {
+    padding: 16px 20px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    max-height: 55vh;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .admin-modal:not(.profile-modal) .admin-field span {
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #9ca3af;
+  }
+  .admin-modal:not(.profile-modal) .admin-field input,
+  .admin-modal:not(.profile-modal) .admin-field select {
+    height: 48px;
+    border-radius: 12px;
+    font-size: 15px;
+    border: 1px solid #e5e7eb;
+    background: #fafafa;
+  }
+  .admin-modal:not(.profile-modal) .admin-field input:focus,
+  .admin-modal:not(.profile-modal) .admin-field select:focus {
+    border-color: var(--primary, #c92f3b);
+    box-shadow: 0 0 0 3px rgba(201, 47, 59, 0.1);
+    background: #fff;
+  }
+  .admin-modal:not(.profile-modal) .admin-select {
+    height: 48px;
+    border-radius: 12px;
+    background: #fafafa;
+    border: 1px solid #e5e7eb;
+  }
+  .admin-modal:not(.profile-modal) .admin-select:focus-within {
+    border-color: var(--primary, #c92f3b);
+    box-shadow: 0 0 0 3px rgba(201, 47, 59, 0.1);
+  }
+  .admin-modal:not(.profile-modal) .modal-actions {
+    padding: 14px 20px calc(14px + env(safe-area-inset-bottom));
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    gap: 12px;
+  }
+  .admin-modal:not(.profile-modal) .modal-actions .secondary-button {
+    flex: 1;
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 14.5px;
+    font-weight: 600;
+  }
+  .admin-modal:not(.profile-modal) .modal-actions .primary-button {
+    flex: 1.4;
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 14.5px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #c92f3b, #a8242f) !important;
+    border-color: transparent !important;
+    color: #fff !important;
+    box-shadow: 0 4px 14px rgba(201, 47, 59, 0.3);
+  }
+
+  /* ─────────────────────────────────────────────
+     5. EMERGENCY MODAL — red-tinted urgency
+     ───────────────────────────────────────────── */
+  .emergency-modal-backdrop {
+    padding: 0 !important;
+    animation-name: backdrop-in;
+    animation-duration: 0.3s;
+    animation-timing-function: ease-out;
+    animation-fill-mode: both;
+  }
+  .emergency-modal-backdrop + .modal-card,
+  .emergency-modal-backdrop + .emergency-modal-fixed {
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 88vh;
+    border-radius: 26px 26px 0 0;
+    padding: 0;
+    animation-name: sheet-up;
+    animation-duration: 0.42s;
+    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+    animation-fill-mode: both;
+    box-shadow:
+      0 -1px 3px rgba(0, 0, 0, 0.03),
+      0 -4px 12px rgba(0, 0, 0, 0.06),
+      0 -12px 40px rgba(0, 0, 0, 0.1),
+      0 -2px 8px rgba(220, 38, 38, 0.06);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  /* Red grabber for urgency */
+  .emergency-modal-backdrop + .modal-card::before,
+  .emergency-modal-backdrop + .emergency-modal-fixed::before {
+    content: "";
+    display: block;
+    width: 40px;
+    height: 5px;
+    border-radius: 99px;
+    background: linear-gradient(90deg, #f87171, #ef4444);
+    margin: 10px auto 4px;
+    flex-shrink: 0;
+  }
+  .emergency-modal-backdrop + .modal-card .modal-close,
+  .emergency-modal-backdrop + .emergency-modal-fixed .modal-close {
+    top: 14px;
+    right: 16px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(220, 38, 38, 0.06);
+    color: #b91c1c;
+  }
+
+  /* Contact branch (emergency-modal) */
+  .modal-card.emergency-modal .modal-kicker {
+    padding: 18px 20px 0;
+    color: #dc2626;
+  }
+  .modal-card.emergency-modal > h2 {
+    font-size: 20px;
+    font-weight: 800;
+    padding: 6px 20px 0;
+    color: #991b1b;
+    letter-spacing: -0.01em;
+  }
+  .modal-card.emergency-modal .modal-copy {
+    padding: 4px 20px 0;
+    color: #6b7280;
+    line-height: 1.5;
+  }
+  .emergency-contact-list {
+    height: auto;
+    max-height: calc(88vh - 180px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding: 12px 20px calc(14px + env(safe-area-inset-bottom));
+  }
+  .em-contact-row {
+    padding: 14px 0;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .em-contact-row:last-child {
+    border-bottom: 0;
+  }
+  .em-contact-mobile {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .em-contact-mobile .em-contact-name {
+    font-size: 16.5px;
+    font-weight: 700;
+    color: #1f2937;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .em-contact-actions {
+    display: flex;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .em-call-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 18px;
+    border-radius: 14px;
+    font-size: 13.5px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+    color: #fff !important;
+    border-color: transparent !important;
+    box-shadow: 0 3px 12px rgba(22, 163, 74, 0.3);
+  }
+  .em-wa-btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 18px;
+    border-radius: 14px;
+    font-size: 13.5px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #25d366, #128c7e) !important;
+    color: #fff !important;
+    border-color: transparent !important;
+    box-shadow: 0 3px 12px rgba(37, 211, 102, 0.3);
+  }
+
+  /* Emergency consent / privacy boxes */
+  .modal-card.emergency-modal .em-consent-box,
+  .emergency-modal-fixed .em-consent-box {
+    margin: 0 20px 8px;
+    padding: 14px;
+    border-radius: 14px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+  .modal-card.emergency-modal .em-privacy-box,
+  .emergency-modal-fixed .em-privacy-box {
+    margin: 0 20px 8px;
+    padding: 14px;
+    border-radius: 14px;
+    background: #f8faf8;
+    border: 1px solid #eef0f0;
+    font-size: 13.5px;
+    line-height: 1.5;
+  }
+
+  /* Emergency donor card internals */
+  .emergency-modal-fixed .donor-card-top,
+  .emergency-modal-fixed .em-donor-top {
+    padding: 16px 20px;
+    flex-wrap: wrap;
+  }
+  .emergency-modal-fixed .em-loc-row {
+    padding: 0 20px 12px;
+    font-size: 13.5px;
+    color: #6b7280;
+  }
+
+  /* ─────────────────────────────────────────────
+     6. VOLUNTEER PROFILE MODAL
+     ───────────────────────────────────────────── */
+  .vol-modal-backdrop {
+    padding: 0 !important;
+    animation-name: backdrop-in;
+    animation-duration: 0.3s;
+    animation-timing-function: ease-out;
+    animation-fill-mode: both;
+  }
+  .vol-modal {
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 88vh;
+    min-height: 40vh;
+    border-radius: 26px 26px 0 0;
+    padding: 0;
+    animation-name: sheet-up;
+    animation-duration: 0.42s;
+    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+    animation-fill-mode: both;
+    box-shadow:
+      0 -1px 3px rgba(0, 0, 0, 0.03),
+      0 -4px 12px rgba(0, 0, 0, 0.06),
+      0 -12px 40px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .vol-modal::before {
+    content: "";
+    display: block;
+    width: 40px;
+    height: 5px;
+    border-radius: 99px;
+    background: rgba(0, 0, 0, 0.12);
+    margin: 10px auto 2px;
+    flex-shrink: 0;
+  }
+  .vol-modal .vol-modal-close {
+    top: 12px;
+    right: 14px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.05);
+    color: #6b7280;
+  }
+
+  /* Header — clean card-style */
+  .vol-modal .vol-modal-header {
+    border-radius: 0;
+    padding: 8px 20px 16px;
+    border-bottom: 1px solid #f3f4f6;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+  .vol-modal .vol-modal-avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 17px;
+    border-radius: 14px;
+    flex-shrink: 0;
+    border: 2.5px solid #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  .vol-modal .vol-modal-name {
+    font-size: 19px;
+    font-weight: 700;
+    color: #1f2937;
+  }
+  .vol-modal .vol-modal-sub {
+    font-size: 13px;
+    color: #9ca3af;
+  }
+  .vol-modal .vol-modal-pills {
+    gap: 5px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+
+  /* Scrollable body */
+  .vol-modal .vol-modal-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    flex: 1;
+    min-height: 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* ── Phone row: R14 call-icon-only preserved ── */
+  .vol-modal-phone-row .vol-modal-tel-text {
+    display: none;
+  }
+  .vol-modal-phone-row .vol-modal-call-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+    color: #16a34a;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(22, 163, 74, 0.12);
+  }
+  .vol-modal-phone-row .vol-modal-copy {
+    display: none;
+  }
+  .vol-modal-phone-row > svg {
+    display: none;
+  }
+  .vol-modal-phone-row a.vol-modal-tel-link {
+    flex: 1;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    padding: 0;
+    justify-content: flex-end;
+  }
+
+  /* All rows */
+  .vol-modal .vol-modal-row {
+    padding: 12px 20px;
+    font-size: 14.5px;
+    gap: 12px;
+    border-bottom: 1px solid #f8f9fa;
+  }
+  .vol-modal .vol-modal-row:last-child {
+    border-bottom: none;
+  }
+
+  /* Stats grid */
+  .vol-modal .vol-modal-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    padding: 8px 20px;
+  }
+  .vol-modal .vol-modal-stat-box {
+    padding: 12px 8px;
+    border-radius: 14px;
+    background: #f8f9f8;
+    border: 1px solid #eef0f0;
+    text-align: center;
+  }
+  .vol-modal .vol-modal-stat-box strong {
+    font-size: 16px;
+    font-weight: 800;
+    color: #1f2937;
+  }
+  .vol-modal .vol-modal-stat-box small {
+    font-size: 11px;
+    color: #9ca3af;
+  }
+
+  /* Actions — stacked full-width */
+  .vol-modal .vol-modal-actions {
+    padding: 12px 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .vol-modal .vol-modal-actions .primary-button {
+    width: 100%;
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 14.5px;
+    font-weight: 700;
+    justify-content: center;
+    background: linear-gradient(135deg, #c92f3b, #a8242f) !important;
+    border-color: transparent !important;
+    color: #fff !important;
+    box-shadow: 0 4px 14px rgba(201, 47, 59, 0.3);
+  }
+  .vol-modal .vol-modal-actions .secondary-button {
+    width: 100%;
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 14.5px;
+    font-weight: 600;
+    justify-content: center;
+    background: #f4f5f4 !important;
+    border-color: transparent !important;
+  }
+
+  /* Notes */
+  .vol-modal .vol-modal-notes {
+    padding: 10px 20px 18px;
+    gap: 6px;
+    font-size: 13.5px;
+    color: #7c857c;
+    background: #f8f9f8;
+    border-top: 1px solid #f3f4f6;
+  }
+
+  /* ─────────────────────────────────────────────
+     7. ADMIN PROFILE MODAL (RecordModal + DonationDetailModal)
+     ───────────────────────────────────────────── */
+  .admin-modal.profile-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 88vh;
+    min-height: 40vh;
+    border-radius: 26px 26px 0 0;
+    padding: 0;
+    animation-name: sheet-up;
+    animation-duration: 0.42s;
+    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
+    animation-fill-mode: both;
+    box-shadow:
+      0 -1px 3px rgba(0, 0, 0, 0.03),
+      0 -4px 12px rgba(0, 0, 0, 0.06),
+      0 -12px 40px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    display: flex;
+    flex-direction: column;
+  }
+  .admin-modal.profile-modal::before {
+    content: "";
+    display: block;
+    position: static;
+    inset: auto;
+    top: auto;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    transform: none;
+    z-index: auto;
+    width: 40px;
+    height: 5px;
+    border-radius: 99px;
+    background: rgba(0, 0, 0, 0.12);
+    margin: 10px auto 4px;
+    flex-shrink: 0;
+  }
+  .admin-modal.profile-modal .modal-close {
+    top: 12px;
+    right: 14px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.05);
+    color: #6b7280;
+  }
+
+  /* Topline */
+  .admin-modal.profile-modal .profile-topline {
+    height: auto;
+    min-height: 44px;
+    padding: 6px 16px 8px;
+    flex-shrink: 0;
+    gap: 8px;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .admin-modal.profile-modal .profile-topline-actions {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .admin-modal.profile-modal .profile-back-button {
+    gap: 4px;
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 10px;
+    background: #f4f5f4;
+    color: #4b5563;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .admin-modal.profile-modal .profile-back-button svg {
+    flex-shrink: 0;
+  }
+  .admin-modal.profile-modal .profile-call-button {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    min-height: 38px;
+    padding: 0;
+    border-radius: 12px;
+    background: #f0fdf4;
+    border-color: transparent;
+    color: #15803d;
+    font-size: 0;
+    justify-content: center;
+    align-items: center;
+    gap: 0;
+  }
+  .admin-modal.profile-modal .profile-call-button svg {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+  }
+  .admin-modal.profile-modal .profile-top-edit {
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 10px;
+    background: #f4f5f4;
+    color: #4b5563;
+    font-size: 13px;
+    font-weight: 600;
+    gap: 4px;
+  }
+
+  /* Header — compact */
+  .admin-modal.profile-modal .profile-header {
+    padding: 12px 18px 14px;
+    gap: 12px;
+  }
+  .admin-modal.profile-modal .profile-id-block {
+    display: block;
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 0 0 4px;
+    text-align: left;
+  }
+  .admin-modal.profile-modal .profile-id-block .profile-id-value,
+  .admin-modal.profile-modal .profile-id-block .profile-id-value.pending {
+    font-size: 11.5px;
+    line-height: 1.35;
+  }
+  .admin-modal.profile-modal .profile-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+    font-size: 15px;
+  }
+  .admin-modal.profile-modal .profile-header h2 {
+    font-size: 19px;
+    font-weight: 800;
+    color: #1a1d1a;
+    letter-spacing: -0.02em;
+  }
+
+  /* Overview strip — card style */
+  .admin-modal.profile-modal .profile-overview-strip {
+    grid-template-columns: repeat(3, 1fr);
+    margin: 10px 16px 12px;
+    background: #f8f9f8;
+    border: 1px solid #eef0f0;
+    border-radius: 14px;
+    padding: 4px;
+    column-gap: 10px;
+  }
+  .admin-modal.profile-modal .profile-overview-strip > div {
+    padding: 10px 6px;
+    border: 0;
+    border-radius: 10px;
+  }
+  .admin-modal.profile-modal .profile-overview-strip > div:last-child {
+    border-right: 0;
+  }
+  .admin-modal.profile-modal .profile-overview-strip > div span {
+    font-size: 10.5px;
+    gap: 2px;
+    color: #9ca3af;
+  }
+  .admin-modal.profile-modal .profile-overview-strip > div span svg {
+    display: none;
+  }
+  .admin-modal.profile-modal .profile-overview-strip > div strong {
+    font-size: 13px;
+    font-weight: 700;
+    margin-top: 2px;
+    color: #374151;
+  }
+
+  /* Sections — card style */
+  .admin-modal.profile-modal .profile-detail-section,
+  .admin-modal.profile-modal .profile-consent-section,
+  .admin-modal.profile-modal .profile-donation-section,
+  .admin-modal.profile-modal .profile-history-section,
+  .admin-modal.profile-modal .profile-verification-section,
+  .admin-modal.profile-modal .profile-activity-section {
+    margin: 0 16px 10px;
+    padding: 16px;
+    background: #f8f9f8;
+    border: 1px solid #eef0f0;
+    border-radius: 14px;
+  }
+  .admin-modal.profile-modal .profile-detail-section:last-child,
+  .admin-modal.profile-modal .profile-consent-section:last-child,
+  .admin-modal.profile-modal .profile-donation-section:last-child,
+  .admin-modal.profile-modal .profile-history-section:last-child,
+  .admin-modal.profile-modal .profile-verification-section:last-child,
+  .admin-modal.profile-modal .profile-activity-section:last-child {
+    margin-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+  .admin-modal.profile-modal .profile-detail-section h3,
+  .admin-modal.profile-modal .profile-consent-section h3,
+  .admin-modal.profile-modal .profile-verification-heading h3,
+  .admin-modal.profile-modal .profile-activity-section h3 {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #9ca3af;
+    margin-bottom: 10px;
+  }
+  .admin-modal.profile-modal .profile-detail-section h3 svg,
+  .admin-modal.profile-modal .profile-consent-section h3 svg,
+  .admin-modal.profile-modal .profile-activity-section h3 svg {
+    color: #c92f3b;
+  }
+
+  /* Detail grid — outer stays 1-col (rows stacked full width), each row 2-col */
+  .admin-modal.profile-modal .profile-personal-section .profile-detail-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .admin-modal.profile-modal .profile-personal-section .profile-detail-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 12px;
+  }
+  .admin-modal.profile-modal .profile-personal-section .profile-detail-row > div {
+    min-height: auto;
+    padding: 6px 0;
+    border: 0;
+  }
+  .admin-modal.profile-modal .profile-personal-section .profile-detail-row > div span {
+    font-size: 11px;
+    color: #9ca3af;
+  }
+  .admin-modal.profile-modal .profile-personal-section .profile-detail-row > div strong {
+    font-size: 13.5px;
+    color: #374151;
+  }
+
+  /* Consent — single-col, flat rows with divider */
+  .admin-modal.profile-modal .profile-consent-layout {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .admin-modal.profile-modal .profile-consent-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    min-height: 0;
+    margin-top: 0;
+    padding: 12px 0;
+    gap: 10px;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid #f0f2f0;
+    border-radius: 0;
+  }
+  .admin-modal.profile-modal .profile-consent-row:last-child {
+    border-bottom: 0;
+  }
+  .admin-modal.profile-modal .profile-consent-row > .profile-consent-icon {
+    flex: 0 0 22px;
+    width: 22px;
+    height: 22px;
+    font-size: 14px;
+  }
+  .admin-modal.profile-modal .profile-consent-row > span small {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+  .admin-modal.profile-modal .profile-consent-row > span strong {
+    margin-top: 4px;
+    font-size: 14px;
+    color: #374151;
+  }
+  .admin-modal.profile-modal .profile-consent-row em {
+    display: none;
+  }
+
+  /* History — rebuilt mobile: labeled donation cards */
+  .admin-modal.profile-modal .profile-history-section {
+    padding: 16px;
+  }
+  .admin-modal.profile-modal .profile-history-heading {
+    padding: 0;
+    margin-bottom: 12px;
+    gap: 12px;
+  }
+  .admin-modal.profile-modal .profile-history-heading h3 {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #9ca3af;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .admin-modal.profile-modal .profile-history-heading h3 svg {
+    color: #c92f3b;
+  }
+  .admin-modal.profile-modal .profile-history-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 16px;
+    min-height: 36px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 700;
+    flex: 0 0 auto;
+  }
+  .admin-modal.profile-modal .profile-history-section.open .profile-history-toggle {
+    color: #a33c43;
+    border-color: #efcfd1;
+    background: #fff7f7;
+  }
+  .admin-modal.profile-modal .profile-history-head {
+    display: none;
+  }
+  .admin-modal.profile-modal .profile-history {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border: none;
+  }
+  /* donation card */
+  .admin-modal.profile-modal .profile-history > div:not(.profile-history-head):not(.profile-history-footer) {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "donation status"
+      "donated-label donated-value"
+      "eligible-label eligible-value";
+    align-items: center;
+    gap: 5px 14px;
+    padding: 14px;
+    background: #fff;
+    border: 1px solid #eef0f0;
+    border-radius: 14px;
+    margin-bottom: 0;
+    min-height: auto;
+  }
+  .admin-modal.profile-modal .profile-history > div > span {
+    grid-area: donation;
+    font-weight: 800;
+    font-size: 14.5px;
+    letter-spacing: normal;
+    color: #1a1d1a;
+  }
+  .admin-modal.profile-modal .profile-history > div > em {
+    display: block;
+    font-style: normal;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #9ca3af;
+  }
+  .admin-modal.profile-modal .profile-history > div > em:first-of-type {
+    grid-area: donated-label;
+  }
+  .admin-modal.profile-modal .profile-history > div > em:nth-of-type(2) {
+    grid-area: eligible-label;
+  }
+  .admin-modal.profile-modal .profile-history > div > b.profile-history-donated {
+    grid-area: donated-value;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #1f2937;
+    text-align: right;
+    justify-self: end;
+  }
+  .admin-modal.profile-modal .profile-history > div > b.profile-history-eligible {
+    grid-area: eligible-value;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #6b7280;
+    text-align: right;
+    justify-self: end;
+  }
+  .admin-modal.profile-modal .profile-history > div > small {
+    display: contents;
+  }
+  .admin-modal.profile-modal .profile-history > div > small .eligible-icon {
+    grid-area: status;
+    justify-self: end;
+    width: 30px;
+    height: 30px;
+  }
+  .admin-modal.profile-modal .profile-history > div > small .eligible-icon svg {
+    width: 17px;
+    height: 17px;
+  }
+  .admin-modal.profile-modal .profile-history-footer {
+    padding-top: 10px;
+  }
+  .admin-modal.profile-modal .profile-history-footer .profile-donation-button {
+    width: 100%;
+    min-height: 46px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 4px;
+  }
+
+  /* Donation summary — 2-col cards */
+  .admin-modal.profile-modal .profile-donation-summary {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+  }
+  .admin-modal.profile-modal .profile-summary-stat {
+    padding: 12px;
+    background: #fff;
+    border: 1px solid #eef0f0;
+    border-radius: 12px;
+  }
+  .admin-modal.profile-modal .profile-summary-stat span {
+    font-size: 10.5px;
+  }
+  .admin-modal.profile-modal .profile-summary-stat strong {
+    font-size: 15px;
+    margin-top: 6px;
+  }
+  .admin-modal.profile-modal .profile-summary-stat:first-child > strong {
+    font-size: 20px;
+  }
+
+  /* Activity timeline */
+  .admin-modal.profile-modal .profile-activity-timeline {
+    gap: 12px;
+    margin: 10px 0 4px 6px;
+    padding-left: 18px;
+  }
+  .admin-modal.profile-modal .profile-activity-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--primary, #c92f3b);
+    left: -18px;
+    top: 5px;
+  }
+
+  /* Save success — centered celebration */
+  .admin-modal.profile-modal .profile-save-success {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    padding: 40px 24px;
+    text-align: center;
+  }
+  .admin-modal.profile-modal .profile-success-icon {
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+    color: #16a34a;
+    font-size: 28px;
+    margin-bottom: 18px;
+  }
+  .admin-modal.profile-modal .profile-save-success h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: #1f2937;
+    letter-spacing: -0.02em;
+  }
+  .admin-modal.profile-modal .profile-save-success p {
+    font-size: 14.5px;
+    color: #7c857c;
+    margin: 8px 0 24px;
+    line-height: 1.5;
+  }
+  .admin-modal.profile-modal .profile-save-success p strong {
+    color: #1f2937;
+  }
+  .admin-modal.profile-modal .profile-save-success .primary-button {
+    min-height: 48px;
+    padding: 0 28px;
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #c92f3b, #a8242f) !important;
+    border-color: transparent !important;
+    color: #fff !important;
+    box-shadow: 0 4px 14px rgba(201, 47, 59, 0.3);
+    width: 100%;
+    max-width: 280px;
+    justify-content: center;
+  }
+
+  /* ─────────────────────────────────────────────
+     8. PROFILE MENUS
+     ───────────────────────────────────────────── */
+  .profile-menu.open {
+    max-width: min(90vw, 300px);
+    padding: 8px;
+    border-radius: 18px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.14);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+  }
+  .profile-menu .profile-menu-head {
+    padding: 12px 14px;
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .profile-menu .profile-menu-item {
+    padding: 11px 14px;
+    font-size: 14.5px;
+    min-height: 42px;
+    border-radius: 10px;
+  }
+
+  /* ─────────────────────────────────────────────
+     9. GLOBAL BACKDROP — premium blur
+     ───────────────────────────────────────────── */
+  .modal-backdrop {
+    background: rgba(13, 18, 14, 0.65);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   VOLUNTEER PROFILE POPUP — DESKTOP RESTORE (≥701px)
+   Re-creates the original desktop card design for the live
+   .vol-modal markup: hero gradient header, tone avatar, name/sub/
+   pills, card info rows, and the stats "numbers" grid.
+   The mobile bottom-sheet is entirely separate (max-width:700px
+   block above) and is NOT touched here.
+   ═══════════════════════════════════════════════════════════════ */
+@media (min-width: 701px) {
+  /* Close button — original .modal-close look */
+  .vol-modal .vol-modal-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 3;
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    color: #55635a;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .vol-modal .vol-modal-close:hover {
+    background: #fff;
+    color: #29322b;
+  }
+
+  /* Header — original .vol-modal-hero */
+  .vol-modal .vol-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 28px 26px 20px;
+    border-radius: 22px 22px 0 0;
+    position: relative;
+  }
+  .vol-modal .vol-modal-header:has(.vol-pill-verified) {
+    background: linear-gradient(180deg, #eaf3ea 0%, #f1f6ef 100%);
+  }
+  .vol-modal .vol-modal-header:has(.vol-pill-pending) {
+    background: linear-gradient(180deg, #faf3e3 0%, #f6f4ec 100%);
+  }
+
+  /* Title column — original .vol-modal-title */
+  .vol-modal .vol-modal-header > div:not(.vol-modal-avatar) {
+    flex: 1;
+    min-width: 0;
+  }
+  .vol-modal h2.vol-modal-name {
+    display: block;
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.15;
+    color: #29322b;
+    max-width: 100%;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .vol-modal .vol-modal-sub {
+    display: block;
+    margin: 4px 0 0;
+    font-size: 13.5px;
+    color: #6b746b;
+  }
+  .vol-modal .vol-modal-muted {
+    color: #9ca3af;
+    font-size: 14px;
+    font-style: italic;
+  }
+  .vol-modal .vol-modal-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  /* Avatar — original .vol-avatar circle + volunteer tone palette */
+  .vol-modal .vol-modal-avatar {
+    flex-shrink: 0;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    background: #eef1ee;
+    color: #55635a;
+  }
+  .vol-modal .vol-modal-avatar.vol-tone-coral { background: #f7dcd2; color: #9c4632; }
+  .vol-modal .vol-modal-avatar.vol-tone-plum { background: #eadbe9; color: #6d4a6d; }
+  .vol-modal .vol-modal-avatar.vol-tone-blue { background: #d9e8ed; color: #3d5f70; }
+  .vol-modal .vol-modal-avatar.vol-tone-sage { background: #dce7d7; color: #43624a; }
+  .vol-modal .vol-modal-avatar.vol-tone-sand { background: #eee2c9; color: #7a6336; }
+  .vol-modal .vol-modal-avatar.vol-tone-rose { background: #f1d8db; color: #93525c; }
+  .vol-modal .vol-modal-avatar.vol-tone-gold { background: #eee2c1; color: #7a6a2f; }
+  .vol-modal .vol-modal-avatar.vol-tone-lavender { background: #e4deed; color: #5e5378; }
+
+  /* Info rows — original .vol-contact-row cards */
+  .vol-modal .vol-modal-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 13px;
+    border: 1px solid #e7ebe5;
+    border-radius: 12px;
+    background: #fcfdfc;
+    margin-bottom: 8px;
+  }
+  .vol-modal .vol-modal-row:last-child {
+    margin-bottom: 0;
+  }
+  .vol-modal .vol-modal-row > svg {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    padding: 9px;
+    box-sizing: border-box;
+    border-radius: 10px;
+    background: #f0f3ef;
+    color: #55635a;
+  }
+  .vol-modal .vol-modal-row a {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    color: #2c362e;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .vol-modal .vol-modal-tel-link {
+    display: flex;
+    align-items: center;
+    padding: 0;
+  }
+  .vol-modal .vol-modal-copy {
+    flex-shrink: 0;
+    padding: 5px 10px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #55635a;
+    background: #fff;
+    border: 1px solid #e7ebe5;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .vol-modal .vol-modal-copy:hover {
+    background: #f0f3ef;
+    border-color: #c3d2c2;
+  }
+
+  /* Stats — original .vol-modal-stats "numbers" grid */
+  .vol-modal .vol-modal-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 16px;
+  }
+  .vol-modal .vol-modal-stat-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 8px;
+    border: 1px solid #e7ebe5;
+    border-radius: 12px;
+    background: #fcfdfc;
+    text-align: center;
+    min-width: 0;
+  }
+  .vol-modal .vol-modal-stat-box svg {
+    color: #7a857b;
+    flex-shrink: 0;
+  }
+  .vol-modal .vol-modal-stat-box strong {
+    font-size: 12.5px;
+    font-weight: 800;
+    line-height: 1.35;
+    color: #39423a;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .vol-modal .vol-modal-stat-box small {
+    font-size: 11px;
+    color: #8d968d;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Desktop (≥701px) — Emergency Contacts modal
+   Mobile keeps the approved sheet (max-width: 700px rules untouched).
+   ------------------------------------------------------------------ */
+/* Desktop directory layout is hidden by default; shown only ≥701px. */
+.em-contact-desktop {
+  display: none;
+}
+
+@media (min-width: 701px) {
+  /* ── Emergency contacts modal — desktop card ── */
+  .modal-backdrop.emergency-modal-backdrop + .modal-card.emergency-modal {
+    width: min(600px, calc(100vw - 48px));
+    padding: 0;
+    border-radius: 22px;
+    overflow: hidden;
+  }
+  .modal-card.emergency-modal {
+    height: auto;
+    max-height: calc(100vh - 56px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(180deg, #fff5f5 0%, #ffffff 190px);
+  }
+  .modal-card.emergency-modal .modal-close {
+    top: 20px;
+    right: 20px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 0;
+    background: #fee2e2;
+    color: #b91c1c;
+  }
+  .modal-card.emergency-modal .modal-close:hover {
+    background: #fecaca;
+  }
+  .modal-card.emergency-modal .modal-kicker {
+    padding: 30px 32px 0;
+    color: #dc2626;
+  }
+  .modal-card.emergency-modal > h2 {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.015em;
+    color: #7f1d1d;
+    margin: 0;
+    padding: 10px 32px 0;
+  }
+  .modal-card.emergency-modal .modal-copy {
+    padding: 7px 32px 0;
+    color: #6b7280;
+    line-height: 1.55;
+  }
+
+  /* List */
+  .modal-card.emergency-modal .emergency-contact-list {
+    height: auto;
+    max-height: min(430px, calc(100vh - 300px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 16px 32px 26px;
+    gap: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: #e5c9c9 transparent;
+  }
+  .modal-card.emergency-modal .emergency-contact-list::-webkit-scrollbar {
+    width: 8px;
+  }
+  .modal-card.emergency-modal .emergency-contact-list::-webkit-scrollbar-thumb {
+    background: #e5c9c9;
+    border-radius: 99px;
+  }
+
+  /* Rows — directory cards */
+  .modal-card.emergency-modal .em-contact-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 14px;
+    background: #ffffff;
+    border: 1px solid #f2e4e4;
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(127, 29, 29, 0.05);
+  }
+  .modal-card.emergency-modal .em-contact-row:last-child {
+    border-bottom: 1px solid #f2e4e4;
+  }
+  .modal-card.emergency-modal .em-contact-avatar {
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    border-radius: 13px;
+    background: linear-gradient(135deg, #fee2e2, #fecaca);
+    color: #b91c1c;
+    display: grid;
+    place-items: center;
+    font-size: 13.5px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+  }
+  .modal-card.emergency-modal .em-contact-main {
+    flex: 1;
+    min-width: 0;
+  }
+  .modal-card.emergency-modal .em-contact-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1f2937;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .modal-card.emergency-modal .em-contact-num {
+    font-size: 13px;
+    font-weight: 600;
+    color: #6b7280;
+    margin: 3px 0 0;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+
+  /* Actions — labeled Call / Message */
+  .modal-card.emergency-modal .em-contact-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .modal-card.emergency-modal .em-call-btn,
+  .modal-card.emergency-modal .em-wa-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 38px;
+    padding: 0 15px;
+    border-radius: 11px;
+    border: 0;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #fff;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: filter 0.15s ease, box-shadow 0.15s ease;
+  }
+  .modal-card.emergency-modal .em-call-btn {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    box-shadow: 0 3px 10px rgba(22, 163, 74, 0.28);
+  }
+  .modal-card.emergency-modal .em-call-btn:hover {
+    filter: brightness(1.06);
+    box-shadow: 0 4px 14px rgba(22, 163, 74, 0.36);
+  }
+  .modal-card.emergency-modal .em-wa-btn {
+    background: linear-gradient(135deg, #25d366, #128c7e);
+    box-shadow: 0 3px 10px rgba(37, 211, 102, 0.28);
+  }
+  .modal-card.emergency-modal .em-wa-btn:hover {
+    filter: brightness(1.06);
+    box-shadow: 0 4px 14px rgba(37, 211, 102, 0.36);
+  }
+
+  /* Switch layout: show desktop directory, hide mobile sheet block */
+  .modal-card.emergency-modal .em-contact-mobile {
+    display: none;
+  }
+  .modal-card.emergency-modal .em-contact-desktop {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* ── Toast notifications ────────────────────────────────────────
+   Solid, per-type coloured close buttons (never transparent).
+   Backgrounds come from sonner's rich-colors CSS variables set in
+   components/ui/sonner.tsx; only the hover darkening lives here. */
+.toaster [data-sonner-toast] [data-close-button] {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+}
+.toaster [data-sonner-toast][data-type="success"] [data-close-button]:hover {
+  background: #15803d;
+  border-color: #166534;
+}
+.toaster [data-sonner-toast][data-type="info"] [data-close-button]:hover {
+  background: #1d4ed8;
+  border-color: #1e40af;
+}
+.toaster [data-sonner-toast][data-type="warning"] [data-close-button]:hover {
+  background: #b45309;
+  border-color: #92400e;
+}
+.toaster [data-sonner-toast][data-type="error"] [data-close-button]:hover {
+  background: #b91c1c;
+  border-color: #991b1b;
+}
+.toaster [data-sonner-toast]:not([data-rich-colors="true"]) [data-close-button]:hover {
+  background: #f2f5f2;
+  border-color: #cfd8cf;
+}
+
+/* ────────────────────────────────────────────────────────────────
+   7. EMERGENCY DONOR PROFILE POPUP — MOBILE REDESIGN (≤700px)
+   Home page → tapping a donor card opens this bottom sheet
+   (.emergency-modal-fixed donor branch). Premium card layout on
+   mobile only; desktop (≥701px) and the emergency-contact sheet
+   (About page, .emergency-modal) stay untouched.
+   ──────────────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  /* Sheet: scroll gracefully if content ever exceeds 88vh (small
+     phones, larger fonts); pinch the red grabber to the top. */
+  .emergency-modal-backdrop + .emergency-modal-fixed {
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+  }
+  .emergency-modal-backdrop + .emergency-modal-fixed::-webkit-scrollbar {
+    display: none;
+  }
+  .emergency-modal-backdrop + .emergency-modal-fixed::before {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  .emergency-modal-fixed > div {
+    flex-shrink: 0;
+  }
+
+  /* ── Header hero ─────────────────────────────────────────────── */
+  .emergency-modal-fixed .em-donor-top {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: nowrap;
+    padding: 20px 20px 16px;
+    background: radial-gradient(120% 110% at 50% -20%, #fff2ef 0%, #ffffff 60%);
+    border-bottom: 1px solid #f9ece9;
+  }
+  .emergency-modal-fixed .em-donor-top .avatar {
+    width: 64px;
+    height: 64px;
+    font-size: 22px;
+    font-weight: 700;
+    border-radius: 18px;
+    border: 2.5px solid #ffffff;
+    box-shadow:
+      0 8px 20px rgba(185, 28, 28, 0.16),
+      0 2px 6px rgba(185, 28, 28, 0.1);
+    flex: 0 0 auto;
+  }
+  .emergency-modal-fixed .em-donor-top .donor-identity {
+    min-width: 0;
+    flex: 1;
+  }
+  .emergency-modal-fixed .em-donor-top .donor-name-row {
+    gap: 7px;
+  }
+  .emergency-modal-fixed .em-donor-top .donor-name-row h3 {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: #2b2321;
+  }
+  .emergency-modal-fixed .em-donor-top .donor-name-row .verified-icon {
+    width: 20px;
+    height: 20px;
+    color: #3f8f5a;
+    flex: 0 0 auto;
+  }
+  .emergency-modal-fixed .em-donor-top .donor-identity > p {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: #9c8a86;
+    margin-top: 5px;
+  }
+  .emergency-modal-fixed .em-donor-top .blood-chip {
+    background: linear-gradient(135deg, #fff1ef, #ffe3df);
+    color: #c2333b;
+    border: 1px solid #ffd2cd;
+    border-radius: 10px;
+    padding: 8px 11px;
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: 0 2px 8px rgba(194, 51, 59, 0.14);
+    flex: 0 0 auto;
+  }
+
+  /* ── Location row ────────────────────────────────────────────── */
+  .emergency-modal-fixed .em-loc-row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 14px 20px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #7d6a66;
+  }
+  .emergency-modal-fixed .em-loc-row svg {
+    width: 26px;
+    height: 26px;
+    padding: 5px;
+    box-sizing: border-box;
+    background: #fdeeed;
+    border-radius: 50%;
+    color: #c2333b;
+    flex: 0 0 auto;
+  }
+
+  /* ── Consent trust card ──────────────────────────────────────── */
+  .emergency-modal-fixed .em-consent-box {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 2px 16px 0;
+    padding: 15px 15px;
+    border-radius: 16px;
+    background: #f5faf3;
+    border: 1px solid #e0eedc;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: #5d675a;
+  }
+  .emergency-modal-fixed .em-consent-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .emergency-modal-fixed .em-consent-row svg {
+    width: 26px;
+    height: 26px;
+    padding: 5px;
+    box-sizing: border-box;
+    background: #e2f0dd;
+    border-radius: 50%;
+    color: #2f7f4c;
+    flex: 0 0 auto;
+    margin-top: -1px;
+  }
+  .emergency-modal-fixed .em-consent-row strong {
+    font-weight: 700;
+    color: #3c4a39;
+  }
+
+  /* ── Privacy card ────────────────────────────────────────────── */
+  .emergency-modal-fixed .em-privacy-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    margin: 8px 16px calc(14px + env(safe-area-inset-bottom));
+    padding: 15px 15px;
+    border-radius: 16px;
+    background: #f8f9f7;
+    border: 1px solid #ecedea;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: #6f7770;
+  }
+  .emergency-modal-fixed .em-privacy-box svg {
+    width: 26px;
+    height: 26px;
+    padding: 5px;
+    box-sizing: border-box;
+    background: #e8efe7;
+    border-radius: 50%;
+    color: #4c7652;
+    flex: 0 0 auto;
+    margin-top: -1px;
+  }
+  .emergency-modal-fixed .em-privacy-box strong {
+    font-weight: 700;
+    color: #414a43;
   }
 }

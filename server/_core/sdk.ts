@@ -10,7 +10,6 @@ import { parse as parseCookieHeader } from "cookie";
 import type { Request } from "express";
 import { SignJWT, jwtVerify } from "jose";
 import type { User } from "../../drizzle/schema";
-import * as db from "../db";
 import { ENV } from "./env";
 import type {
   ExchangeTokenRequest,
@@ -290,67 +289,30 @@ class SDKServer {
       return buildCronUser(userInfo);
     }
 
-    const sessionUserId = session.openId;
+    // Google Sheets is the sole data source for this app — there is NO
+    // database read for the OAuth user.  Resolve identity from the OAuth
+    // server (the authoritative store for Manus accounts) and build the
+    // user object from it directly.  In a sheets-only deployment every
+    // logged-in user is treated as admin (there is no other role store).
     const signedInAt = new Date();
-
-    const hasDb = Boolean(process.env.DATABASE_URL);
-    let user = hasDb ? await db.getUserByOpenId(sessionUserId) : undefined;
-
-    // If user not in DB, sync from OAuth server automatically
-    if (!user) {
-      try {
-        const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
-        if (hasDb) {
-          await db.upsertUser({
-            openId: userInfo.openId,
-            name: userInfo.name || null,
-            email: userInfo.email ?? null,
-            loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-            lastSignedIn: signedInAt,
-          });
-          user = await db.getUserByOpenId(userInfo.openId);
-        }
-
-        // When the DB is unavailable, construct a synthetic user from the
-        // JWT session + OAuth info so authenticated users can still access
-        // admin endpoints (audit log, etc.).  In a no-DB deployment every
-        // logged-in user is treated as admin since there's no other role
-        // store.
-        if (!user) {
-          const now = new Date();
-          user = {
-            id: 0,
-            openId: userInfo.openId || sessionUserId,
-            name: userInfo.name || session.name || null,
-            email: userInfo.email ?? null,
-            loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-            role: "admin" as const,
-            createdAt: now,
-            updatedAt: now,
-            lastSignedIn: signedInAt,
-          };
-          console.log(
-            `[Auth] No DB — using synthetic user for ${user.openId} (role: ${user.role})`,
-          );
-        }
-      } catch (error) {
-        console.error("[Auth] Failed to sync user from OAuth:", error);
-        throw ForbiddenError("Failed to sync user info");
-      }
-    }
-
-    if (!user) {
-      throw ForbiddenError("User not found");
-    }
-
-    if (hasDb) {
-      await db.upsertUser({
-        openId: user.openId,
+    try {
+      const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
+      const now = new Date();
+      return {
+        id: 0,
+        openId: userInfo.openId || session.openId,
+        name: userInfo.name || session.name || null,
+        email: userInfo.email ?? null,
+        loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
+        role: "admin" as const,
+        createdAt: now,
+        updatedAt: now,
         lastSignedIn: signedInAt,
-      });
+      };
+    } catch (error) {
+      console.error("[Auth] Failed to sync user from OAuth:", error);
+      throw ForbiddenError("Failed to sync user info");
     }
-
-    return user;
   }
 }
 

@@ -12,11 +12,15 @@
  */
 import { z } from "zod";
 import {
-  fetchAuditLogs,
   clearAuditLogs as clearSheetAuditLogs,
-  type RawAuditLogEntry,
 } from "./googleAppsScriptApi";
 import { ensureFreshCache, getCachedProfiles } from "./googleSheetsApi";
+import {
+  ensureFreshAuditCache,
+  getCachedAuditLogs,
+  invalidateAuditCache,
+  type RawAuditLogEntry,
+} from "./auditLogCache";
 import { publicProcedure, router } from "./trpc";
 
 /* ------------------------------------------------------------------ */
@@ -55,6 +59,17 @@ function buildNameLookup(): Map<string, string> {
 /* ------------------------------------------------------------------ */
 /* Sheet helpers                                                       */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Only these audit action kinds surface in the admin Audit Log section.
+ * Staff actions, directory syncs, emails, deletes, and system notices stay
+ * in the sheet but are not shown in the UI.
+ */
+const VISIBLE_ACTIONS = new Set([
+  "profile.verify",
+  "profile.update",
+  "profile.donation",
+]);
 
 /** Map uppercase Apps Script action types to dot-notation keys. */
 function normaliseAction(raw: string): string {
@@ -132,9 +147,6 @@ const listInput = z.object({
   search: z.string().max(120).optional(),
 });
 
-/** How many rows to pull from the audit sheet. */
-const SHEET_FETCH_POOL = 2000;
-
 export const auditRouter = router({
   list: publicProcedure.input(listInput).query(async ({ input }) => {
     const { limit = 50, offset = 0, action, search } = input;
@@ -143,16 +155,19 @@ export const auditRouter = router({
     await ensureFreshCache();
     const nameLookup = buildNameLookup();
 
-    /* ----- Read from Google Sheets via Apps Script ----- */
-    const sheetRes = await fetchAuditLogs(SHEET_FETCH_POOL, 0);
-    if (!sheetRes.success || !Array.isArray(sheetRes.data)) {
+    /* ----- Read from cached audit logs (refreshed every 30s) ----- */
+    await ensureFreshAuditCache();
+    const rawLogs = getCachedAuditLogs();
+    if (!rawLogs.length) {
       return { logs: [] as UiAuditLogEntry[], total: 0 };
     }
 
-    let entries = sheetRes.data
+    let entries = rawLogs
       .map((row, i) => sheetRowToEntry(row, i, nameLookup))
       // Skip junk rows (header row, fully blank rows).
-      .filter((e) => e.action !== "" || e.actionLabel !== "" || e.details !== null);
+      .filter((e) => e.action !== "" || e.actionLabel !== "" || e.details !== null)
+      // Only show profile updates / verifications / donations in the UI.
+      .filter((e) => VISIBLE_ACTIONS.has(e.action));
 
     // Apply action filter (normalised dot-notation).
     if (action && action !== "all") {
@@ -168,6 +183,13 @@ export const auditRouter = router({
       });
     }
 
+    // Newest first — sheet rows are appended oldest→newest, so the UI shows
+    // recent audits on top and older ones further down.
+    entries.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
     const total = entries.length;
     const page = entries.slice(offset, offset + limit);
 
@@ -181,6 +203,10 @@ export const auditRouter = router({
   clear: publicProcedure.mutation(async () => {
     const result = await clearSheetAuditLogs();
     const removed = result.success && result.data ? result.data.removed : 0;
+    // The sheet takes 10–40 s to reflect the clear; bust the read cache so
+    // the next `list` re-reads the CSV instead of serving stale entries for
+    // up to the TTL.
+    invalidateAuditCache();
     return { success: result.success, removed };
   }),
 });

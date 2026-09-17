@@ -7,6 +7,7 @@
  * Mutations (verify, recordDonation, delete) still go through Apps Script.
  */
 import { ENV } from "./env";
+import { assignHrsId } from "./googleAppsScriptApi";
 import { buildXlsx } from "./xlsxWriter";
 
 // -------------------------------------------------------------------------- //
@@ -48,8 +49,12 @@ export interface PublicProfile {
   "Blood Group": string;
   City: string;
   Area: string;
+  "Date of Birth"?: string;
+  Gender?: string;
   "Last Donation Time"?: string;
   "Availability Status"?: string;
+  "Verification Time"?: string;
+  "Blood Donation Count"?: string;
 }
 
 export interface ApiResponse<T = unknown> {
@@ -84,6 +89,17 @@ export interface Statistics {
 
 let cachedProfiles: Profile[] = [];
 let cachedAt: number | null = null;
+
+// Track which auto-assigned HRS-IDs have already been dispatched to the
+// Apps Script for write-back.  Resets on cold start (serverless), which is
+// fine — the Apps Script handler is idempotent (skips if cell already set).
+//
+// Map value = last dispatch attempt timestamp (ms).  On success we mark the
+// entry as permanently done (Infinity) so it's never retried; on failure the
+// entry stays valid only after a cooldown, so a missing handler doesn't spam
+// the Apps Script URL every poll cycle.
+const hrsIdWriteTracker = new Map<string, number>();
+const HRS_ID_WRITE_RETRY_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 
 // The background poller is fully controllable at runtime so the admin
 // "Sync & Data" panel can genuinely start/stop auto-sync and change how often
@@ -231,6 +247,22 @@ function parseCsv(text: string): string[][] {
     .map(parseCsvLine);
 }
 
+/**
+ * Normalize a phone number: if it contains exactly 12 digits
+ * (e.g. Indian country code "91" + 10-digit local number),
+ * strip the leading 2 digits so it matches the 10-digit format
+ * used throughout the portal.
+ */
+function normalizePhone(raw: string | undefined): string {
+  if (!raw) return "";
+  const trimmed = raw.trim();
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 12) {
+    return digits.slice(2);
+  }
+  return trimmed;
+}
+
 // -------------------------------------------------------------------------- //
 // Fetch & parse
 // -------------------------------------------------------------------------- //
@@ -260,18 +292,101 @@ async function fetchProfilesFromSheet(): Promise<ApiResponse<ProfilesResponse>> 
     const headers = rows[0]!;
     const profiles: Profile[] = [];
 
+    // Pre-scan: find the maximum existing HRS ID number so auto-assignment
+    // never reuses an existing ID (e.g. HRS-0001 after a full dataset).
+    let maxExistingHrsNum = 0;
+    for (let i = 1; i < rows.length; i += 1) {
+      const cell = rows[i]![0]?.trim();
+      if (cell) {
+        const m = cell.match(/HRS-(\d+)/);
+        if (m) {
+          const n = parseInt(m[1]!, 10);
+          if (n > maxExistingHrsNum) maxExistingHrsNum = n;
+        }
+      }
+    }
+    let pendingIdCounter = maxExistingHrsNum + 1; // auto-assign HRS-{max+1}, … to ID-less rows
+
+    // Track rows that got auto-assigned IDs so we can write them back to the
+    // sheet via Apps Script after the parse loop.
+    type PendingWrite = { id: string; rawPhone: string; registrationTime: string };
+    const pendingWrites: PendingWrite[] = [];
+
     for (let i = 1; i < rows.length; i += 1) {
       const row = rows[i]!;
-      // Skip completely blank rows (no HRS ID)
+
+      // Build the profile object from the row
+      const profile: Profile = {};
       const hrsId = row[0]?.trim();
-      if (!hrsId) continue;
-      const profile: Profile = { "HRS ID": hrsId };
+      if (hrsId) {
+        profile["HRS ID"] = hrsId;
+      }
       for (let j = 1; j < headers.length; j += 1) {
         profile[headers[j]!] = row[j] ?? "";
       }
       // Strip the internal row number if present
       delete profile["sheet_row"];
+
+      // Normalize phone number — strip country code if 12 digits
+      if (profile["Phone Number"]) {
+        profile["Phone Number"] = normalizePhone(profile["Phone Number"]);
+      }
+
+      // Auto-assign sequential HRS-IDs to records that have data but no ID.
+      // These are pending Google-Form submissions appended to the main sheet
+      // without a pre-assigned ID. They get HRS-0001, HRS-0002, etc. in
+      // sheet order and will appear as "Pending" (no blood group).
+      if (!profile["HRS ID"]) {
+        const hasData = Object.values(profile).some(v => v?.trim());
+        if (!hasData) continue; // skip truly blank rows
+        const autoId = `HRS-${String(pendingIdCounter).padStart(4, "0")}`;
+        profile["HRS ID"] = autoId;
+        pendingIdCounter++;
+
+        // Capture the raw (un-normalized) phone and registration time from
+        // the CSV row so the Apps Script can locate this row by matching.
+        // Column 4 = Phone Number (raw, before normalization), Column 8 = Registration Time.
+        pendingWrites.push({
+          id: autoId,
+          rawPhone: row[4]?.trim() ?? "",
+          registrationTime: row[8]?.trim() ?? "",
+        });
+      }
+
       profiles.push(profile);
+    }
+
+    // Fire-and-forget: write auto-assigned IDs back to the Google Sheet.
+    // Non-blocking — we don't await these; failures are logged and retried
+    // after a cooldown.  Idempotent: Apps Script skips if cell is set.
+    if (pendingWrites.length > 0) {
+      const now = Date.now();
+      const toWrite = pendingWrites.filter(p => {
+        const last = hrsIdWriteTracker.get(p.id);
+        return last === undefined || last === Infinity || now - last >= HRS_ID_WRITE_RETRY_COOLDOWN_MS;
+      });
+      if (toWrite.length > 0) {
+        console.log(
+          `[GoogleSheets] Writing ${toWrite.length} auto-assigned IDs to sheet: ${toWrite.map(p => p.id).join(", ")}`
+        );
+        for (const pw of toWrite) {
+          hrsIdWriteTracker.set(pw.id, now); // mark dispatched
+          assignHrsId(pw.id, pw.rawPhone, pw.registrationTime)
+            .then(res => {
+              if (res.success) {
+                console.log(`[GoogleSheets] ✅ ${pw.id} written to sheet`);
+                hrsIdWriteTracker.set(pw.id, Infinity); // never retry
+              } else {
+                console.warn(`[GoogleSheets] ⚠️  Failed to write ${pw.id}: ${res.error}`);
+                // tracker already holds `now` → retry allowed after cooldown
+              }
+            })
+            .catch(err => {
+              console.error(`[GoogleSheets] Error writing ${pw.id}:`, err);
+              // tracker already holds `now` → retry allowed after cooldown
+            });
+        }
+      }
     }
 
     return {
@@ -282,6 +397,96 @@ async function fetchProfilesFromSheet(): Promise<ApiResponse<ProfilesResponse>> 
     console.error("[GoogleSheets] Failed to fetch CSV:", err);
     return {
       success: false,
+      error: err instanceof Error ? err.message : "Network error",
+    };
+  }
+}
+
+// -------------------------------------------------------------------------- //
+// Other-tab CSV reads (Volunteer / Admin / Audit Log)
+//
+// The whole spreadsheet is published ("Entire document"), so appending
+// `&gid=<tab gid>` to the SAME `/pub?output=csv` URL serves that tab's CSV.
+// GIDs are stable per tab unless the tab is deleted and recreated; each can
+// be overridden with an env var if the sheet layout ever changes.
+// -------------------------------------------------------------------------- //
+
+const CSV_TAB_GIDS: Record<string, string> = {
+  volunteer: process.env.GOOGLE_SHEETS_VOLUNTEER_GID ?? "534054871",
+  admin: process.env.GOOGLE_SHEETS_ADMIN_GID ?? "2018346030",
+  audit: process.env.GOOGLE_SHEETS_AUDIT_LOG_GID ?? "1965462403",
+};
+
+export type CsvTabKey = keyof typeof CSV_TAB_GIDS;
+
+/**
+ * Fetch a non-Profiles tab (Volunteer / Admin / Audit Log) from the published
+ * Google Sheet as CSV, keyed by tab → gid. Rows are returned as objects whose
+ * keys are the sheet's header row (e.g. "Username", "Full Name", "Password").
+ *
+ * Pure read path: no Apps Script involved. Falls back gracefully (empty data
+ * + error string) so callers never throw.
+ */
+export async function fetchCsvTab(
+  tabKey: CsvTabKey,
+  timeoutMs = 30_000
+): Promise<{ success: boolean; data: Record<string, string>[]; error?: string }> {
+  const gid = CSV_TAB_GIDS[tabKey];
+  if (!gid) {
+    return {
+      success: false,
+      data: [],
+      error: `No CSV tab gid configured for "${tabKey}"`,
+    };
+  }
+
+  const csvUrl = ENV.googleSheetsCsvUrl;
+  const separator = csvUrl.includes("?") ? "&" : "?";
+  const url = `${csvUrl}${separator}gid=${encodeURIComponent(gid)}`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    let response: globalThis.Response;
+    try {
+      response = await fetch(url, { cache: "no-store", signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      return {
+        success: false,
+        data: [],
+        error: `Google Sheets returned HTTP ${response.status}`,
+      };
+    }
+
+    const text = await response.text();
+    const rows = parseCsv(text);
+
+    // Header row only (or empty tab) → no data rows.
+    if (rows.length < 2) return { success: true, data: [] };
+
+    const headers = rows[0]!;
+    const out: Record<string, string>[] = [];
+    for (let i = 1; i < rows.length; i += 1) {
+      const row = rows[i]!;
+      // Skip fully blank lines.
+      if (row.every((cell) => !cell.trim())) continue;
+      const obj: Record<string, string> = {};
+      for (let j = 0; j < headers.length; j += 1) {
+        obj[headers[j]!] = row[j] ?? "";
+      }
+      out.push(obj);
+    }
+
+    return { success: true, data: out };
+  } catch (err) {
+    console.error(`[GoogleSheets] fetchCsvTab("${tabKey}") failed:`, err);
+    return {
+      success: false,
+      data: [],
       error: err instanceof Error ? err.message : "Network error",
     };
   }
@@ -452,7 +657,7 @@ let inflightPoll: Promise<void> | null = null;
  */
 export async function ensureFreshCache(): Promise<void> {
   if (cachedAt && Date.now() - cachedAt < READ_FRESHNESS_MS) {
-    return; // fresh enough — serve from memory
+    return;
   }
   if (inflightPoll) {
     await inflightPoll; // another request is already topping up the cache
@@ -462,6 +667,16 @@ export async function ensureFreshCache(): Promise<void> {
     inflightPoll = null;
   });
   await inflightPoll;
+}
+
+/**
+ * Force-invalidate the profile cache so the next ensureFreshCache() call
+ * triggers a fresh CSV download.  Called by lazyPendingFormSync() after
+ * successfully importing new records so the dashboard picks them up
+ * immediately instead of waiting for the next 15-second read cycle.
+ */
+export function invalidateProfileCache(): void {
+  cachedAt = null;
 }
 
 // -------------------------------------------------------------------------- //
@@ -510,10 +725,11 @@ export function getDataHealth(): DataHealth {
   for (const p of records) {
     if (!(p["HRS ID"] ?? "").trim()) missingHrsId += 1;
     const status = (p["Verification Status"] ?? "PENDING").toString().toUpperCase();
-    if (status === "VERIFIED") verified += 1;
+    const bloodGroup = (p["Blood Group"] ?? "").trim();
+    // Only count as verified when the sheet says VERIFIED AND a blood group is recorded.
+    if (status === "VERIFIED" && bloodGroup && bloodGroup !== "—") verified += 1;
     else pending += 1;
 
-    const bloodGroup = (p["Blood Group"] ?? "").trim();
     if (!bloodGroup || bloodGroup === "—") missingBloodGroup += 1;
 
     if (!(p["Phone Number"] ?? "").trim()) missingMobile += 1;
@@ -710,7 +926,11 @@ function convertToAdminRecord(p: Profile): AdminRecord {
     ? 0
     : new Date().getFullYear() - birthDate.getFullYear();
   const rawStatus = verificationStatus.toUpperCase();
-  const isPending = rawStatus.includes("PENDING") || rawStatus.includes("VERIFICATION");
+  const sheetVerified = rawStatus === "VERIFIED";
+  // Profiles without a blood group are treated as pending even when the sheet
+  // marks them "VERIFIED" — verification is incomplete without a blood group.
+  const hasBloodGroup = Boolean(bloodGroup.trim() && bloodGroup.trim() !== "—");
+  const isPending = !sheetVerified || !hasBloodGroup;
   const consentStatus =
     storageConsent.toUpperCase() === "YES" ? "Yes" :
     storageConsent.toUpperCase() === "NO" ? "No" : "Pending";
@@ -731,18 +951,27 @@ function convertToAdminRecord(p: Profile): AdminRecord {
       ? (donorConsent ? "Available" : "Unavailable")
       : "Unavailable";
 
+  // Donation timestamps are IST wall-clock strings in the CSV — normalize them
+  // through the same IST parse as the other timestamp columns so they carry
+  // the correct absolute instant. Fall back to the raw string if unparseable
+  // (display-only; formatShortDate still renders naive strings as IST).
   const donationDates: string[] = [];
   for (let i = 1; i <= 5; i += 1) {
     const dateValue = p[`Donation ${i} Date`];
-    if (dateValue?.trim()) donationDates.push(dateValue.trim());
+    if (dateValue?.trim()) {
+      donationDates.push(parseSheetDateLocal(dateValue) ?? dateValue.trim());
+    }
   }
 
   const publicVisible = Boolean(
     id && rawStatus === "VERIFIED" && donorConsent === true &&
-    bloodGroup && bloodGroup !== "—" && publicVisibility.toUpperCase() === "YES"
+    bloodGroup && bloodGroup !== "—" && publicVisibility.toUpperCase() === "YES" &&
+    isEligibleNow
   );
   const initials = name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "?";
-  const lastDonationAt = lastDonationTime?.trim() || null;
+  const lastDonationAt = lastDonationTime?.trim()
+    ? (parseSheetDateLocal(lastDonationTime) ?? lastDonationTime.trim())
+    : null;
 
   return {
     id, name,
@@ -793,12 +1022,15 @@ export function getCachedPublicProfiles(): ApiResponse<{ profiles: PublicProfile
       const donorConsent = (p["Donor Consent"] ?? "").toUpperCase();
       const bloodGroup = p["Blood Group"] ?? "";
       const publicVisibility = (p["Public Directory Visibility"] ?? "").toUpperCase();
+      const nextEligibleTime = (p["Next Eligible Time"] ?? "").trim();
+      const isEligibleNow = !nextEligibleTime || Date.parse(nextEligibleTime) <= Date.now();
       return (
         status === "VERIFIED" &&
         donorConsent === "YES" &&
         bloodGroup !== "" &&
         bloodGroup !== "—" &&
-        publicVisibility === "YES"
+        publicVisibility === "YES" &&
+        isEligibleNow
       );
     })
     .map(p => ({
@@ -807,8 +1039,12 @@ export function getCachedPublicProfiles(): ApiResponse<{ profiles: PublicProfile
       "Blood Group": p["Blood Group"] ?? "",
       City: p["City"] ?? "",
       Area: p["Area"] ?? "",
+      "Date of Birth": p["Date of Birth"] ?? "",
+      Gender: p["Gender"] ?? "",
       "Last Donation Time": p["Last Donation Time"],
       "Availability Status": p["Availability Status"],
+      "Verification Time": p["Verification Time"],
+      "Blood Donation Count": p["Blood Donation Count"],
     }));
 
   return { success: true, data: { profiles: publicProfiles, count: publicProfiles.length } };
@@ -945,11 +1181,14 @@ export function getCachedStatistics(): ApiResponse<Statistics> {
     const bloodGroup = p["Blood Group"] ?? "";
     const city = p["City"] ?? "";
 
-    if (status.includes("PENDING") || status.includes("VERIFICATION")) {
+    // Only count as verified when the sheet says VERIFIED AND a blood group is recorded.
+    const sheetVerified = status === "VERIFIED";
+    const hasBloodGroup = Boolean(bloodGroup.trim() && bloodGroup.trim() !== "—");
+    if (sheetVerified && hasBloodGroup) {
+      verifiedProfiles += 1;
+    } else {
       pendingProfiles += 1;
       pending += 1;
-    } else {
-      verifiedProfiles += 1;
     }
 
     if (donorConsent === "YES") {
