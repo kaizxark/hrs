@@ -218,8 +218,8 @@ export default function Register() {
     const e: Record<string, string> = {};
     if (form.fullName.trim().length < 2) e.fullName = "Please enter the full name.";
     if (!dobIso) e.dob = "Select the full date of birth.";
-    else if ((age ?? 0) < 17) e.dob = "Donors must be at least 17 years old.";
-    else if ((age ?? 0) > 100) e.dob = "Please check the year selected.";
+    else if (new Date(`${dobIso}T00:00:00`) > new Date())
+      e.dob = "Date of birth cannot be in the future.";
     if (!form.gender) e.gender = "Select a gender.";
     const digits = form.phone.replace(/\D/g, "");
     if (digits.length < 10 || digits.length > 12)

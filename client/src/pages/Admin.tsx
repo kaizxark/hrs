@@ -52,6 +52,7 @@ import {
   FileSpreadsheet,
   Heart,
   HeartHandshake,
+  UserPlus,
   History,
   Info,
   KeyRound,
@@ -2168,12 +2169,14 @@ export default function Admin() {
                   </p>
                 </div>
                 {!isVolunteer && (
-                  <button
+                  <a
                     className="primary-button"
-                    onClick={() => setAddOpen(true)}
+                    href="/register"
+                    target="_blank"
+                    rel="noopener noreferrer"
                   >
-                    <Plus size={17} /> Add Person
-                  </button>
+                    <UserPlus size={17} /> Add Person
+                  </a>
                 )}
               </div>
               <div className="record-tabs">

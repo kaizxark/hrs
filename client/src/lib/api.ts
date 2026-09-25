@@ -204,11 +204,17 @@ export function convertApiProfileToAdminRecord(profile: Profile): {
   const availabilityStatus = profile["Availability Status"] || "";
   const publicVisibility = profile["Public Directory Visibility"] || "";
 
-  // Calculate age
+  // Calculate age (exact — accounts for whether this year's birthday has passed)
   const birthDate = new Date(dob);
   const age = Number.isNaN(birthDate.getTime())
     ? 0
-    : new Date().getFullYear() - birthDate.getFullYear();
+    : (() => {
+        const now = new Date();
+        let a = now.getFullYear() - birthDate.getFullYear();
+        const m = now.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && now.getDate() < birthDate.getDate())) a--;
+        return a < 0 ? 0 : a;
+      })();
 
   // Determine status — every profile is verified at creation now
   const rawStatus = verificationStatus.toUpperCase();

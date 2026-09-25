@@ -645,38 +645,7 @@ export default function Home() {
                   </div>
                   <ArrowRight size={18} />
                 </button>
-                <Link
-                  href="/register"
-                  className="primary-button hero-dropdown-btn"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "15px",
-                    padding: "14px 22px",
-                    fontSize: "15px",
-                    background: "#fff",
-                    border: "1.5px solid var(--border-dark)",
-                    color: "var(--foreground)",
-                    boxShadow: "var(--shadow-sm)",
-                    width: "100%",
-                    borderRadius: "12px",
-                    marginTop: "10px",
-                    textDecoration: "none",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                    }}
-                  >
-                    <HeartHandshake size={20} color="var(--primary)" /> Want to
-                    become a donor? Register
-                  </div>
-                  <ArrowRight size={18} color="var(--primary)" />
-                </Link>
+
               </div>
               </div>
             <div

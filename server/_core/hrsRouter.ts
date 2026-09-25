@@ -289,28 +289,6 @@ export const hrsRouter = router({
         donorConsent: z.enum(["YES", "NO"]),
         dataStorageConsent: z.literal("YES"),
       })
-      .superRefine((val, ctx) => {
-        // Server-side age gate: the client check is advisory; the API is public
-        // so the rule must be enforced here. Donors must be 17+.
-        if (val.dateOfBirth) {
-          const dob = new Date(`${val.dateOfBirth}T00:00:00`);
-          if (Number.isNaN(dob.getTime())) {
-            ctx.addIssue({ code: "custom", path: ["dateOfBirth"], message: "Invalid date of birth" });
-            return;
-          }
-          const now = new Date();
-          let age = now.getFullYear() - dob.getFullYear();
-          const m = now.getMonth() - dob.getMonth();
-          if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age--;
-          if (dob > now) {
-            ctx.addIssue({ code: "custom", path: ["dateOfBirth"], message: "Date of birth cannot be in the future" });
-          } else if (age < 17) {
-            ctx.addIssue({ code: "custom", path: ["dateOfBirth"], message: "Donors must be at least 17 years old" });
-          } else if (age > 120) {
-            ctx.addIssue({ code: "custom", path: ["dateOfBirth"], message: "Please check the year of birth" });
-          }
-        }
-      })
     )
     .mutation(async ({ input }) => {
       const result = await supabaseApi.addPerson({

@@ -151,6 +151,16 @@ function eqCI(value: unknown, expected: string): boolean {
   return String(value ?? "").trim().toUpperCase() === expected;
 }
 
+
+/** Exact age in completed years (correct even before the birthday). */
+function exactAge(birth: Date): number {
+  const now = new Date();
+  let a = now.getFullYear() - birth.getFullYear();
+  const m = now.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) a--;
+  return a < 0 ? 0 : a;
+}
+
 /** All profiles are verified at creation — the Pending concept is gone. */
 function isVerifiedRecord(p: Profile): boolean {
   return eqCI(p["Verification Status"], "VERIFIED");
@@ -900,7 +910,7 @@ export function convertToAdminRecord(p: Profile): AdminRecord {
   const birthDate = new Date(dob);
   const age = Number.isNaN(birthDate.getTime())
     ? 0
-    : new Date().getFullYear() - birthDate.getFullYear();
+    : exactAge(birthDate);
   const rawStatus = verificationStatus.toUpperCase();
   const consentStatus =
     storageConsent.toUpperCase() === "YES" ? "Yes" : "No";
