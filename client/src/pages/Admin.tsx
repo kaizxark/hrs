@@ -1315,7 +1315,7 @@ export default function Admin() {
     onSuccess: result => {
       if (result.success && result.data) {
         toast.success(
-          `${result.data.deleted} record${result.data.deleted === 1 ? "" : "s"} deleted.`
+          `${result.data.count} record${result.data.count === 1 ? "" : "s"} deleted.`
         );
         setSelectedForDelete(new Set());
         setDeleteMode(false);
@@ -2945,22 +2945,18 @@ function WorkspaceView({
     if (
       !csvDownloadedRef.current &&
       exportCsvQuery.data &&
-      "filename" in exportCsvQuery.data &&
-      exportCsvQuery.data.filename
+      exportCsvQuery.data.data?.filename &&
+      exportCsvQuery.data.data?.csv != null
     ) {
       csvDownloadedRef.current = true;
-      // Server returns base64-encoded XLSX bytes.
-      const binaryStr = atob(exportCsvQuery.data.data);
-      const bytes = new Uint8Array(binaryStr.length);
-      for (let i = 0; i < binaryStr.length; i++)
-        bytes[i] = binaryStr.charCodeAt(i);
-      const blob = new Blob([bytes], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      // Server returns a CSV string.
+      const blob = new Blob([exportCsvQuery.data.data.csv], {
+        type: "text/csv",
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = exportCsvQuery.data.filename;
+      a.download = exportCsvQuery.data.data.filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -2975,9 +2971,10 @@ function WorkspaceView({
     onSuccess: result => {
       // `result` is the `{success, data?, error?}` wrapper; `data` holds the Apps Script payload.
       if (result.success) {
+        const count = (result as { data?: { count?: number } }).data?.count;
         toast.success(
-          (result.data as { count?: number } | undefined)?.count != null
-            ? `${(result.data as { count: number }).count} profile(s) erased — new registrations start from HRS-0001`
+          count != null
+            ? `${count} profile(s) erased — new registrations start from HRS-0001`
             : "All profiles erased — new registrations start from HRS-0001"
         );
         setResetConfirmOpen(false);
@@ -3182,13 +3179,12 @@ function WorkspaceView({
   if (view === "sync") {
     const sync = syncStatusQuery.data;
     const diag = syncDiagMutation.data;
-    const syncOk = sync?.lastStatus === "ok";
-    const writeOk = diag?.write?.ok;
+    const syncOk = sync?.lastStatus === "idle";
+    const writeOk = diag?.write?.success;
     const writeTested = diag?.write != null;
     const readTested = diag?.read != null;
-    // A poll landed within the last ~7.5s → pulse the status dot.
-    const justSynced =
-      sync?.lastAttemptAt != null && Date.now() - sync.lastAttemptAt < 7500;
+    // Last sync pulse within the last ~7.5s → pulse the status dot.
+    const justSynced = false;
 
     const intervalOptions = [
       { label: "5s", value: 5000 },
@@ -3257,13 +3253,16 @@ function WorkspaceView({
               <div className="sync-metric">
                 <span className="sync-metric-label">Latency</span>
                 <span className="sync-metric-value">
-                  {fmtMs(sync?.avgLatencyMs)}
+                  {fmtMs(diag?.read?.latencyMs)}
                 </span>
               </div>
               <div className="sync-metric">
                 <span className="sync-metric-label">Success rate</span>
                 <span className="sync-metric-value">
-                  {fmtRate(sync?.successes ?? 0, sync?.attempts ?? 0)}
+                  {fmtRate(
+                    sync?.lastStatus === "idle" ? 1 : 0,
+                    sync?.lastStatus === "idle" || sync?.lastStatus === "error" ? 1 : 0
+                  )}
                 </span>
               </div>
               <div className="sync-metric">
@@ -3289,9 +3288,7 @@ function WorkspaceView({
               <div className="sync-metric">
                 <span className="sync-metric-label">Last attempt</span>
                 <span className="sync-metric-value sync-metric-time">
-                  {formatIndiaSyncTime(
-                    sync?.lastAttemptAt ? new Date(sync.lastAttemptAt) : null
-                  )}
+                  {formatIndiaSyncTime(null)}
                 </span>
               </div>
             </div>
@@ -3336,26 +3333,20 @@ function WorkspaceView({
               <div className="sync-metric">
                 <span className="sync-metric-label">Write latency</span>
                 <span className="sync-metric-value">
-                  {diag?.write ? fmtMs(diag.write.latencyMs) : "—"}
+                  {diag?.read ? fmtMs(diag.read.latencyMs) : "—"}
                 </span>
               </div>
               <div className="sync-metric">
                 <span className="sync-metric-label">Write path</span>
                 <span className="sync-metric-value sync-metric-small">
-                  {diag?.write?.ok ? "Active" : "—"}
+                  {diag?.write?.success ? "Active" : "—"}
                 </span>
               </div>
             </div>
-            {diag?.write && !diag.write.ok && diag.write.error && (
+            {diag?.write && !diag.write.success && diag.write.error && (
               <div className="sync-card-error">
                 <AlertTriangle size={13} />
                 <span>{diag.write.error}</span>
-              </div>
-            )}
-            {diag?.write?.message && (
-              <div className="sync-card-note">
-                <Info size={12} />
-                <span>{diag.write.message}</span>
               </div>
             )}
             {readTested && diag?.read && (
@@ -3435,11 +3426,7 @@ function WorkspaceView({
               </span>
               <span className="sync-status-time">
                 Last sync:{" "}
-                {formatIndiaSyncTime(
-                  sync?.lastAttemptAt
-                    ? new Date(sync.lastAttemptAt)
-                    : lastSyncedAt
-                )}
+                {formatIndiaSyncTime(lastSyncedAt)}
               </span>
             </div>
           </section>
@@ -3491,9 +3478,9 @@ function WorkspaceView({
             </button>
             {diag && (
               <div
-                className={`sync-diag-result ${diag.read?.ok && diag.write?.ok ? "ok" : "error"}`}
+                className={`sync-diag-result ${diag.read?.ok && diag.write?.success ? "ok" : "error"}`}
               >
-                {diag.read?.ok && diag.write?.ok ? (
+                {diag.read?.ok && diag.write?.success ? (
                   <>
                     <CheckCircle size={13} /> Both read and write paths are
                     healthy

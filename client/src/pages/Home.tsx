@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import SiteFooter from "@/components/SiteFooter";
-import { usePublicProfiles } from "@/lib/api";
+import { usePublicProfiles, Profile } from "@/lib/api";
 import { trpc } from "@/lib/trpc";
 import {
   Activity,
@@ -444,7 +444,8 @@ export default function Home() {
   // Google Sheet). The server already filters to VERIFIED + Donor Consent YES +
   // blood group + Public Directory Visibility YES.
   const donors = useMemo<Donor[]>(() => {
-    const profiles = publicProfilesQuery.data?.data?.profiles ?? [];
+    const data = publicProfilesQuery.data;
+    const profiles: Profile[] = data?.success ? data.data ?? [] : [];
     const tones = [
       "coral",
       "plum",

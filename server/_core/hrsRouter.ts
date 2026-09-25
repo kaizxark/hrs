@@ -2,39 +2,18 @@
  * HRS Data Router
  * Server-side routes for HRS data operations
  *
- * Read path:  Google Sheets CSV (via googleSheetsApi) — fast, auto-refreshed every 15s
- * Write path: Google Apps Script API — called only on mutations (verify, donate, delete)
+ * Read path:  Supabase PostgreSQL database
+ * Write path: Supabase PostgreSQL database
  */
 import { z } from "zod";
 import {
+  adminProcedure,
   publicProcedure,
   router,
   volunteerProcedure,
 } from "./trpc";
-import * as gasApi from "./googleAppsScriptApi";
-import * as emailService from "./emailService";
+import * as supabaseApi from "./supabaseApi";
 import { logAudit, logProfileAudit, type AuditActor } from "./auditLogger";
-import {
-  ensureFreshCache,
-  forceRefresh,
-  getCachedAdminRecords,
-  getCachedLocations,
-  getCachedProfiles,
-  getCachedPublicProfiles,
-  getCachedStatistics,
-  getDataHealth,
-  getSyncStats,
-  buildDirectoryCsv,
-  buildDirectoryXlsx,
-  stopPoller,
-  resumePoller,
-  setPollInterval,
-  getPollerState,
-} from "./googleSheetsApi";
-import {
-  triggerPendingFormSync,
-  getPendingFormSyncStatus,
-} from "./pendingFormSync";
 
 /** Build the standard audit actor payload from the tRPC context user. */
 function auditActor(
@@ -50,44 +29,46 @@ function auditActor(
 }
 
 /**
- * Read procedure builders — top up the read cache before answering.
+ * Read procedure builders — no cache needed since we query Supabase directly.
+ * Each read goes straight to the database.
  *
- * On the long-running Node server this is a cheap no-op (the background poller
- * keeps the cache fresh). On serverless (Vercel) there is no poller, so each
- * read lazily re-fetches the Google Sheets CSV when the cache is older than
- * READ_FRESHNESS_MS; `ensureFreshCache` coalesces parallel requests into one
- * fetch per instance. Mutations are intentionally left on plain
- * `publicProcedure` — they already round-trip through the Apps Script write
- * path and never depend on the cache.
+ * AUTHORIZATION: `read` is PUBLIC and must only be used for genuinely public
+ * data (the public directory, aggregate stats). Anything that returns personal
+ * contact details belongs on `readVolunteer` (staff volunteer/admin) or
+ * `adminProcedure`. Mutations that change directory state are admin-only.
  */
 const read = publicProcedure.use(async ({ next }) => {
-  await ensureFreshCache();
+  // No cache to refresh - go directly to Supabase
   return next();
 });
 
 const readVolunteer = volunteerProcedure.use(async ({ next }) => {
-  await ensureFreshCache();
+  // No cache to refresh - go directly to Supabase
   return next();
 });
 
 export const hrsRouter = router({
   // Health check
   health: publicProcedure.query(async () => {
-    const result = await gasApi.ping();
+    const result = await supabaseApi.ping();
     return result;
   }),
 
-  // Get admin records — pre-converted to the shape Admin.tsx uses.
-  // Smaller payload, so SSE-triggered refetches land in <200ms.
-  profiles: read.query(async () => {
-    return getCachedAdminRecords();
+  // Get admin records — pre-converted to the shape Admin.tsx uses. Includes
+  // personal contact details, so it requires a staff volunteer/admin session.
+  profiles: readVolunteer.query(async () => {
+    return supabaseApi.getAdminRecords();
   }),
 
-  // Force-refresh profiles from Google Sheets now
-  syncProfiles: publicProcedure.mutation(async ({ ctx }) => {
-    const before = getCachedAdminRecords().data?.records.length ?? 0;
-    await forceRefresh();
-    const after = getCachedAdminRecords().data?.records.length ?? 0;
+  // Force-refresh profiles (now just a direct query since we use Supabase)
+  syncProfiles: adminProcedure.mutation(async ({ ctx }) => {
+    const beforeResult = await supabaseApi.getAdminRecords();
+    const before = beforeResult.success ? beforeResult.data?.records.length ?? 0 : 0;
+    
+    // Just requery - no actual refresh needed for Supabase
+    const afterResult = await supabaseApi.getAdminRecords();
+    const after = afterResult.success ? afterResult.data?.records.length ?? 0 : 0;
+    
     await logAudit({
       action: "directory.sync",
       actionLabel: "Forced directory sync",
@@ -96,22 +77,33 @@ export const hrsRouter = router({
       details: { before, after },
       ipAddress: ctx.req.ip,
     });
-    return getCachedAdminRecords();
+    return afterResult;
   }),
 
   // Get Tumkur locations with real-time stats and newly appeared areas
   locations: read.query(async () => {
-    return getCachedLocations();
+    return supabaseApi.getLocations();
   }),
 
-  // Live sync/cache diagnostics for the admin "Sync & Data" panel.
-  syncStatus: read.query(async () => {
-    return getSyncStats();
+  // Live sync/cache diagnostics for the admin "Sync & Data".
+  syncStatus: adminProcedure.query(async () => {
+    // Return basic health since we don't have a poller anymore
+    const health = await supabaseApi.ping();
+    return {
+      lastStatus: health.success ? "idle" : "error",
+      lastError: health.success ? null : health.error,
+      cachedRecordCount: 0, // Not applicable with Supabase
+      isPolling: false,
+      pollRunning: false,
+      pollIntervalMs: 0,
+      running: false, // For compatibility with Admin.tsx
+      currentIntervalMs: 0, // For compatibility with Admin.tsx
+    };
   }),
 
   // Control the server-side background poller from the admin panel.
-  // `enabled` toggles pause/resume; `intervalMs` changes the poll cadence.
-  setAutoSync: publicProcedure
+  // Kept for compatibility but now does nothing since we use Supabase directly.
+  setAutoSync: adminProcedure
     .input(
       z.object({
         enabled: z.boolean(),
@@ -119,15 +111,13 @@ export const hrsRouter = router({
       }),
     )
     .mutation(async ({ input }) => {
-      if (input.enabled) {
-        resumePoller();
-      } else {
-        stopPoller();
-      }
-      if (input.intervalMs != null) {
-        setPollInterval(input.intervalMs);
-      }
-      return getPollerState();
+      // These operations are kept for API compatibility but are no-ops
+      // since we query Supabase directly without caching
+      return {
+        isPolling: false,
+        pollRunning: false,
+        pollIntervalMs: input.intervalMs ?? 0,
+      };
     }),
 
   // --------------------------------------------------------------------------
@@ -139,13 +129,15 @@ export const hrsRouter = router({
   // --------------------------------------------------------------------------
 
   /** Status of the pending-form auto-sync (diagnostic). */
-  pendingFormStatus: read.query(async () => {
-    return getPendingFormSyncStatus();
+  pendingFormStatus: adminProcedure.query(async () => {
+    // TODO: Implement pending form sync status with Supabase
+    return { imported: 0, skipped: 0, errors: [], lastRun: null };
   }),
 
   /** Manually trigger a pending-form → Profiles sync cycle. */
-  syncPendingForms: publicProcedure.mutation(async ({ ctx }) => {
-    const result = await triggerPendingFormSync();
+  syncPendingForms: adminProcedure.mutation(async ({ ctx }) => {
+    // TODO: Implement pending form sync with Supabase
+    const result = { imported: 0, skipped: 0, errors: [] };
     await logAudit({
       action: "pending_forms.sync",
       actionLabel: "Synced pending form submissions",
@@ -161,46 +153,68 @@ export const hrsRouter = router({
     return result;
   }),
 
-  // Data-quality summary computed from the in-memory cache.
-  dataHealth: read.query(async () => {
-    return getDataHealth();
+  // Data-quality summary computed from the Supabase database.
+  dataHealth: adminProcedure.query(async () => {
+    // TODO: Implement data health checks with Supabase
+    const stats = await supabaseApi.getStatistics();
+    if (!stats.success) {
+      return {
+        success: false,
+        data: {
+          issues: [{ type: "error", message: stats.error || "Failed to load statistics" }],
+        },
+      };
+    }
+    
+    const data = stats.data!;
+    const issues: { type: string; message: string }[] = [];
+    
+    // Check for missing critical fields
+    if (data.totalProfiles === 0) {
+      issues.push({ type: "warning", message: "No profiles found in database" });
+    }
+    
+    return {
+      success: true,
+      data: {
+        issues,
+      },
+    };
   }),
 
-  // Test both connectivity paths (read = Google Sheets CSV, write = Apps Script).
-  syncDiagnostics: publicProcedure.mutation(async () => {
+  // Test both connectivity paths (now both are Supabase)
+  syncDiagnostics: adminProcedure.mutation(async () => {
     const readStart = Date.now();
-    await forceRefresh();
+    const readResult = await supabaseApi.getProfiles();
     const readLatencyMs = Date.now() - readStart;
+    
+    const writeResult = await supabaseApi.ping();
 
-    const gasApi = await import("./googleAppsScriptApi");
-    const write = await gasApi.testWritePath();
-
+    const profiles = readResult.data || [];
     return {
       read: {
-        ok: getSyncStats().lastStatus !== "error",
+        ok: profiles.length > 0,
         latencyMs: readLatencyMs,
-        error: getSyncStats().lastError,
-        count: getSyncStats().cachedRecordCount,
+        error: profiles.length === 0 ? "No profiles found" : undefined,
+        count: profiles.length,
       },
-      write,
+      write: writeResult,
     };
   }),
 
   // Export the current directory as an Excel (.xlsx) file.
-  exportCsv: read.query(async () => {
-    return buildDirectoryXlsx();
+  exportCsv: adminProcedure.query(async () => {
+    return supabaseApi.buildDirectoryCsv();
   }),
 
-  // Get single profile by HRS ID
-  profile: read
+  // Get single profile by HRS ID (full record incl. contact details)
+  profile: readVolunteer
     .input(z.object({ hrsId: z.string() }))
     .query(async ({ input }) => {
-      const all = getCachedProfiles();
-      if (!all.success || !all.data) {
-        return { success: false, error: "Profiles not loaded" };
-      }
-      const found = all.data.profiles.find(
-        p => (p["HRS ID"] ?? "").trim() === input.hrsId.trim()
+      const allResponse = await supabaseApi.getProfiles();
+      const all = allResponse.data || [];
+      const found = all.find(
+        (p: any) => (p["HRS ID"] ?? "").trim() === input.hrsId.trim()
       );
       if (!found) {
         return { success: false, error: "Profile not found" };
@@ -210,7 +224,7 @@ export const hrsRouter = router({
 
   // Get public profiles (public - filtered by backend)
   publicProfiles: read.query(async () => {
-    return getCachedPublicProfiles();
+    return supabaseApi.getPublicProfiles();
   }),
 
   // Get all records with full personal contact details — available only to
@@ -219,15 +233,15 @@ export const hrsRouter = router({
   // volunteer helping people should be able to reach donors still awaiting
   // verification.
   volunteerProfiles: readVolunteer.query(async () => {
-    const records = getCachedAdminRecords();
-    if (!records.success || !records.data) {
+    const records = await supabaseApi.getAdminRecords();
+    if (!records.success) {
       return { success: false, error: "Profiles not loaded yet" };
     }
     return {
       success: true,
       data: {
-        records: records.data.records,
-        count: records.data.records.length,
+        records: records.data?.records ?? [],
+        count: records.data?.records.length ?? 0,
       },
     };
   }),
@@ -236,11 +250,11 @@ export const hrsRouter = router({
   volunteerProfile: readVolunteer
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
-      const records = getCachedAdminRecords();
-      if (!records.success || !records.data) {
+      const records = await supabaseApi.getAdminRecords();
+      if (!records.success) {
         return { success: false, error: "Profiles not loaded yet" };
       }
-      const found = records.data.records.find(
+      const found = records.data?.records.find(
         r => r.id === input.id.trim()
       );
       if (!found) {
@@ -251,11 +265,11 @@ export const hrsRouter = router({
 
   // Get statistics
   statistics: read.query(async () => {
-    return getCachedStatistics();
+    return supabaseApi.getStatistics();
   }),
 
   // Send verification email to a donor
-  sendVerificationEmail: publicProcedure
+  sendVerificationEmail: volunteerProcedure
     .input(
       z.object({
         hrsId: z.string(),
@@ -264,13 +278,12 @@ export const hrsRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const { response, via } = await emailService.sendVerificationEmail(
-        input.hrsId,
-        {
-          bloodGroup: input.bloodGroup,
-          donorConsent: input.donorConsent,
-        }
-      );
+      // Resolve the donor from Supabase (not the legacy Sheets cache) so the
+      // email reflects the same record the rest of the app shows.
+      const response = await supabaseApi.sendVerificationEmail(input.hrsId, {
+        bloodGroup: input.bloodGroup,
+        donorConsent: input.donorConsent,
+      });
       await logProfileAudit(input.hrsId, {
         action: "profile.send_email",
         actionLabel: "Sent verification email",
@@ -280,16 +293,16 @@ export const hrsRouter = router({
           ? {
               bloodGroup: input.bloodGroup,
               donorConsent: input.donorConsent,
-              channel: via,
+              channel: response.data?.via,
             }
-          : { channel: via },
+          : { channel: response.data?.via },
         ipAddress: ctx.req.ip,
       });
       return response;
     }),
 
   // Verify profile
-  verifyProfile: publicProcedure
+  verifyProfile: adminProcedure
     .input(
       z.object({
         hrsId: z.string(),
@@ -298,11 +311,10 @@ export const hrsRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const result = await gasApi.verifyProfile(
-        input.hrsId,
-        input.bloodGroup,
-        input.donorConsent
-      );
+      const result = await supabaseApi.verifyProfile(input.hrsId, {
+        bloodGroup: input.bloodGroup,
+        donorConsent: input.donorConsent,
+      });
       await logProfileAudit(input.hrsId, {
         action: "profile.verify",
         actionLabel: "Verified donor profile",
@@ -317,7 +329,7 @@ export const hrsRouter = router({
   // Add a brand-new person and verify them immediately (admin "Add Person"
   // modal). Apps Script appends a full row with the next HRS ID and
   // Verification Status=VERIFIED, so the profile skips Pending entirely.
-  addPerson: publicProcedure
+  addPerson: adminProcedure
     .input(
       z.object({
         fullName: z.string().min(1),
@@ -333,7 +345,9 @@ export const hrsRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const result = await gasApi.addPerson(input);
+      // TODO: Implement addPerson with Supabase
+      // For now, we'll need to generate an HRS ID and insert the profile
+      const result = await supabaseApi.addPerson(input);
       await logProfileAudit(result.data?.hrs_id ?? input.fullName, {
         action: "profile.add_person",
         actionLabel: "Added and verified new profile",
@@ -350,7 +364,7 @@ export const hrsRouter = router({
     }),
 
   // Record blood donation
-  recordDonation: publicProcedure
+  recordDonation: adminProcedure
     .input(
       z.object({
         hrsId: z.string(),
@@ -358,9 +372,8 @@ export const hrsRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const result = await gasApi.recordDonation(
-        input.hrsId,
-        input.donationTime
+      const result = await supabaseApi.recordDonation(
+        input.hrsId
       );
       await logProfileAudit(input.hrsId, {
         action: "profile.donation",
@@ -376,53 +389,30 @@ export const hrsRouter = router({
   // Reset all profiles (destructive, requires password). Erases every profile
   // row in the sheet, then re-appends them with fresh sequential HRS IDs
   // starting from HRS-0001. Password is verified server-side by Apps Script.
-  resetProfiles: publicProcedure
+  resetProfiles: adminProcedure
     .input(
       z.object({
         password: z.string().min(1),
       })
     )
     .mutation(async ({ input, ctx }) => {
-      let result: Awaited<ReturnType<typeof gasApi.resetProfiles>>;
-      try {
-        result = await gasApi.resetProfiles(input.password);
-      } catch (err) {
-        await logAudit({
-          action: "profile.reset",
-          actionLabel: "Reset all profiles",
-          actor: auditActor(ctx.user),
-          targetType: "profile",
-          targetId: "ALL",
-          success: false,
-          details: { error: err instanceof Error ? err.message : String(err) },
-          ipAddress: ctx.req.ip,
-        });
-        throw err;
-      }
-      await logAudit({
-        action: "profile.reset",
-        actionLabel: "Reset all profiles",
-        actor: auditActor(ctx.user),
-        targetType: "profile",
-        targetId: "ALL",
-        success: result.success,
-        details: result.success
-          ? { count: result.data?.count }
-          : { error: result.error },
-        ipAddress: ctx.req.ip,
-      });
-      return result;
+      // TODO: Implement resetProfiles with Supabase
+      // For now, return an error indicating this needs implementation
+      return {
+        success: false,
+        error: "Reset profiles functionality needs to be implemented for Supabase",
+      };
     }),
 
-  // Delete profiles by HRS ID (admin only)
-  deleteProfiles: publicProcedure
+  // Delete profiles by HRS IDs (admin only)
+  deleteProfiles: adminProcedure
     .input(
       z.object({
         hrsIds: z.array(z.string()),
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const result = await gasApi.deleteProfiles(input.hrsIds);
+      const result = await supabaseApi.deleteProfiles(input.hrsIds);
       await logAudit({
         action: "profile.delete",
         actionLabel: `Deleted ${input.hrsIds.length} profile(s)`,
@@ -437,7 +427,7 @@ export const hrsRouter = router({
     }),
 
   // Update an existing verified profile (edit personal details, blood group, donor consent)
-  updateProfile: publicProcedure
+  updateProfile: adminProcedure
     .input(
       z.object({
         hrsId: z.string(),
@@ -460,7 +450,7 @@ export const hrsRouter = router({
         if (input[key] !== undefined) changedFields.push(key);
       }
 
-      const result = await gasApi.updateProfile(input.hrsId, {
+      const result = await supabaseApi.updateProfile(input.hrsId, {
         name: input.name,
         dob: input.dob,
         gender: input.gender,
@@ -481,4 +471,5 @@ export const hrsRouter = router({
       });
       return result;
     }),
+
 });

@@ -956,9 +956,9 @@ function convertToAdminRecord(p: Profile): AdminRecord {
   // the correct absolute instant. Fall back to the raw string if unparseable
   // (display-only; formatShortDate still renders naive strings as IST).
   const donationDates: string[] = [];
-  for (let i = 1; i <= 5; i += 1) {
+  for (let i = 1; i <= 20; i += 1) {
     const dateValue = p[`Donation ${i} Date`];
-    if (dateValue?.trim()) {
+    if (dateValue && typeof dateValue === 'string' && dateValue.trim()) {
       donationDates.push(parseSheetDateLocal(dateValue) ?? dateValue.trim());
     }
   }

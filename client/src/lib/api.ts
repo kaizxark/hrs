@@ -260,7 +260,7 @@ export function convertApiProfileToAdminRecord(profile: Profile): {
   for (let i = 1; i <= 20; i++) {
     const dateKey = `Donation ${i} Date`;
     const dateValue = profile[dateKey];
-    if (dateValue && dateValue.trim()) {
+    if (dateValue && typeof dateValue === 'string' && dateValue.trim()) {
       donationDates.push(
         parseSheetDate(dateValue)?.toISOString() ?? dateValue.trim()
       );

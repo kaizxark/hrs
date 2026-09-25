@@ -1,27 +1,17 @@
 /**
- * Audit Router (Google Sheets + Apps Script only — no database)
+ * Audit Router — reads the Supabase `audit_logs` table (the single audit
+ * trail, written by `logAudit` on every privileged action).
  *
- * Reads audit log entries from the Google Sheets "Audit Log" tab via the
- * Apps Script `audit_logs` GET endpoint. All privileged actions are written
- * by the Apps Script `appendAuditLog()` helper on each mutation, then this
- * router surfaces them to the admin UI with filtering and pagination.
+ * The previous implementation read an Apps-Script-maintained "Audit Log"
+ * Google Sheet through a CSV cache; that path is retired along with the rest
+ * of the Sheets integration.
  *
- * Action keys normalised to dot-notation (e.g. "profile.verify") so the
- * client always sees one consistent format regardless of the sheet's
- * uppercase "Action Type" column.
+ * Action keys are stored in dot-notation already ("profile.verify"), so no
+ * mapping layer is needed any more.
  */
 import { z } from "zod";
-import {
-  clearAuditLogs as clearSheetAuditLogs,
-} from "./googleAppsScriptApi";
-import { ensureFreshCache, getCachedProfiles } from "./googleSheetsApi";
-import {
-  ensureFreshAuditCache,
-  getCachedAuditLogs,
-  invalidateAuditCache,
-  type RawAuditLogEntry,
-} from "./auditLogCache";
-import { publicProcedure, router } from "./trpc";
+import { supabase } from "./supabaseApi";
+import { adminProcedure, router } from "./trpc";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -39,101 +29,89 @@ interface UiAuditLogEntry {
   createdAt: string; // ISO-8601 string
 }
 
-/* ------------------------------------------------------------------ */
-/* Name resolver                                                       */
-/* ------------------------------------------------------------------ */
-
-/** Build a Map<HRS ID, Full Name> from the cached profiles. */
-function buildNameLookup(): Map<string, string> {
-  const map = new Map<string, string>();
-  const res = getCachedProfiles();
-  if (!res.success || !res.data) return map;
-  for (const p of res.data.profiles) {
-    const id = (p["HRS ID"] || "").trim();
-    const name = (p["Full Name"] || "").trim();
-    if (id && name) map.set(id, name);
-  }
-  return map;
-}
-
-/* ------------------------------------------------------------------ */
-/* Sheet helpers                                                       */
-/* ------------------------------------------------------------------ */
+type AuditRow = {
+  id: string;
+  action: string;
+  action_label: string;
+  actor_open_id: string | null;
+  actor_name: string | null;
+  target_type: string | null;
+  target_id: string | null;
+  details: Record<string, unknown> | null;
+  success: boolean;
+  created_at: string;
+};
 
 /**
- * Only these audit action kinds surface in the admin Audit Log section.
- * Staff actions, directory syncs, emails, deletes, and system notices stay
- * in the sheet but are not shown in the UI.
+ * Only these action kinds surface in the admin Audit Log section. Staff
+ * bookkeeping (list/login) and the internal seed marker stay hidden.
  */
 const VISIBLE_ACTIONS = new Set([
   "profile.verify",
   "profile.update",
   "profile.donation",
+  "profile.delete",
+  "profile.send_email",
+  "profile.add_person",
+  "staff.create",
+  "staff.delete",
+  "staff.update",
+  "staff.login_failed",
+  "directory.sync",
+  "audit.clear",
 ]);
 
-/** Map uppercase Apps Script action types to dot-notation keys. */
-function normaliseAction(raw: string): string {
-  const upper = raw.trim().toUpperCase();
-  const map: Record<string, string> = {
-    PROFILE_VERIFY: "profile.verify",
-    PROFILE_UPDATE: "profile.update",
-    PROFILE_DELETE: "profile.delete",
-    PROFILE_DONATION: "profile.donation",
-    PROFILE_EMAIL: "profile.send_email",
-    DIRECTORY_SYNC: "directory.sync",
-    SYSTEM_NOTIFY_OWNER: "system.notify_owner",
-    VOLUNTEER_CREATE: "staff.create",
-    VOLUNTEER_DELETE: "staff.delete",
-    AUDIT_CLEAR: "audit.clear",
-    ACTION_ERROR: "action.error",
-  };
-  return map[upper] || raw.trim().toLowerCase();
-}
+/* ------------------------------------------------------------------ */
+/* Name resolution                                                     */
+/* ------------------------------------------------------------------ */
 
-/** Parse the "dd-MM-yyyy HH:mm:ss" sheet timestamp → ISO. */
-function parseSheetTimestamp(raw: string | undefined): string {
-  if (!raw) return new Date().toISOString();
-  const match = raw.match(
-    /^(\d{2})-(\d{2})-(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/,
-  );
-  if (!match) {
-    const d = new Date(raw);
-    return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
-  }
-  const [, dd, mm, yyyy, hh, min, ss] = match;
-  return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}+05:30`;
-}
-
-/** Parse the Details cell (usually JSON string). */
-function parseDetails(raw: string | undefined): Record<string, unknown> | null {
-  if (!raw || !raw.trim()) return null;
+/** Build a Map<HRS ID, Full Name> so audit rows can show who was acted on. */
+async function buildNameLookup(): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
   try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed === "object" && parsed !== null) return parsed;
-    return { message: String(parsed) };
-  } catch {
-    return { message: raw };
+    const { data, error } = await supabase
+      .from("profiles")
+      .select('"HRS ID","Full Name"');
+    if (error) throw error;
+    for (const p of (data ?? []) as Array<Record<string, string>>) {
+      const id = (p["HRS ID"] || "").trim();
+      const name = (p["Full Name"] || "").trim();
+      if (id && name) map.set(id, name);
+    }
+  } catch (error) {
+    console.warn("[auditRouter] Name lookup unavailable:", error);
   }
+  return map;
 }
 
-/** Map a raw sheet row → UI shape. */
-function sheetRowToEntry(
-  raw: RawAuditLogEntry,
-  index: number,
-  nameLookup: Map<string, string>,
+/* ------------------------------------------------------------------ */
+/* Row → UI shape                                                      */
+/* ------------------------------------------------------------------ */
+
+function rowToEntry(
+  row: AuditRow,
+  nameLookup: Map<string, string>
 ): UiAuditLogEntry {
-  const successStr = (raw["Success"] || "Yes").trim().toLowerCase();
-  const hrsId = (raw["Target ID"] || "").trim() || null;
+  const targetId = (row.target_id || "").trim() || null;
   return {
-    id: index,
-    action: normaliseAction(raw["Action Type"] || ""),
-    actionLabel: (raw["Action"] || "").trim(),
-    targetId: hrsId,
-    targetName: hrsId ? (nameLookup.get(hrsId) ?? null) : null,
-    details: parseDetails(raw["Details"]),
-    success: successStr !== "no",
-    createdAt: parseSheetTimestamp(raw["Timestamp"]),
+    id: stableId(row.id),
+    action: row.action,
+    actionLabel: row.action_label,
+    targetId,
+    targetName: targetId ? (nameLookup.get(targetId) ?? null) : null,
+    details: row.details ?? null,
+    success: row.success !== false,
+    createdAt: new Date(row.created_at).toISOString(),
   };
+}
+
+/** Map the UUID primary key to the numeric id the UI uses as a React key. */
+function stableId(uuid: string): number {
+  let h = 0;
+  for (let i = 0; i < uuid.length; i++) {
+    h = (h * 31 + uuid.charCodeAt(i)) | 0;
+  }
+  return h >>> 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -148,65 +126,62 @@ const listInput = z.object({
 });
 
 export const auditRouter = router({
-  list: publicProcedure.input(listInput).query(async ({ input }) => {
+  list: adminProcedure.input(listInput).query(async ({ input }) => {
     const { limit = 50, offset = 0, action, search } = input;
-    // Top up the read cache so HRS-ID → name resolution works on cold
-    // serverless instances (no-op when the cache is already fresh).
-    await ensureFreshCache();
-    const nameLookup = buildNameLookup();
 
-    /* ----- Read from cached audit logs (refreshed every 30s) ----- */
-    await ensureFreshAuditCache();
-    const rawLogs = getCachedAuditLogs();
-    if (!rawLogs.length) {
+    // Base fetch: this table only ever contains audit rows, and the volume is
+    // small (privileged actions only), so a bounded page is enough. Filters
+    // that PostgREST can express directly are pushed down; the visible-action
+    // filter and text search run client-side of the query.
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(500);
+
+    if (error) {
+      console.error("[auditRouter] list failed:", error);
       return { logs: [] as UiAuditLogEntry[], total: 0 };
     }
 
-    let entries = rawLogs
-      .map((row, i) => sheetRowToEntry(row, i, nameLookup))
-      // Skip junk rows (header row, fully blank rows).
-      .filter((e) => e.action !== "" || e.actionLabel !== "" || e.details !== null)
-      // Only show profile updates / verifications / donations in the UI.
-      .filter((e) => VISIBLE_ACTIONS.has(e.action));
+    const nameLookup = await buildNameLookup();
 
-    // Apply action filter (normalised dot-notation).
+    let entries = ((data ?? []) as AuditRow[])
+      .map(row => rowToEntry(row, nameLookup))
+      .filter(e => VISIBLE_ACTIONS.has(e.action));
+
     if (action && action !== "all") {
-      entries = entries.filter((e) => e.action === action);
+      entries = entries.filter(e => e.action === action);
     }
 
-    // Apply search filter.
     if (search && search.trim()) {
       const lower = search.trim().toLowerCase();
-      entries = entries.filter((e) => {
-        const fields = [e.targetId, e.targetName, e.actionLabel, e.action];
-        return fields.some((f) => f && f.toLowerCase().includes(lower));
-      });
+      entries = entries.filter(e =>
+        [e.targetId, e.targetName, e.actionLabel, e.action].some(
+          f => f && f.toLowerCase().includes(lower)
+        )
+      );
     }
-
-    // Newest first — sheet rows are appended oldest→newest, so the UI shows
-    // recent audits on top and older ones further down.
-    entries.sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
 
     const total = entries.length;
     const page = entries.slice(offset, offset + limit);
-
     return { logs: page, total };
   }),
 
-  /**
-   * Clear all audit log entries from the Google Sheets "Audit Log" tab.
-   * The Apps Script `clear_audit` action handles the actual deletion.
-   */
-  clear: publicProcedure.mutation(async () => {
-    const result = await clearSheetAuditLogs();
-    const removed = result.success && result.data ? result.data.removed : 0;
-    // The sheet takes 10–40 s to reflect the clear; bust the read cache so
-    // the next `list` re-reads the CSV instead of serving stale entries for
-    // up to the TTL.
-    invalidateAuditCache();
-    return { success: result.success, removed };
+  /** Clear all audit log entries (admin only). */
+  clear: adminProcedure.mutation(async () => {
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .delete()
+      .neq("action", "__never_matches__") // delete all rows
+      .select("id");
+
+    if (error) {
+      console.error("[auditRouter] clear failed:", error);
+      return { success: false, removed: 0 };
+    }
+
+    const removed = (data ?? []).length;
+    return { success: true, removed };
   }),
 });

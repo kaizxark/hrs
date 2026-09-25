@@ -37,12 +37,9 @@ pnpm test -- server/auth.logout.test.ts
 
 ### Overview
 
-HRS Blood Donor Portal is a full-stack web application for managing blood donor records. It uses a **dual-path data architecture**:
+HRS Blood Donor Portal is a full-stack web application for managing blood donor records. It uses a **Supabase PostgreSQL database** for both read and write operations.
 
-- **Read path (fast)**: Google Sheets CSV export polled every 10–15 seconds. Used for all read operations — profiles, locations, statistics, exports.
-- **Write path (slow, 10–40s)**: Google Apps Script API. Used only for mutations — verify profiles, record donations, delete profiles, send verification emails.
-
-The app integrates with Google Sheets for data storage and Google Apps Script for write operations. Authentication is via Manus OAuth with JWT sessions.
+The app integrates with Supabase for data storage and authentication. Authentication is via Manus OAuth with JWT sessions.
 
 ### Directory Structure
 
@@ -59,9 +56,9 @@ server/_core/         # Server infrastructure
   context.ts         # Request context with authenticated user
   hrsRouter.ts       # HRS data operations (profiles, donations)
   systemRouter.ts    # System operations (notify owner)
-  auditRouter.ts     # Audit log read/write (Google Sheets)
-  googleAppsScriptApi.ts  # Google Apps Script API (write path)
-  googleSheetsApi.ts # Google Sheets CSV polling (read path)
+  auditRouter.ts     # Audit log read/write (Supabase)
+  supabaseApi.ts     # Supabase PostgreSQL API (data operations)
+  emailService.ts    # Email service (SMTP)
   oauth.ts           # OAuth callback handler
   env.ts             # Environment variables
   cookies.ts         # Cookie management
@@ -111,40 +108,62 @@ Key variables in `.env` (see `server/_core/env.ts`):
 
 | Variable | Description |
 |---|---|
-| `DATABASE_URL` | MySQL connection string |
+| `DATABASE_URL` | MySQL connection string (for drizzle) |
 | `JWT_SECRET` | Cookie signing secret |
 | `OAUTH_SERVER_URL` | Manus OAuth server URL |
 | `OWNER_OPEN_ID` | Admin user's OpenID (for owner detection) |
-| `GOOGLE_SHEETS_CSV_URL` | Public Google Sheet CSV export URL (read path) |
-| `GOOGLE_APPS_SCRIPT_URL` | Google Apps Script endpoint (write path) |
-| `GOOGLE_APPS_SCRIPT_SECRET` | API secret for write operations |
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_ANON_KEY` | Supabase anonymous key (for client-side operations) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (for server-side operations) |
+| `GOOGLE_APPS_SCRIPT_URL` | Google Apps Script endpoint (legacy - fallback for email) |
+| `GOOGLE_APPS_SCRIPT_SECRET` | API secret for Google Apps Script (fallback) |
 
 ---
 
 ## Data Architecture
 
-### Read Path (Google Sheets CSV)
+### Supabase PostgreSQL Database
 
-- `googleSheetsApi.ts` fetches the publicly-shared CSV export URL
-- CSV is parsed and cached in memory
-- Background poller runs every 10 seconds (configurable) to keep cache fresh
-- SSE broadcaster at `/api/sync-events` pushes notifications to admin clients when cache updates
-- Pre-converts raw profiles to `AdminRecord` shape on server (avoids client-side O(N) conversion)
-- Exported as CSV (.csv) or XLSX (.xlsx) via `buildDirectoryCsv()` / `buildDirectoryXlsx()`
+All data operations (both read and write) go directly to the Supabase PostgreSQL database:
 
-### Write Path (Google Apps Script)
-
-- All write operations are POST requests with form-urlencoded bodies
-- Operations: `verifyProfile`, `recordDonation`, `deleteProfiles`, `updateProfile`, `sendVerificationEmail`
-- Requires `GOOGLE_APPS_SCRIPT_SECRET` env var
-- All write operations go through `server/_core/googleAppsScriptApi.ts`
-- Write path is slow (~10–40s), so use sparingly
+- **Read operations**: Direct SQL queries to the `profiles` table via `supabaseApi.ts`
+- **Write operations**: Direct SQL updates/inserts/deletes to the `profiles` table via `supabaseApi.ts`
+- **Real-time queries**: No polling needed - data is always current
+- **Background tasks**: Only email sending and periodic audits run in background
 
 ### Database Schema (`drizzle/schema.ts`)
 
 - `users` table — backs OAuth auth flow (openId, name, email, role, loginMethod)
 - `audit_logs` table — append-only record of every privileged action
 - `staff` table — admin-created volunteer accounts (username/password login)
+- `profiles` table — stores donor profiles (HRS ID, blood group, contact info, donation history, etc.)
+
+### Key Data Operations
+
+**Profile Operations**:
+- `getProfiles()` - Fetch all donor profiles
+- `getProfileByHrsId()` - Fetch single profile by HRS ID
+- `getPublicProfiles()` - Fetch profiles visible in public directory
+- `verifyProfile()` - Mark profile as verified
+- `recordDonation()` - Increment donation count for a profile
+- `updateProfile()` - Edit profile details
+- `deleteProfiles()` - Remove profiles by HRS ID
+- `addPerson()` - Add new verified profile
+
+**Statistics & Reporting**:
+- `getStatistics()` - Calculate donor statistics (blood groups, cities, availability, etc.)
+- `getLocations()` - Get cities and areas with donor counts
+- `dataHealth()` - Run data quality checks on profiles table
+
+**Export Operations**:
+- `buildDirectoryCsv()` - Generate CSV export of all profiles
+- `buildDirectoryXlsx()` - Generate Excel export of all profiles
+
+### Email Service
+
+- Primary: Direct SMTP via `emailService.ts` (configured via SMTP env vars)
+- Fallback: Google Apps Script (if SMTP not configured)
+- Used for verification emails and notifications
 
 ---
 
@@ -162,7 +181,7 @@ Runs the Vite dev server with hot reload on the client and Express on the server
 
 1. **Frontend changes**: Edit files in `client/src/`. Components go in `client/src/components/ui/`, pages in `client/src/pages/`.
 2. **Backend API changes**: Modify procedures in `server/_core/hrsRouter.ts` or create new routers.
-3. **Data path changes**: Edit `server/_core/googleSheetsApi.ts` (read path) or `server/_core/googleAppsScriptApi.ts` (write path).
+3. **Data path changes**: Edit `server/_core/supabaseApi.ts` — this controls all Supabase operations.
 4. **Database schema**: Edit `drizzle/schema.ts`, then run `pnpm db:push`.
 
 ### Testing
@@ -185,21 +204,18 @@ pnpm check
 ### Adding a new tRPC endpoint
 
 1. Add the procedure to `server/_core/hrsRouter.ts` (or create a new router)
-2. Import necessary functions from `googleSheetsApi.ts` or `googleAppsScriptApi.ts`
+2. Import necessary functions from `supabaseApi.ts` or `emailService.ts`
 3. Add the router to `server/routers.ts`
 4. Expose the type via `AppRouter`
 
-### Modifying the data read path
+### Modifying the data layer
 
-- Edit `server/_core/googleSheetsApi.ts` — this controls CSV fetching, caching, polling, and all derived queries (profiles, statistics, locations, public profiles, exports)
-
-### Modifying the data write path
-
-- Edit `server/_core/googleAppsScriptApi.ts` — this controls all mutations to Google Sheets via Apps Script
+- Edit `server/_core/supabaseApi.ts` — this controls all database operations via Supabase
+- Edit `drizzle/schema.ts` for schema changes, then run `pnpm db:push`
 
 ### Adding a UI component
 
-1. Create in `client/src/components/ui/` following shadcn patterns
+1. Create in `client/src/components/ui/` following shadcn/ui patterns
 2. Add to `client/src/pages/` if it's a page-level component
 3. Register the route in `client/src/App.tsx`
 
@@ -226,62 +242,22 @@ pnpm check
 
 ---
 
-## Google Sheets Integration
+## Supabase Integration
 
-### Read Path Details
+### Client Initialization
 
-- The publicly shared Google Sheet CSV URL is in `ENV.googleSheetsCsvUrl` (defaults to a specific URL, can be overridden via `GOOGLE_SHEETS_CSV_URL` env var)
-- CSV is fetched with `cache: "no-store"` to prevent browser caching
-- Parse uses a custom CSV parser that handles quoted fields
-- Background poller interval is configurable via the admin panel (`setAutoSync` tRPC procedure) or via `setPollInterval()` function
+- Public client (anon key): Used in `supabaseApi.ts` for read operations
+- Admin client (service role key): Used in `supabaseApi.ts` for write operations (bypasses RLS)
 
-### Write Path Details
+### Security
 
-- All mutations go through Google Apps Script
-- API endpoint: `ENV.googleAppsScriptUrl` (default, can be overridden)
-- Secret: `ENV.googleAppsScriptSecret` (required env var)
-- Form-urlencoded bodies are used
-- All write operations include audit logging via `logAudit()`
+- Row Level Security (RLS) policies should be defined in Supabase dashboard
+- Service role key is only used on the backend for admin operations
+- Anon key is safe to expose to frontend as RLS policies protect data
 
----
+### Migration Notes
 
-## Authentication Details
-
-### Manus OAuth
-
-- OAuth flow handled by `@vitejs/plugin-manus-runtime`
-- User info stored in MySQL `users` table
-- Session cookie: `app_session_id` (HTTP-only)
-- Role-based access: `role === 'admin'` for admin procedures
-
-### Staff (username/password) Login
-
-- Separate from OAuth — uses Google Sheets Volunteer/Admin tabs or DB `staff` table
-- Session cookie: `hrs_staff_session_v2` (HTTP-only)
-- Passwords hashed with scrypt
-- Admin account credentials stored in Google Sheets Admin tab
-
----
-
-## Export Format
-
-### CSV Export
-
-- `buildDirectoryCsv()` returns `{ filename, csv }`
-- Includes all columns from the in-memory cache
-- Date formatted as `YYYY-MM-DD` in filename
-
-### XLSX Export
-
-- `buildDirectoryXlsx()` returns `{ filename, data }` where data is base64-encoded
-- Uses zero-dependency `xlsxWriter`
-- Same columns as CSV export
-
----
-
-## Audit Logging
-
-- All privileged actions are logged via `logAudit()` in `server/_core/auditLogger.ts`
-- Logs written to Google Sheets Audit Log tab (append-only)
-- Includes: action, actor, target, success status, IP address, details
-- Readable via the `auditRouter.list` procedure
+- Migrated from Google Sheets CSV (read path) and Google Apps Script (write path)
+- All operations now go directly to Supabase PostgreSQL
+- No more caching layer or background poller needed for data freshness
+- Export functions still generate CSV/XLSX from database query results

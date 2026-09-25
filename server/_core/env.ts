@@ -17,6 +17,10 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  // Supabase configuration
+  supabaseUrl: process.env.SUPABASE_URL ?? "",
+  supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? "",
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
   // Google Sheets CSV — publicly shared sheet export URL (read-only, fast)
   // Can be overridden via GOOGLE_SHEETS_CSV_URL env var.
   googleSheetsCsvUrl:
@@ -45,8 +49,9 @@ export const ENV = {
     cleanSmtpValue(process.env.SMTP_FROM) ||
     "HRS Blood Donor Portal <no-reply@hrs.org>",
   // Public site URL linked from the email card ("link to this website").
-  appUrl:
-    process.env.APP_URL ?? "https://hrs-camp.vercel.app",
+  appUrl: process.env.APP_URL ?? "https://hrs-camp.vercel.app",
+  // Admin reset password for security-sensitive operations
+  adminResetPassword: process.env.ADMIN_RESET_PASSWORD ?? "",
 
   // Google Forms pending submissions — a SEPARATE published spreadsheet that
   // receives Google Form entries. The auto-sync background job reads this

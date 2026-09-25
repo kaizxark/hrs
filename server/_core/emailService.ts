@@ -29,7 +29,7 @@ export interface VerificationEmailOutcome {
   via: "smtp" | "gas";
 }
 
-function isSmtpConfigured(): boolean {
+export function isSmtpConfigured(): boolean {
   return Boolean(ENV.smtpHost && ENV.smtpUser && ENV.smtpPass);
 }
 
@@ -317,7 +317,13 @@ export function buildVerificationEmailText(
  */
 export async function sendVerificationEmail(
   hrsId: string,
-  extras?: { bloodGroup?: string; donorConsent?: string }
+  extras?: { bloodGroup?: string; donorConsent?: string },
+  /**
+   * The donor record to render. Callers now pass the record resolved from the
+   * database (Supabase); when omitted we fall back to the legacy Google Sheets
+   * cache for backwards compatibility.
+   */
+  recordOverride?: AdminRecord
 ): Promise<VerificationEmailOutcome> {
   if (!isSmtpConfigured()) {
     const response = await gasApi.sendVerificationEmail(hrsId, extras);
@@ -326,9 +332,10 @@ export async function sendVerificationEmail(
 
   const cached = getCachedAdminRecords();
   const record =
-    cached.success && cached.data
+    recordOverride ??
+    (cached.success && cached.data
       ? cached.data.records.find((r) => r.id === hrsId)
-      : undefined;
+      : undefined);
 
   if (!record) {
     // Cache may lag the verification write — let Apps Script have a go.

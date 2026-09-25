@@ -93,6 +93,8 @@ export const staff = mysqlTable(
     passwordHash: varchar("passwordHash", { length: 128 }).notNull(),
     /** Human-readable display name. */
     displayName: varchar("displayName", { length: 128 }).notNull(),
+    /** Contact number shown in the public emergency-contacts list (volunteers). */
+    mobile: varchar("mobile", { length: 20 }).default("").notNull(),
     /** Role: admin (full access) or volunteer (home-like read + call). */
     role: mysqlEnum("role", ["admin", "volunteer"]).default("volunteer").notNull(),
     /** Whether the account is active. Soft-delete by deactivating. */
