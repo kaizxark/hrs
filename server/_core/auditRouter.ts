@@ -10,7 +10,7 @@
  * mapping layer is needed any more.
  */
 import { z } from "zod";
-import { supabase } from "./supabaseApi";
+import { supabase, getProfileNameLookup } from "./supabaseApi";
 import { adminProcedure, router } from "./trpc";
 
 /* ------------------------------------------------------------------ */
@@ -43,22 +43,15 @@ type AuditRow = {
 };
 
 /**
- * Only these action kinds surface in the admin Audit Log section. Staff
- * bookkeeping (list/login) and the internal seed marker stay hidden.
+ * Only these action kinds surface in the admin Audit Log section — the four
+ * donor-record lifecycle events (registrations, edits, donations,
+ * deletions). Everything else is out of scope by product decision.
  */
 const VISIBLE_ACTIONS = new Set([
-  "profile.verify",
+  "profile.add_person",
   "profile.update",
   "profile.donation",
   "profile.delete",
-  "profile.send_email",
-  "profile.add_person",
-  "staff.create",
-  "staff.delete",
-  "staff.update",
-  "staff.login_failed",
-  "directory.sync",
-  "audit.clear",
 ]);
 
 /* ------------------------------------------------------------------ */
@@ -67,21 +60,13 @@ const VISIBLE_ACTIONS = new Set([
 
 /** Build a Map<HRS ID, Full Name> so audit rows can show who was acted on. */
 async function buildNameLookup(): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
   try {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select('"HRS ID","Full Name"');
-    if (error) throw error;
-    for (const p of (data ?? []) as Array<Record<string, string>>) {
-      const id = (p["HRS ID"] || "").trim();
-      const name = (p["Full Name"] || "").trim();
-      if (id && name) map.set(id, name);
-    }
+    // Shared snapshot — no extra round-trip of its own.
+    return await getProfileNameLookup();
   } catch (error) {
     console.warn("[auditRouter] Name lookup unavailable:", error);
+    return new Map();
   }
-  return map;
 }
 
 /* ------------------------------------------------------------------ */
@@ -133,18 +118,23 @@ export const auditRouter = router({
     // small (privileged actions only), so a bounded page is enough. Filters
     // that PostgREST can express directly are pushed down; the visible-action
     // filter and text search run client-side of the query.
-    const { data, error } = await supabase
-      .from("audit_logs")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(500);
+    // The HRS-ID → name lookup runs in parallel with the log fetch instead of
+    // after it (it previously added a second serial round-trip to Supabase).
+    const [logsResult, nameLookup] = await Promise.all([
+      supabase
+        .from("audit_logs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(500),
+      buildNameLookup(),
+    ]);
+
+    const { data, error } = logsResult;
 
     if (error) {
       console.error("[auditRouter] list failed:", error);
       return { logs: [] as UiAuditLogEntry[], total: 0 };
     }
-
-    const nameLookup = await buildNameLookup();
 
     let entries = ((data ?? []) as AuditRow[])
       .map(row => rowToEntry(row, nameLookup))

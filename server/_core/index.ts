@@ -43,6 +43,19 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 export async function createApp(): Promise<{ app: express.Express; server: Server }> {
   const app = express();
   const server = createServer(app);
+  // Basic security headers on every response. HSTS is already applied at the
+  // Vercel edge; nosniff/frame-deny/referrer hardening are set here so they
+  // hold regardless of the hosting layer.
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader(
+      "Permissions-Policy",
+      "camera=(), microphone=(), geolocation=()"
+    );
+    next();
+  });
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));

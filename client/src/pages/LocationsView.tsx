@@ -39,7 +39,6 @@ type LocationsViewProps = {
   records: AdminRecord[];
   donors: AdminRecord[];
   availableDonors: AdminRecord[];
-  pending: AdminRecord[];
   lastSyncedAt: Date | null;
   bloodGroups: string[];
   isSyncing: boolean;
@@ -78,7 +77,6 @@ export default function LocationsView({
   records: _records,
   donors: _donors,
   availableDonors: _availableDonors,
-  pending: _pending,
   lastSyncedAt: _lastSyncedAt,
   bloodGroups,
   isSyncing: _isSyncing,

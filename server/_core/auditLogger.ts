@@ -1,20 +1,31 @@
 /**
  * Audit Logger
  *
- * Central helper for recording privileged actions (directory mutations,
- * verifications, donations, staff changes, …) in the Supabase `audit_logs`
- * table.
+ * Central helper for recording privileged actions in the Supabase
+ * `audit_logs` table.
  *
- * Design notes:
- * - The previous implementation was a no-op stub: the Sheets/Apps-Script era
- *   wrote audit rows from the Apps Script, which this codebase no longer
- *   calls — so NO audit trail was being recorded at all. Every privileged
- *   action now lands in `audit_logs`.
- * - Writing a log entry NEVER throws / never breaks the caller's flow.
- * - `logProfileAudit` keeps its old signature so all call sites stay valid.
+ * Scope (product decision): the audit log tracks ONLY the four donor-record
+ * lifecycle events —
+ *   1. profile.add_person  → a donor registers (public form or admin)
+ *   2. profile.update      → a profile is edited
+ *   3. profile.donation    → a donation is recorded
+ *   4. profile.delete      → a profile is deleted
+ * Everything else (staff logins, listing, syncs, diagnostics, …) is
+ * deliberately NOT recorded — `logAudit` silently skips any other action,
+ * so stray call sites can never pollute the trail.
+ *
+ * Writing a log entry NEVER throws / never breaks the caller's flow.
  */
 import type { User } from "../../drizzle/schema";
 import { supabase } from "./supabaseApi";
+
+/** The only actions that may be written to the audit trail. */
+const AUDITED_ACTIONS = new Set([
+  "profile.add_person",
+  "profile.update",
+  "profile.donation",
+  "profile.delete",
+]);
 
 export type AuditActor = Pick<User, "id" | "openId" | "name" | "role"> | null;
 
@@ -38,6 +49,10 @@ export interface AuditLogEntry {
  */
 export async function logAudit(entry: AuditLogEntry): Promise<void> {
   try {
+    // Scope enforcement: anything outside the four donor-record lifecycle
+    // events is intentionally not audited.
+    if (!AUDITED_ACTIONS.has(entry.action)) return;
+
     const actor = entry.actor ?? null;
     await supabase.from("audit_logs").insert({
       action: entry.action,

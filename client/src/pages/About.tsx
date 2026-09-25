@@ -21,29 +21,29 @@ import SiteFooter from "@/components/SiteFooter";
 
 const processSteps = [
   {
-    title: "Register your basic details",
-    copy: "The info needed for the blood grouping camp.",
+    title: "Fill the registration form",
+    copy: "Your details, blood group, and consents — one short form at the camp or online at /register.",
     icon: FileCheck2,
   },
   {
     title: "Get your blood group checked",
-    copy: "Done on the spot at the camp, and you get your result right away.",
+    copy: "Done on the spot at the camp, and you enter the result right in the form.",
     icon: Droplets,
   },
   {
-    title: "Your record gets completed",
-    copy: "HRS adds your checked blood group to your profile.",
-    icon: Database,
-  },
-  {
-    title: "You're asked separately about becoming a donor",
-    copy: "Whether you're okay being contacted later if your blood group is needed.",
+    title: "Choose your consents",
+    copy: "Decide whether HRS may contact you when your blood group is needed, and confirm secure data storage.",
     icon: HeartHandshake,
   },
   {
-    title: "You get an HRS ID",
-    copy: "Once your details, blood group, and consent are all in, your record is saved.",
+    title: "You're verified instantly",
+    copy: "Your profile is saved verified the moment you submit — no waiting, no follow-up steps.",
     icon: ShieldCheck,
+  },
+  {
+    title: "You get an HRS ID",
+    copy: "A permanent donor ID is generated immediately. Keep it for every future donation.",
+    icon: Database,
   },
   {
     title: "Eligible donors go into the directory",

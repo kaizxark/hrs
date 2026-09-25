@@ -24,6 +24,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   X,
+  HeartHandshake,
 } from "lucide-react";
 
 type Donor = {
@@ -478,18 +479,10 @@ export default function Home() {
         10
       );
 
-      // Calculate age from DOB
-      let age = 0;
-      const dob = p["Date of Birth"];
-      if (dob) {
-        const birthDate = new Date(dob);
-        if (!Number.isNaN(birthDate.getTime())) {
-          age = Math.floor(
-            (Date.now() - birthDate.getTime()) /
-              (365.25 * 24 * 60 * 60 * 1000)
-          );
-        }
-      }
+      // The server strips DOB from the public payload and ships a derived
+      // `age` instead (exact birthdates are never exposed publicly).
+      const serverAge = (p as unknown as { age?: unknown }).age;
+      const age = typeof serverAge === "number" ? serverAge : 0;
 
       return {
         id: p["HRS ID"] || "",
@@ -652,8 +645,40 @@ export default function Home() {
                   </div>
                   <ArrowRight size={18} />
                 </button>
+                <Link
+                  href="/register"
+                  className="primary-button hero-dropdown-btn"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "15px",
+                    padding: "14px 22px",
+                    fontSize: "15px",
+                    background: "#fff",
+                    border: "1.5px solid var(--border-dark)",
+                    color: "var(--foreground)",
+                    boxShadow: "var(--shadow-sm)",
+                    width: "100%",
+                    borderRadius: "12px",
+                    marginTop: "10px",
+                    textDecoration: "none",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                    }}
+                  >
+                    <HeartHandshake size={20} color="var(--primary)" /> Want to
+                    become a donor? Register
+                  </div>
+                  <ArrowRight size={18} color="var(--primary)" />
+                </Link>
               </div>
-            </div>
+              </div>
             <div
               className="search-panel motion-card"
               aria-label="Find blood donors"

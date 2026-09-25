@@ -120,39 +120,6 @@ export const hrsRouter = router({
       };
     }),
 
-  // --------------------------------------------------------------------------
-  // Pending Google Form → Profiles sync (R9)
-  //
-  // On Vercel serverless there are no persistent background timers, so the
-  // pending-form import is triggered on-demand via this procedure.  On local
-  // dev it also runs automatically every 5 min via startPendingFormSync().
-  // --------------------------------------------------------------------------
-
-  /** Status of the pending-form auto-sync (diagnostic). */
-  pendingFormStatus: adminProcedure.query(async () => {
-    // TODO: Implement pending form sync status with Supabase
-    return { imported: 0, skipped: 0, errors: [], lastRun: null };
-  }),
-
-  /** Manually trigger a pending-form → Profiles sync cycle. */
-  syncPendingForms: adminProcedure.mutation(async ({ ctx }) => {
-    // TODO: Implement pending form sync with Supabase
-    const result = { imported: 0, skipped: 0, errors: [] };
-    await logAudit({
-      action: "pending_forms.sync",
-      actionLabel: "Synced pending form submissions",
-      actor: auditActor(ctx.user),
-      targetType: "system",
-      details: {
-        imported: result.imported,
-        skipped: result.skipped,
-        errorCount: result.errors.length,
-      },
-      ipAddress: ctx.req.ip,
-    });
-    return result;
-  }),
-
   // Data-quality summary computed from the Supabase database.
   dataHealth: adminProcedure.query(async () => {
     // TODO: Implement data health checks with Supabase
@@ -301,34 +268,87 @@ export const hrsRouter = router({
       return response;
     }),
 
-  // Verify profile
-  verifyProfile: adminProcedure
+  // Public donor self-registration — the shared camp/registration form.
+  // Creates the profile as VERIFIED immediately: with the Pending concept
+  // removed, every record is complete (blood group + consents) at creation.
+  registerDonor: publicProcedure
     .input(
       z.object({
-        hrsId: z.string(),
-        bloodGroup: z.string(),
-        donorConsent: z.string(),
+        fullName: z.string().min(2).max(120),
+        dateOfBirth: z.string().optional(),
+        gender: z.string().optional(),
+        phoneNumber: z.string().regex(/^\+?[0-9]{10,15}$/, "Enter a valid mobile number"),
+        email: z
+          .string()
+          .email("Enter a valid email")
+          .optional()
+          .or(z.literal("")),
+        city: z.string().max(80).optional(),
+        area: z.string().max(80).optional(),
+        bloodGroup: z.string().regex(/^(A|B|AB|O)[+-]$/, "Select a valid blood group"),
+        donorConsent: z.enum(["YES", "NO"]),
+        dataStorageConsent: z.literal("YES"),
+      })
+      .superRefine((val, ctx) => {
+        // Server-side age gate: the client check is advisory; the API is public
+        // so the rule must be enforced here. Donors must be 17+.
+        if (val.dateOfBirth) {
+          const dob = new Date(`${val.dateOfBirth}T00:00:00`);
+          if (Number.isNaN(dob.getTime())) {
+            ctx.addIssue({ code: "custom", path: ["dateOfBirth"], message: "Invalid date of birth" });
+            return;
+          }
+          const now = new Date();
+          let age = now.getFullYear() - dob.getFullYear();
+          const m = now.getMonth() - dob.getMonth();
+          if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age--;
+          if (dob > now) {
+            ctx.addIssue({ code: "custom", path: ["dateOfBirth"], message: "Date of birth cannot be in the future" });
+          } else if (age < 17) {
+            ctx.addIssue({ code: "custom", path: ["dateOfBirth"], message: "Donors must be at least 17 years old" });
+          } else if (age > 120) {
+            ctx.addIssue({ code: "custom", path: ["dateOfBirth"], message: "Please check the year of birth" });
+          }
+        }
       })
     )
-    .mutation(async ({ input, ctx }) => {
-      const result = await supabaseApi.verifyProfile(input.hrsId, {
+    .mutation(async ({ input }) => {
+      const result = await supabaseApi.addPerson({
+        fullName: input.fullName.trim(),
         bloodGroup: input.bloodGroup,
         donorConsent: input.donorConsent,
+        dateOfBirth: input.dateOfBirth,
+        gender: input.gender,
+        phoneNumber: input.phoneNumber,
+        email: input.email,
+        city: input.city,
+        area: input.area,
+        dataStorageConsent: input.dataStorageConsent,
       });
-      await logProfileAudit(input.hrsId, {
-        action: "profile.verify",
-        actionLabel: "Verified donor profile",
-        actor: auditActor(ctx.user),
-        success: result.success,
-        details: { bloodGroup: input.bloodGroup, donorConsent: input.donorConsent },
-        ipAddress: ctx.req.ip,
-      });
-      return result;
+
+      if (result.success) {
+        await logAudit({
+          action: "profile.add_person",
+          actionLabel: "Registered via public form",
+          actor: null,
+          targetType: "profile",
+          targetId: result.data?.hrs_id ?? "",
+          details: {
+            fullName: input.fullName.trim(),
+            bloodGroup: input.bloodGroup,
+            donorConsent: input.donorConsent,
+            source: "public_form",
+          },
+        });
+      }
+
+      return result.success
+        ? { success: true as const, hrsId: result.data?.hrs_id ?? "" }
+        : { success: false as const, error: result.error ?? "Registration failed" };
     }),
 
   // Add a brand-new person and verify them immediately (admin "Add Person"
-  // modal). Apps Script appends a full row with the next HRS ID and
-  // Verification Status=VERIFIED, so the profile skips Pending entirely.
+  // modal). The profile is created VERIFIED with the next HRS ID.
   addPerson: adminProcedure
     .input(
       z.object({
@@ -384,24 +404,6 @@ export const hrsRouter = router({
         ipAddress: ctx.req.ip,
       });
       return result;
-    }),
-
-  // Reset all profiles (destructive, requires password). Erases every profile
-  // row in the sheet, then re-appends them with fresh sequential HRS IDs
-  // starting from HRS-0001. Password is verified server-side by Apps Script.
-  resetProfiles: adminProcedure
-    .input(
-      z.object({
-        password: z.string().min(1),
-      })
-    )
-    .mutation(async ({ input, ctx }) => {
-      // TODO: Implement resetProfiles with Supabase
-      // For now, return an error indicating this needs implementation
-      return {
-        success: false,
-        error: "Reset profiles functionality needs to be implemented for Supabase",
-      };
     }),
 
   // Delete profiles by HRS IDs (admin only)

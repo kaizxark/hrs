@@ -111,7 +111,7 @@ type AdminView =
   | "settings"
   | "volunteer";
 
-type RecordTab = "all" | "pending" | "donors" | "available" | "unavailable";
+type RecordTab = "all" | "donors" | "available" | "unavailable";
 type ModalOrigin = { x: number; y: number };
 
 const VIEW_LABELS: Record<AdminView, string> = {
@@ -129,7 +129,6 @@ const VIEW_LABELS: Record<AdminView, string> = {
 
 const RECORD_TABS: { id: RecordTab; label: string }[] = [
   { id: "all", label: "All Records" },
-  { id: "pending", label: "Pending" },
 ];
 
 /** Views a volunteer is allowed to navigate to via the sidebar. */
@@ -152,9 +151,9 @@ export type AdminRecord = {
   group: string;
   location: string;
   area: string;
-  status: "Verified" | "Pending";
+  status: "Verified";
   consent: boolean;
-  consentStatus: "Yes" | "No" | "Pending";
+  consentStatus: "Yes" | "No";
   availability: "Available" | "Unavailable";
   donorConsent: boolean | null;
   submitted: string;
@@ -1079,18 +1078,20 @@ export default function Admin() {
   // (same as clicking the Sync button, but automatic and silent). The 15s
   // refetchInterval is the fallback for serverless (Vercel), where SSE only
   // broadcasts to clients connected to the same function instance.
+  // Supabase is always live, so polling here only burns serverless invocations
+  // — a 60s refresh catches any cross-instance snapshot-cache drift.
   const profilesQuery = trpc.hrs.profiles.useQuery(undefined, {
     refetchOnWindowFocus: false,
-    staleTime: Infinity,
-    refetchInterval: 15_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
     retry: 2,
   });
 
-  // Tumkur locations — auto-detects new areas from Google Sheets
+  // Tumkur locations with real-time stats — same rationale as profiles.
   const locationsQuery = trpc.hrs.locations.useQuery(undefined, {
     refetchOnWindowFocus: false,
-    staleTime: Infinity,
-    refetchInterval: 15_000,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
     retry: 2,
   });
 
@@ -1100,6 +1101,11 @@ export default function Admin() {
   const totalDonors = lok?.totalDonors ?? 0;
   const totalAvailable = lok?.totalAvailable ?? 0;
   const newThisSync = lok?.newThisSync ?? [];
+
+  // "Last synced" now reflects actual successful data loads (no auto-sync timer).
+  useEffect(() => {
+    if (profilesQuery.dataUpdatedAt) setLastSyncedAt(new Date(profilesQuery.dataUpdatedAt));
+  }, [profilesQuery.dataUpdatedAt]);
   const outsideTumkur = lok?.outsideTumkur ?? 0;
 
   // Subscribe to /api/sync-events — server pushes a notification on every cache update
@@ -1189,32 +1195,8 @@ export default function Admin() {
   // Stores records snapshot before an optimistic update — used for rollback on server failure.
   const previousRecordsRef = useRef<AdminRecord[] | null>(null);
 
-  const verifyMutation = trpc.hrs.verifyProfile.useMutation({
-    onSuccess: result => {
-      if (result.success) {
-        // Optimistic update was already applied in the click handler.
-        previousRecordsRef.current = null;
-        pendingVerificationRef.current = null;
-      } else {
-        // Server returned an error result — roll back optimistic update.
-        if (previousRecordsRef.current) {
-          setRecords(previousRecordsRef.current);
-          previousRecordsRef.current = null;
-        }
-        pendingVerificationRef.current = null;
-        toast.error(result.error || "Failed to verify profile");
-      }
-    },
-    onError: () => {
-      // Roll back optimistic update on network/failure
-      if (previousRecordsRef.current) {
-        setRecords(previousRecordsRef.current);
-        previousRecordsRef.current = null;
-      }
-      pendingVerificationRef.current = null;
-      toast.error(`Verification failed`);
-    },
-  });
+  // verifyProfile mutation removed — the Pending concept no longer exists;
+  // every profile is created fully verified via the registration form.
 
   const recordDonationMutation = trpc.hrs.recordDonation.useMutation({
     onSuccess: result => {
@@ -1258,6 +1240,9 @@ export default function Admin() {
 
   // Use a ref to hold a stable sync trigger so the manual Sync button doesn't
   // recreate the tRPC mutation object on every render.
+  // NOTE: the Sheets-era auto-sync timer was removed — Supabase data is live
+  // and every timed sync wrote a `directory.sync` audit row (12+ rows in 20s
+  // during testing). The manual button still forces a refresh.
   const triggerSyncRef = useRef<(manual: boolean) => void>(() => {});
   triggerSyncRef.current = (manual: boolean) => {
     if (syncProfilesMutation.isPending) return;
@@ -1267,14 +1252,6 @@ export default function Admin() {
     (manual: boolean) => triggerSyncRef.current(manual),
     []
   );
-
-  // Hard auto-sync timer: call mutation directly every interval
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      triggerSync(true);
-    }, syncIntervalMs);
-    return () => window.clearInterval(timer);
-  }, [syncIntervalMs, triggerSync]);
 
   // Auto-sync is now driven by the SERVER-side poller (googleSheetsApi.ts),
   // controlled from the Settings panel via trpc.hrs.setAutoSync. The server
@@ -1397,7 +1374,6 @@ export default function Admin() {
     syncProfilesMutation.isPending,
   ]);
 
-  const pending = records.filter(record => record.status === "Pending");
   // Newest first for the dashboard lists — the CSV is in sheet order
   // (oldest on top), so without sorting the dashboard shows the oldest
   // additions. Fall back to 0 when the timestamp is missing.
@@ -1406,9 +1382,6 @@ export default function Admin() {
     const t = new Date(record.registeredAt).getTime();
     return Number.isNaN(t) ? 0 : t;
   };
-  const pendingByRecent = [...pending].sort(
-    (a, b) => recordTime(b) - recordTime(a)
-  );
   const verifiedByRecent = records
     .filter(record => record.status === "Verified")
     .sort((a, b) => recordTime(b) - recordTime(a));
@@ -1477,13 +1450,12 @@ export default function Admin() {
         record.name.toLowerCase().includes(searchTerm) ||
         (record.id ?? "").toLowerCase().includes(searchTerm);
       if (!matchesSearch) return false;
-      if (recordTab === "pending" && record.status !== "Pending") return false;
       if (recordTab === "donors" && !record.donorConsent) return false;
       if (recordTab === "available" && record.availability !== "Available")
         return false;
       if (
         recordTab === "unavailable" &&
-        (record.availability !== "Unavailable" || record.status === "Pending")
+        record.availability !== "Unavailable"
       )
         return false;
       if (filterGroup !== "All" && record.group !== filterGroup) return false;
@@ -1537,7 +1509,7 @@ export default function Admin() {
   // (the original definitions live inside the Statistics sub-component block).
   const bloodGroupsTop = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
   const isVerifiedTop = (record: AdminRecord) => record.status === "Verified";
-  const verifiedTop = records.filter(isVerifiedTop);
+  const verifiedTop = records;
   const voluntaryDonorsTop = verifiedTop.filter(
     record => record.donorConsent === true
   );
@@ -1587,14 +1559,10 @@ export default function Admin() {
       onError?.();
       return;
     }
-    const isPending = record.status === "Pending";
-    const hrsId = record.id ?? "PENDING";
+    const hrsId = record.id ?? "";
 
-    // For pending records: require HRS ID (should be assigned by the spreadsheet batch job)
-    if (isPending && !record.id) {
-      toast.error(
-        "This record has no HRS ID. Please run the ID assignment first."
-      );
+    if (!hrsId) {
+      toast.error("This record has no HRS ID and cannot be saved.");
       onError?.();
       return;
     }
@@ -1602,38 +1570,8 @@ export default function Admin() {
     // Save snapshot for potential rollback on server failure
     previousRecordsRef.current = records;
 
-    if (isPending) {
-      // First-time verification: apply optimistic update immediately, then fire mutation.
-      const updated = applyVerifiedRecord(
-        record,
-        hrsId,
-        group,
-        donationConsent
-      );
-      setRecords(current =>
-        current.map(rec => (rec.id === record.id ? updated : rec))
-      );
-      // Update selected separately (outside the setRecords updater to avoid stale closure).
-      setSelected(updated);
-      toast.success("Profile verified successfully!");
-
-      // Capture for onSuccess cleanup (no-op here since we already updated)
-      pendingVerificationRef.current = null;
-      // Fire mutation in background — UI already updated.
-      verifyMutation.mutate({
-        hrsId,
-        bloodGroup: group,
-        donorConsent: donationConsent ? "YES" : "NO",
-      });
-      // Send verification email (non-blocking — fails silently if no email on file)
-      sendVerificationEmailMutation.mutate({
-        hrsId,
-        bloodGroup: group,
-        donorConsent: donationConsent ? "YES" : "NO",
-      });
-      onSuccess?.(hrsId);
-    } else {
-      // Editing an existing record: apply optimistic update immediately, then fire mutation.
+    {
+      // Edit an existing (always-verified) record: optimistic update, then mutation.
       const eligibleNow =
         !record.nextEligibleAt ||
         Date.parse(record.nextEligibleAt) <= Date.now();
@@ -2115,13 +2053,13 @@ export default function Admin() {
                       </strong>
                       <small>Ready for public search</small>
                     </div>
-                    <div className="metric-card warning">
+                    <div className="metric-card">
                       <div className="metric-card-head">
-                        <span>Pending entry</span>
-                        <Clock3 size={17} />
+                        <span>Willing donors</span>
+                        <HeartHandshake size={17} />
                       </div>
-                      <strong>{pending.length}</strong>
-                      <small>Needs your review</small>
+                      <strong>{records.filter(r => r.donorConsent === true).length}</strong>
+                      <small>Consented to be contacted</small>
                     </div>
                     <div className="metric-card">
                       <div className="metric-card-head">
@@ -2154,12 +2092,12 @@ export default function Admin() {
                     <section className="admin-card records-table-card dashboard-record-section">
                       <div className="admin-card-heading">
                         <div>
-                          <h2>Needs your attention</h2>
-                          <p>Records waiting for blood group entry</p>
+                          <h2>Recent registrations</h2>
+                          <p>Newest members of the donor network</p>
                         </div>
                         <button
                           className="text-button"
-                          onClick={() => goToView("records", "pending")}
+                          onClick={() => goToView("records", "all")}
                         >
                           View all <ArrowRight size={15} />
                         </button>
@@ -2170,7 +2108,7 @@ export default function Admin() {
                         <span>Location</span>
                         <span>Status</span>
                       </div>
-                      {pendingByRecent.slice(0, 4).map(record => (
+                      {verifiedByRecent.slice(0, 4).map(record => (
                         <RecordRow
                           key={record.id ?? record.name}
                           record={record}
@@ -2178,9 +2116,9 @@ export default function Admin() {
                           showSubmitted={false}
                         />
                       ))}
-                      {pending.length === 0 && (
+                      {verifiedByRecent.length === 0 && (
                         <div className="small-empty">
-                          <Check size={17} /> All records are up to date
+                          <Check size={17} /> No registrations yet
                         </div>
                       )}
                     </section>
@@ -2564,7 +2502,6 @@ export default function Admin() {
               view={activeView}
               records={records}
               donors={donors}
-              pending={pending}
               locationRows={locationRows}
               lastSyncedAt={lastSyncedAt}
               bloodGroups={bloodGroupsTop}
@@ -2813,7 +2750,6 @@ function WorkspaceView({
   view,
   records,
   donors,
-  pending,
   locationRows,
   lastSyncedAt,
   bloodGroups,
@@ -2840,7 +2776,6 @@ function WorkspaceView({
   view: AdminView;
   records: AdminRecord[];
   donors: AdminRecord[];
-  pending: AdminRecord[];
   locationRows: { location: string; areas: string[]; count: number }[];
   lastSyncedAt: Date | null;
   bloodGroups: string[];
@@ -2964,40 +2899,7 @@ function WorkspaceView({
     }
   }, [exportCsvQuery.data]);
 
-  // ── Reset all profiles (destructive, password-gated) ──────────────
-  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
-  const [resetPassword, setResetPassword] = useState("");
-  const resetProfilesMutation = trpc.hrs.resetProfiles.useMutation({
-    onSuccess: result => {
-      // `result` is the `{success, data?, error?}` wrapper; `data` holds the Apps Script payload.
-      if (result.success) {
-        const count = (result as { data?: { count?: number } }).data?.count;
-        toast.success(
-          count != null
-            ? `${count} profile(s) erased — new registrations start from HRS-0001`
-            : "All profiles erased — new registrations start from HRS-0001"
-        );
-        setResetConfirmOpen(false);
-        setResetPassword("");
-        // Refresh the cached read-path data so the new HRS IDs show up right away.
-        onSync();
-        setTimeout(() => onSync(), 12000); // second pass in case the first raced the write
-      } else {
-        toast.error(
-          result.error || "Reset failed — check the Apps Script deployment."
-        );
-      }
-    },
-    onError: err => toast.error(err.message || "Could not reset profiles."),
-  });
-
-  const handleResetProfiles = () => {
-    if (!resetPassword.trim()) {
-      toast.error("Enter the reset password to continue.");
-      return;
-    }
-    resetProfilesMutation.mutate({ password: resetPassword.trim() });
-  };
+  // resetProfiles (destructive bulk reset) removed with the Pending concept.
 
   if (view === "donations") {
     const DONATIONS_PER_PAGE = 30;
@@ -3136,7 +3038,6 @@ function WorkspaceView({
           records={records}
           donors={donors}
           availableDonors={availableDonors}
-          pending={pending}
           lastSyncedAt={lastSyncedAt}
           bloodGroups={bloodGroups}
           isSyncing={isSyncing}
@@ -3494,76 +3395,6 @@ function WorkspaceView({
               </div>
             )}
           </section>
-
-          <section className="admin-card sync-export-card sync-danger-card">
-            <h3 className="sync-danger-title">
-              <Trash2 size={16} />
-              Reset All Profiles
-            </h3>
-            <p className="sync-card-desc">
-              Erase every profile from the sheet. New registrations will start
-              from HRS-0001. This is permanent and irreversible.
-            </p>
-            {!resetConfirmOpen ? (
-              <button
-                className="sync-action-btn sync-danger-btn"
-                type="button"
-                onClick={() => setResetConfirmOpen(true)}
-              >
-                <Trash2 size={14} />
-                Reset All Profiles…
-              </button>
-            ) : (
-              <div className="sync-danger-confirm">
-                <label
-                  className="sync-danger-label"
-                  htmlFor="reset-password-input"
-                >
-                  Enter password to confirm
-                </label>
-                <input
-                  id="reset-password-input"
-                  type="password"
-                  className="sync-danger-input"
-                  value={resetPassword}
-                  onChange={e => setResetPassword(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === "Enter") handleResetProfiles();
-                  }}
-                  autoFocus
-                  placeholder="Reset password"
-                />
-                <div className="sync-danger-actions">
-                  <button
-                    className="sync-action-btn"
-                    type="button"
-                    onClick={() => {
-                      setResetConfirmOpen(false);
-                      setResetPassword("");
-                    }}
-                    disabled={resetProfilesMutation.isPending}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="sync-action-btn sync-danger-btn"
-                    type="button"
-                    onClick={handleResetProfiles}
-                    disabled={resetProfilesMutation.isPending}
-                  >
-                    {resetProfilesMutation.isPending ? (
-                      <Loader2 size={14} className="syncing-icon" />
-                    ) : (
-                      <Trash2 size={14} />
-                    )}
-                    {resetProfilesMutation.isPending
-                      ? "Resetting…"
-                      : "Erase All Profiles"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </section>
         </div>
       </AdminSection>
     );
@@ -3659,7 +3490,6 @@ function Statistics({ records }: { records: AdminRecord[] }) {
         record.donorConsent !== null
     );
   const verified = records.filter(isVerified);
-  const pending = records.filter(record => !isVerified(record));
   // Storage consent is mandatory at registration; donation consent is recorded only on verification.
   const voluntaryDonors = verified.filter(
     record => record.donorConsent === true
@@ -3679,7 +3509,6 @@ function Statistics({ records }: { records: AdminRecord[] }) {
     value: verified.filter(record => record.group === group).length,
   }));
   const recordedGroups = verified.length;
-  const pendingProfiles = pending.length;
   const donorParticipation = records.length
     ? Math.round((voluntaryDonors.length / records.length) * 100)
     : 0;
@@ -3912,9 +3741,9 @@ function Statistics({ records }: { records: AdminRecord[] }) {
           </small>
         </div>
         <div className="statistics-kpi">
-          <span>Pending Verification</span>
-          <strong>{pendingProfiles}</strong>
-          <small>Awaiting blood group and donor consent</small>
+          <span>Not Participating</span>
+          <strong>{notParticipating.length}</strong>
+          <small>Declined donation consent</small>
         </div>
         <div className="statistics-kpi">
           <span>Voluntary Donors</span>
@@ -3948,11 +3777,6 @@ function Statistics({ records }: { records: AdminRecord[] }) {
                 label: "Verified Profiles",
                 value: verified.length,
                 tone: "verified",
-              },
-              {
-                label: "Pending Verification",
-                value: pendingProfiles,
-                tone: "pending",
               },
             ]}
             total={records.length}
@@ -4148,8 +3972,8 @@ function Statistics({ records }: { records: AdminRecord[] }) {
               {recordedGroups} / {records.length}
             </span>
             <span>
-              <b>Not Yet Recorded</b>
-              {pendingProfiles}
+              <b>Registered members</b>
+              {records.length}
             </span>
           </div>
         </section>
@@ -4576,8 +4400,8 @@ function Statistics({ records }: { records: AdminRecord[] }) {
               <strong>{verified.length}</strong>
             </span>
             <span>
-              <b>Pending Verification</b>
-              <strong>{pendingProfiles}</strong>
+              <b>Not Participating</b>
+              <strong>{notParticipating.length}</strong>
             </span>
             <span>
               <b>Active Voluntary Donors</b>
@@ -5185,9 +5009,10 @@ function RecordModal({
     );
   }, [origin]);
 
-  const isPending = record.status === "Pending";
+  // Pending concept removed — every record arrives verified; the modal opens in view mode.
+  const isPending = false as boolean;
   const [mode, setMode] = useState<"view" | "edit">(
-    isVolunteer ? "view" : isPending ? "edit" : "view"
+    isVolunteer ? "view" : "view"
   );
   const [saveState, setSaveState] = useState<"idle" | "success" | "error">(
     "idle"
@@ -5344,7 +5169,7 @@ function RecordModal({
                 <div className="profile-blood-badge">
                   {record.group === "—" ? "—" : record.group}
                   <small>
-                    {record.group === "—" ? "Pending" : "Blood group"}
+                    {record.group === "—" ? "Blood group" : "Blood group"}
                   </small>
                 </div>
               </div>

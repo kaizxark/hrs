@@ -47,7 +47,6 @@ export interface ProfilesResponse {
 export interface Statistics {
   totalProfiles: number;
   verifiedProfiles: number;
-  pendingProfiles: number;
   donorConsentYes: number;
   donorConsentNo: number;
   bloodGroupCounts: Record<string, number>;
@@ -56,7 +55,6 @@ export interface Statistics {
     available: number;
     temporarilyUnavailable: number;
     notParticipating: number;
-    pending: number;
   };
   donationCounts: {
     total: number;
@@ -145,13 +143,6 @@ export function useLocations() {
   });
 }
 
-// Verify profile mutation
-export function useVerifyProfile() {
-  return trpc.hrs.verifyProfile.useMutation({
-    retry: 1,
-  });
-}
-
 // Record donation mutation
 export function useRecordDonation() {
   return trpc.hrs.recordDonation.useMutation({
@@ -178,9 +169,9 @@ export function convertApiProfileToAdminRecord(profile: Profile): {
   group: string;
   location: string;
   area: string;
-  status: "Verified" | "Pending";
+  status: "Verified";
   consent: boolean;
-  consentStatus: "Yes" | "No" | "Pending";
+  consentStatus: "Yes" | "No";
   availability: "Available" | "Unavailable";
   donorConsent: boolean | null;
   submitted: string;
@@ -219,23 +210,17 @@ export function convertApiProfileToAdminRecord(profile: Profile): {
     ? 0
     : new Date().getFullYear() - birthDate.getFullYear();
 
-  // Determine status
+  // Determine status — every profile is verified at creation now
   const rawStatus = verificationStatus.toUpperCase();
-  const isPending =
-    rawStatus.includes("PENDING") || rawStatus.includes("VERIFICATION");
 
   // Consent status
   const consentStatus =
     storageConsent.toUpperCase() === "YES"
       ? "Yes"
-      : storageConsent.toUpperCase() === "NO"
-        ? "No"
-        : "Pending";
+      : "No";
 
   // Donor consent
-  const donorConsent = isPending
-    ? null
-    : donationConsent.toUpperCase() === "YES";
+  const donorConsent = donationConsent.toUpperCase() === "YES";
 
   // Parse dates
   const parseSheetDate = (value: string | undefined) => {
@@ -312,7 +297,7 @@ export function convertApiProfileToAdminRecord(profile: Profile): {
     group: bloodGroup,
     location: city,
     area,
-    status: isPending ? "Pending" : "Verified",
+    status: "Verified",
     consent: consentStatus === "Yes",
     consentStatus,
     availability,

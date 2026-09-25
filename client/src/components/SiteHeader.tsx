@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { House, Info, LogIn, Menu, X } from "lucide-react";
+import { House, Info, LogIn, Menu, UserRoundPlus, X } from "lucide-react";
 
 function LogoMark() {
   return (
@@ -24,6 +24,7 @@ export default function SiteHeader() {
   const [location] = useLocation();
   const isAbout = location === "/about";
   const isHome = location === "/";
+  const isRegister = location === "/register";
 
   if (location === "/admin") return null;
 
@@ -60,6 +61,13 @@ export default function SiteHeader() {
             onClick={closeMenu}
           >
             <Info size={15} /> About
+          </Link>
+          <Link
+            href="/register"
+            className={`nav-icon-link nav-register${isRegister ? " active" : ""}`}
+            onClick={closeMenu}
+          >
+            <UserRoundPlus size={15} /> Register
           </Link>
           <span className="nav-divider" aria-hidden="true" />
           <Link href="/admin" className="admin-link" onClick={closeMenu}>

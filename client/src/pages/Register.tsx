@@ -1,0 +1,590 @@
+import { useMemo, useState } from "react";
+import { Link } from "wouter";
+import { trpc } from "@/lib/trpc";
+import {
+  Droplets,
+  Check,
+  ChevronDown,
+  ArrowRight,
+  ArrowLeft,
+  HeartHandshake,
+  ShieldCheck,
+  UserRound,
+  PartyPopper,
+  Copy,
+  Home,
+  AlertCircle,
+} from "lucide-react";
+
+/* ------------------------------------------------------------------ */
+/* Constants                                                           */
+/* ------------------------------------------------------------------ */
+
+const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const;
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+] as const;
+
+const AREAS = [
+  "Tumkur City", "Ashok Nagar", "SIT", "Kyathsandra",
+  "Gulur", "Gubbi Gate", "SS Puram", "Other",
+] as const;
+
+const CITIES = ["Tumkur", "Bangalore", "Hassan", "Other"] as const;
+
+const GENDERS = ["Male", "Female", "Other"] as const;
+
+/** Current year back to 1940, newest first (module-level, no hooks). */
+const YEARS: number[] = (() => {
+  const years: number[] = [];
+  for (let y = new Date().getFullYear(); y >= 1940; y--) years.push(y);
+  return years;
+})();
+
+/** Days in the selected month (leap-year aware). */
+function daysInMonth(month: number, year: number): number {
+  if (month === 0) return 31;
+  return new Date(year, month + 1, 0).getDate();
+}
+
+/* ------------------------------------------------------------------ */
+/* Small building blocks                                               */
+/* ------------------------------------------------------------------ */
+
+function StepBadge({ n, active, done }: { n: number; active: boolean; done: boolean }) {
+  return (
+    <span
+      className={`reg-step-badge${active ? " active" : ""}${done ? " done" : ""}`}
+      aria-hidden
+    >
+      {done ? <Check size={13} strokeWidth={3} /> : n}
+    </span>
+  );
+}
+
+function Field({
+  label,
+  required,
+  hint,
+  error,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  error?: string | null;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="reg-field">
+      <span className="reg-field-label">
+        {label}
+        {required && <em>*</em>}
+      </span>
+      {children}
+      {hint && !error && <span className="reg-field-hint">{hint}</span>}
+      {error && <span className="reg-field-error">{error}</span>}
+    </label>
+  );
+}
+
+function SelectBox({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: readonly string[] | number[];
+  placeholder: string;
+}) {
+  return (
+    <span className="reg-select-wrap">
+      <select
+        className={`reg-select${value ? "" : " placeholder"}`}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+      >
+        <option value="" disabled>
+          {placeholder}
+        </option>
+        {options.map(o => (
+          <option key={String(o)} value={String(o)}>
+            {String(o)}
+          </option>
+        ))}
+      </select>
+      <ChevronDown size={15} className="reg-select-caret" aria-hidden />
+    </span>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Page                                                                */
+/* ------------------------------------------------------------------ */
+
+type FormData = {
+  fullName: string;
+  dobDay: string;
+  dobMonth: string;
+  dobYear: string;
+  gender: string;
+  phone: string;
+  email: string;
+  city: string;
+  area: string;
+  bloodGroup: string;
+  donorConsent: boolean | null;
+  storageConsent: boolean;
+};
+
+const INITIAL: FormData = {
+  fullName: "",
+  dobDay: "",
+  dobMonth: "",
+  dobYear: "",
+  gender: "",
+  phone: "",
+  email: "",
+  city: "",
+  area: "",
+  bloodGroup: "",
+  donorConsent: null,
+  storageConsent: false,
+};
+
+export default function Register() {
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState<FormData>(INITIAL);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submittedHrsId, setSubmittedHrsId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const registerMutation = trpc.hrs.registerDonor.useMutation({
+    onSuccess: result => {
+      if (result.success) {
+        setSubmittedHrsId(result.hrsId);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        setErrors({ form: result.error || "Registration failed. Please try again." });
+      }
+    },
+    onError: err =>
+      setErrors({ form: err.message || "Registration failed. Please try again." }),
+  });
+
+  const set = <K extends keyof FormData>(key: K, value: FormData[K]) => {
+    setForm(prev => ({ ...prev, [key]: value }));
+    setErrors(prev => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const dobIso = useMemo(() => {
+    if (!form.dobDay || !form.dobMonth || !form.dobYear) return "";
+    const y = Number(form.dobYear);
+    const m = Number(form.dobMonth);
+    const d = Number(form.dobDay);
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }, [form.dobDay, form.dobMonth, form.dobYear]);
+
+  const age = useMemo(() => {
+    if (!dobIso) return null;
+    const birth = new Date(dobIso + "T00:00:00");
+    if (Number.isNaN(birth.getTime())) return null;
+    const now = new Date();
+    let a = now.getFullYear() - birth.getFullYear();
+    const monthDiff = now.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) a--;
+    return a;
+  }, [dobIso]);
+
+  const dayOptions = useMemo(() => {
+    const month = form.dobMonth ? Number(form.dobMonth) : null;
+    const year = form.dobYear ? Number(form.dobYear) : new Date().getFullYear();
+    const max = month ? daysInMonth(month - 1, year) : 31;
+    return Array.from({ length: max }, (_, i) => i + 1);
+  }, [form.dobMonth, form.dobYear]);
+
+  /* ---------------- validation ---------------- */
+
+  function validateStep1(): boolean {
+    const e: Record<string, string> = {};
+    if (form.fullName.trim().length < 2) e.fullName = "Please enter the full name.";
+    if (!dobIso) e.dob = "Select the full date of birth.";
+    else if ((age ?? 0) < 17) e.dob = "Donors must be at least 17 years old.";
+    else if ((age ?? 0) > 100) e.dob = "Please check the year selected.";
+    if (!form.gender) e.gender = "Select a gender.";
+    const digits = form.phone.replace(/\D/g, "");
+    if (digits.length < 10 || digits.length > 12)
+      e.phone = "Enter a valid mobile number (10–12 digits).";
+    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
+      e.email = "Enter a valid email, or leave it empty.";
+    if (!form.city) e.city = "Select a city.";
+    if (!form.area) e.area = "Select an area.";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  function validateStep2(): boolean {
+    const e: Record<string, string> = {};
+    if (!form.bloodGroup) e.bloodGroup = "Select the blood group.";
+    if (form.donorConsent === null)
+      e.donorConsent = "Choose Yes or No — both are okay.";
+    if (!form.storageConsent)
+      e.storageConsent = "Storage consent is required to save the record.";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  function next() {
+    if (step === 1 && validateStep1()) setStep(2);
+  }
+
+  function submit() {
+    if (!validateStep2()) return;
+    registerMutation.mutate({
+      fullName: form.fullName.trim(),
+      dateOfBirth: dobIso || undefined,
+      gender: form.gender,
+      phoneNumber: form.phone.replace(/[^\d+]/g, ""),
+      email: form.email.trim() || undefined,
+      city: form.city,
+      area: form.area,
+      bloodGroup: form.bloodGroup,
+      donorConsent: form.donorConsent ? "YES" : "NO",
+      dataStorageConsent: "YES",
+    });
+  }
+
+  function copyId() {
+    if (!submittedHrsId) return;
+    navigator.clipboard?.writeText(submittedHrsId).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => {}
+    );
+  }
+
+  /* ---------------- success screen ---------------- */
+
+  if (submittedHrsId) {
+    return (
+      <div className="register-page">
+        <div className="reg-card reg-success">
+          <div className="reg-success-icon">
+            <PartyPopper size={30} />
+          </div>
+          <h1>Welcome to the HRS donor network!</h1>
+          <p className="reg-success-sub">
+            Your profile is <strong>verified and active</strong>. Keep this ID —
+            it identifies you at every future camp or donation.
+          </p>
+          <div className="reg-id-box">
+            <span className="reg-id-label">Your HRS Donor ID</span>
+            <span className="reg-id-value">{submittedHrsId}</span>
+            <button type="button" className="reg-id-copy" onClick={copyId}>
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+              {copied ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <div className="reg-success-actions">
+            <Link href="/" className="reg-btn reg-btn-primary">
+              <Home size={16} /> Back to home
+            </Link>
+            <button
+              type="button"
+              className="reg-btn reg-btn-ghost"
+              onClick={() => {
+                setForm(INITIAL);
+                setSubmittedHrsId(null);
+                setStep(1);
+              }}
+            >
+              Register another person
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ---------------- form ---------------- */
+
+  return (
+    <div className="register-page">
+      <header className="reg-head">
+        <span className="reg-kicker">HRS Blood Donor Portal</span>
+        <h1>Join the donor network</h1>
+        <p>
+          One short form — your details, your blood group, and your consents.
+          Your profile is saved <strong>verified</strong> the moment you submit.
+        </p>
+      </header>
+
+      <div className="reg-card">
+        <div className="reg-steps" role="tablist" aria-label="Registration steps">
+          <StepBadge n={1} active={step === 1} done={step > 1} />
+          <span className="reg-step-label">Personal details</span>
+          <span className="reg-step-line" />
+          <StepBadge n={2} active={step === 2} done={false} />
+          <span className="reg-step-label">Blood group & consent</span>
+        </div>
+
+        {errors.form && (
+          <div className="reg-form-error" role="alert">
+            <AlertCircle size={16} /> {errors.form}
+          </div>
+        )}
+
+        {step === 1 && (
+          <section className="reg-step-panel">
+            <div className="reg-grid-2">
+              <Field label="Full name" required error={errors.fullName}>
+                <input
+                  className="reg-input"
+                  type="text"
+                  value={form.fullName}
+                  onChange={e => set("fullName", e.target.value)}
+                  placeholder="As printed on your ID"
+                  autoComplete="name"
+                />
+              </Field>
+              <Field
+                label="Mobile number"
+                required
+                error={errors.phone}
+                hint="Used only to reach you if your group is urgently needed."
+              >
+                <input
+                  className="reg-input"
+                  type="tel"
+                  inputMode="numeric"
+                  value={form.phone}
+                  onChange={e => set("phone", e.target.value)}
+                  placeholder="10-digit mobile number"
+                  autoComplete="tel"
+                />
+              </Field>
+            </div>
+
+            <div className="reg-dob-block">
+              <span className="reg-field-label">
+                Date of birth <em>*</em>
+              </span>
+              <div className="reg-dob-row">
+                <SelectBox
+                  value={form.dobDay}
+                  onChange={v => set("dobDay", v)}
+                  options={dayOptions}
+                  placeholder="Day"
+                />
+                <SelectBox
+                  value={form.dobMonth}
+                  onChange={v => set("dobMonth", v)}
+                  options={MONTHS as unknown as string[]}
+                  placeholder="Month"
+                />
+                <SelectBox
+                  value={form.dobYear}
+                  onChange={v => set("dobYear", v)}
+                  options={YEARS}
+                  placeholder="Year"
+                />
+              </div>
+              {errors.dob && <span className="reg-field-error">{errors.dob}</span>}
+              {age !== null && !errors.dob && (
+                <span className="reg-dob-age">
+                  <UserRound size={13} /> Age {age} years
+                </span>
+              )}
+            </div>
+
+            <div className="reg-grid-3">
+              <Field label="Gender" required error={errors.gender}>
+                <SelectBox
+                  value={form.gender}
+                  onChange={v => set("gender", v)}
+                  options={GENDERS}
+                  placeholder="Select"
+                />
+              </Field>
+              <Field label="City" required error={errors.city}>
+                <SelectBox
+                  value={form.city}
+                  onChange={v => set("city", v)}
+                  options={CITIES}
+                  placeholder="Select"
+                />
+              </Field>
+              <Field label="Area / locality" required error={errors.area}>
+                <SelectBox
+                  value={form.area}
+                  onChange={v => set("area", v)}
+                  options={AREAS}
+                  placeholder="Select"
+                />
+              </Field>
+            </div>
+
+            <Field
+              label="Email"
+              hint="Optional — for updates about camps and eligibility."
+              error={errors.email}
+            >
+              <input
+                className="reg-input"
+                type="email"
+                value={form.email}
+                onChange={e => set("email", e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+              />
+            </Field>
+
+            <div className="reg-actions">
+              <span />
+              <button type="button" className="reg-btn reg-btn-primary" onClick={next}>
+                Continue <ArrowRight size={16} />
+              </button>
+            </div>
+          </section>
+        )}
+
+        {step === 2 && (
+          <section className="reg-step-panel">
+            <div className="reg-blood-block">
+              <span className="reg-field-label">
+                <Droplets size={14} /> Blood group <em>*</em>
+              </span>
+              <div className="reg-blood-grid">
+                {BLOOD_GROUPS.map(bg => (
+                  <button
+                    type="button"
+                    key={bg}
+                    className={`reg-blood-tile${form.bloodGroup === bg ? " selected" : ""}`}
+                    onClick={() => set("bloodGroup", bg)}
+                  >
+                    {bg}
+                  </button>
+                ))}
+              </div>
+              {errors.bloodGroup && (
+                <span className="reg-field-error">{errors.bloodGroup}</span>
+              )}
+            </div>
+
+            <div className="reg-consent-block">
+              <span className="reg-field-label">
+                <HeartHandshake size={14} /> Willing to donate blood? <em>*</em>
+              </span>
+              <p className="reg-consent-sub">
+                Saying <strong>Yes</strong> simply means HRS may contact you when
+                your blood group is urgently needed. You can change this anytime.
+              </p>
+              <div className="reg-consent-row">
+                <button
+                  type="button"
+                  className={`reg-consent-btn yes${form.donorConsent === true ? " selected" : ""}`}
+                  onClick={() => set("donorConsent", true)}
+                >
+                  <Check size={18} /> Yes, I'd like to help
+                </button>
+                <button
+                  type="button"
+                  className={`reg-consent-btn no${form.donorConsent === false ? " selected" : ""}`}
+                  onClick={() => set("donorConsent", false)}
+                >
+                  Not now
+                </button>
+              </div>
+              {errors.donorConsent && (
+                <span className="reg-field-error">{errors.donorConsent}</span>
+              )}
+            </div>
+
+            <div className="reg-storage-block">
+              <button
+                type="button"
+                className={`reg-storage-toggle${form.storageConsent ? " active" : ""}`}
+                role="switch"
+                aria-checked={form.storageConsent}
+                onClick={() => set("storageConsent", !form.storageConsent)}
+              >
+                <span className="reg-toggle-track">
+                  <i />
+                </span>
+                <span className="reg-storage-text">
+                  <ShieldCheck size={15} />
+                  <span>
+                    <strong>I consent to secure data storage.</strong>
+                    <small>
+                      Required. Your details are stored only in the HRS donor
+                      registry and used for donor coordination.
+                    </small>
+                  </span>
+                </span>
+              </button>
+              {errors.storageConsent && (
+                <span className="reg-field-error">{errors.storageConsent}</span>
+              )}
+            </div>
+
+            <div className="reg-review">
+              <span className="reg-review-title">Review</span>
+              <div className="reg-review-grid">
+                <span>{form.fullName || "—"}</span>
+                <span>{dobIso ? `${dobIso} (${age} yrs)` : "—"}</span>
+                <span>{form.gender || "—"}</span>
+                <span>{form.phone || "—"}</span>
+                <span>
+                  {form.area ? `${form.area}, ${form.city}` : "—"}
+                </span>
+                <span>{form.bloodGroup || "—"}</span>
+              </div>
+            </div>
+
+            <div className="reg-actions">
+              <button
+                type="button"
+                className="reg-btn reg-btn-ghost"
+                onClick={() => setStep(1)}
+              >
+                <ArrowLeft size={16} /> Back
+              </button>
+              <button
+                type="button"
+                className="reg-btn reg-btn-primary"
+                onClick={submit}
+                disabled={registerMutation.isPending}
+              >
+                {registerMutation.isPending ? (
+                  <>
+                    <span className="reg-spinner" /> Submitting…
+                  </>
+                ) : (
+                  <>
+                    Complete registration <Check size={16} />
+                  </>
+                )}
+              </button>
+            </div>
+          </section>
+        )}
+      </div>
+
+      <footer className="reg-foot">
+        <Link href="/">← Back to HRS portal</Link>
+        <span>Questions? Ask any HRS volunteer at the camp.</span>
+      </footer>
+    </div>
+  );
+}

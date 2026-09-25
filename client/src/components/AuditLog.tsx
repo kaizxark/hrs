@@ -11,7 +11,7 @@ import {
   Loader2,
   Search,
   Trash2,
-  UserCheck,
+  UserPlus,
   X,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -24,9 +24,10 @@ const PAGE_SIZE = 50;
 
 const ACTION_FILTERS: { value: string; label: string }[] = [
   { value: "all", label: "All actions" },
-  { value: "profile.verify", label: "Verify" },
-  { value: "profile.update", label: "Update" },
-  { value: "profile.donation", label: "Record donation" },
+  { value: "profile.add_person", label: "Registrations" },
+  { value: "profile.update", label: "Profile edits" },
+  { value: "profile.donation", label: "Donations" },
+  { value: "profile.delete", label: "Deletions" },
 ];
 
 /** Elegant, muted palette — each action gets a sophisticated tone. */
@@ -34,10 +35,15 @@ const ACTION_META: Record<
   string,
   { icon: React.ReactNode; color: string; bg: string }
 > = {
-  "profile.verify": {
-    icon: <UserCheck size={15} />,
+  "profile.add_person": {
+    icon: <UserPlus size={15} />,
     color: "#2d6a4f",
     bg: "#d8f3dc",
+  },
+  "profile.delete": {
+    icon: <Trash2 size={15} />,
+    color: "#8c2f39",
+    bg: "#f8d7da",
   },
   "profile.update": {
     icon: <FileText size={15} />,

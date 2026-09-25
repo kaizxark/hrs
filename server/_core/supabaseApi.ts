@@ -114,17 +114,15 @@ export interface PublicProfile {
 export interface Statistics {
   totalProfiles: number;
   verifiedProfiles: number;
-  pendingProfiles: number;
+  pendingProfiles?: number;
   donorConsentYes: number;
   donorConsentNo: number;
   bloodGroupCounts: Record<string, number>;
   cityCounts: Record<string, number>;
-  availabilityCounts: {
-    available: number;
-    temporarilyUnavailable: number;
-    notParticipating: number;
-    pending: number;
-  };
+  availabilityCounts: {      available: number;
+      temporarilyUnavailable: number;
+      notParticipating: number;
+    };
   donationCounts: {
     total: number;
     average: number;
@@ -153,11 +151,9 @@ function eqCI(value: unknown, expected: string): boolean {
   return String(value ?? "").trim().toUpperCase() === expected;
 }
 
-/** A record counts as verified only once it has a real blood group recorded. */
+/** All profiles are verified at creation — the Pending concept is gone. */
 function isVerifiedRecord(p: Profile): boolean {
-  if (!eqCI(p["Verification Status"], "VERIFIED")) return false;
-  const bg = String(p["Blood Group"] ?? "").trim();
-  return bg !== "" && bg !== "—";
+  return eqCI(p["Verification Status"], "VERIFIED");
 }
 
 /**
@@ -218,6 +214,69 @@ function resolveColumn(key: string): string | undefined {
   return undefined;
 }
 
+// ------------------------------------------------------------------------ //
+// Profiles snapshot cache                                                   //
+//                                                                            //
+// The admin dashboard (profiles + statistics + locations) and several        //
+// public pages each pull the full profiles table. On serverless every call   //
+// previously paid a full-table round-trip (~180 KB at the current size) per  //
+// request. This cache shares ONE fetch across all readers for a short TTL,   //
+// single-flight so concurrent requests await the same promise, and is        //
+// invalidated by every profile write so mutations are never served stale.    //
+// ------------------------------------------------------------------------ //
+
+const SNAPSHOT_TTL_MS = 30_000;
+
+let snapshotData: Profile[] | null = null;
+let snapshotAt = 0;
+let snapshotPromise: Promise<Profile[]> | null = null;
+
+async function fetchProfilesSnapshot(): Promise<Profile[]> {
+  const { data, error } = await supabase.from("profiles").select("*");
+  if (error) throw error;
+  const rows = normalizeRows(data);
+  snapshotData = rows;
+  snapshotAt = Date.now();
+  return rows;
+}
+
+/**
+ * Get a near-realtime snapshot of all profiles. Cheap when warm: repeated
+ * calls within the TTL reuse the same array (treat it as read-only).
+ */
+async function getProfilesSnapshot(): Promise<Profile[]> {
+  if (snapshotData && Date.now() - snapshotAt < SNAPSHOT_TTL_MS) {
+    return snapshotData;
+  }
+  if (!snapshotPromise) {
+    snapshotPromise = fetchProfilesSnapshot().finally(() => {
+      snapshotPromise = null;
+    });
+  }
+  return snapshotPromise;
+}
+
+/** Drop the cached snapshot so the next read re-fetches. Called after writes. */
+function invalidateProfilesSnapshot(): void {
+  snapshotData = null;
+  snapshotAt = 0;
+}
+
+/**
+ * Map<HRS ID, Full Name> for resolving audit-log targets, built from the
+ * shared snapshot (no extra table fetch of its own).
+ */
+export async function getProfileNameLookup(): Promise<Map<string, string>> {
+  const profiles = await getProfilesSnapshot();
+  const map = new Map<string, string>();
+  for (const p of profiles) {
+    const id = (p["HRS ID"] || "").trim();
+    const name = (p["Full Name"] || "").trim();
+    if (id && name) map.set(id, name);
+  }
+  return map;
+}
+
 // ========================================================================== //
 // Profile Operations
 // ========================================================================== //
@@ -228,10 +287,8 @@ function resolveColumn(key: string): string | undefined {
  */
 export async function getProfiles(): Promise<ApiResponse<Profile[]>> {
   try {
-    const { data, error } = await supabase.from('profiles').select('*');
-
-    if (error) throw error;
-    return { success: true, data: normalizeRows(data) };
+    const profiles = await getProfilesSnapshot();
+    return { success: true, data: profiles };
   } catch (error) {
     console.error("[Supabase] Failed to fetch profiles:", error);
     return { success: false, error: "Failed to fetch profiles" };
@@ -356,22 +413,16 @@ export async function getProfilesByAvailabilityStatus(status: string): Promise<A
 
 /**
  * Get statistics from profiles table
- * Replaces getStatistics() from googleSheetsApi
+ * Pending concept removed — every profile is created verified, so this
  */
 export async function getStatistics(): Promise<ApiResponse<Statistics>> {
   try {
-    const { data, error } = await supabase.from('profiles').select('*');
-
-    if (error) throw error;
-    const profiles = normalizeRows(data);
+    const profiles = await getProfilesSnapshot();
 
     // Calculate statistics (all status comparisons are case-insensitive — the
     // stored values are UPPERCASE).
     const totalProfiles = profiles.length;
     const verifiedProfiles = profiles.filter(isVerifiedRecord).length;
-    // Anything without a verification + blood group is still awaiting review —
-    // this matches the "Pending" status the admin panel derives per record.
-    const pendingProfiles = totalProfiles - verifiedProfiles;
     const donorConsentYes = profiles.filter(p => eqCI(p["Donor Consent"], "YES")).length;
     const donorConsentNo = profiles.filter(p => eqCI(p["Donor Consent"], "NO")).length;
 
@@ -394,7 +445,6 @@ export async function getStatistics(): Promise<ApiResponse<Statistics>> {
       available: profiles.filter(p => eqCI(p["Availability Status"], "AVAILABLE")).length,
       temporarilyUnavailable: profiles.filter(p => eqCI(p["Availability Status"], "TEMPORARILY UNAVAILABLE")).length,
       notParticipating: profiles.filter(p => eqCI(p["Availability Status"], "NOT PARTICIPATING")).length,
-      pending: profiles.filter(p => eqCI(p["Availability Status"], "PENDING")).length,
     };
 
     // Donation counts
@@ -413,7 +463,6 @@ export async function getStatistics(): Promise<ApiResponse<Statistics>> {
       data: {
         totalProfiles,
         verifiedProfiles,
-        pendingProfiles,
         donorConsentYes,
         donorConsentNo,
         bloodGroupCounts,
@@ -493,10 +542,7 @@ export interface LocationsResponse {
  */
 export async function getLocations(): Promise<ApiResponse<LocationsResponse>> {
   try {
-    const { data, error } = await supabase.from('profiles').select('*');
-
-    if (error) throw error;
-    const profiles = normalizeRows(data);
+    const profiles = await getProfilesSnapshot();
 
     const areaMap: Record<string, {
       total: number;
@@ -593,46 +639,6 @@ export async function getLocations(): Promise<ApiResponse<LocationsResponse>> {
 }
 
 /**
- * Verify a profile (mark as verified)
- * Replaces verifyProfile() from googleSheetsApi
- */
-export async function verifyProfile(
-  hrsId: string,
-  extras?: { bloodGroup?: string; donorConsent?: string }
-): Promise<ApiResponse<{ success: boolean }>> {
-  try {
-    const update: Record<string, unknown> = {
-      // Stored values are UPPERCASE — keep the table's convention so the
-      // case-insensitive reads and public directory match this record.
-      "Verification Status": "VERIFIED",
-      "Verification Time": new Date().toISOString(),
-    };
-    // The verify dialog collects the blood group and donor consent; persist
-    // them here (previously the server accepted them and then ignored them).
-    if (extras?.bloodGroup) update["Blood Group"] = extras.bloodGroup;
-    if (extras?.donorConsent) {
-      update["Donor Consent"] = extras.donorConsent;
-      update["Availability Status"] =
-        String(extras.donorConsent).toUpperCase() === "YES"
-          ? "AVAILABLE"
-          : "NOT PARTICIPATING";
-    }
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(update)
-      .eq('HRS ID', hrsId)
-      .select();
-
-    if (error) throw error;
-    return { success: true, data: { success: true } };
-  } catch (error) {
-    console.error("[Supabase] Failed to verify profile:", error);
-    return { success: false, error: "Failed to verify profile" };
-  }
-}
-
-/**
  * Record a donation for a profile
  * Replaces recordDonation() from googleSheetsApi
  */
@@ -667,6 +673,7 @@ export async function recordDonation(hrsId: string): Promise<ApiResponse<{ succe
       .select();
 
     if (error) throw error;
+    invalidateProfilesSnapshot();
     return { success: true, data: { success: true, newCount } };
   } catch (error) {
     console.error("[Supabase] Failed to record donation:", error);
@@ -691,6 +698,7 @@ export async function deleteProfiles(hrsIds: string[]): Promise<ApiResponse<{ su
       .select('"HRS ID"');
 
     if (error) throw error;
+    invalidateProfilesSnapshot();
     const count = data ? data.length : 0;
     return { success: true, data: { success: true, count } };
   } catch (error) {
@@ -729,6 +737,7 @@ export async function updateProfile(hrsId: string, updates: Partial<Profile>): P
       .select();
 
     if (error) throw error;
+    invalidateProfilesSnapshot();
     return { success: true, data: { success: true } };
   } catch (error) {
     console.error("[Supabase] Failed to update profile:", error);
@@ -832,6 +841,7 @@ export async function addProfile(data: Partial<Profile>): Promise<ApiResponse<{ 
       .select();
 
     if (error) throw error;
+    invalidateProfilesSnapshot();
     return { success: true, data: { success: true } };
   } catch (error) {
     console.error("[Supabase] Failed to add profile:", error);
@@ -840,47 +850,10 @@ export async function addProfile(data: Partial<Profile>): Promise<ApiResponse<{ 
 }
 
 /**
- * Reset all profiles to Pending verification status
- * Used for admin reset functionality
+ * Reset all profiles' verification bookkeeping (legacy helper — retained as a
+ * no-op placeholder since every profile is already verified at creation).
  */
-export async function resetProfiles(): Promise<ApiResponse<{ success: boolean; count: number }>> {
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .update({
-        "Verification Status": "PENDING",
-        "Verification Time": null,
-        "Blood Donation Count": "0",
-        "Last Donation Time": null,
-        "Next Eligible Time": null,
-        "Availability Status": "NOT PARTICIPATING"
-      })
-      .select('"HRS ID"');
 
-    if (error) throw error;
-    const count = data ? data.length : 0;
-    return { success: true, data: { success: true, count } };
-  } catch (error) {
-    console.error("[Supabase] Failed to reset profiles:", error);
-    return { success: false, error: "Failed to reset profiles" };
-  }
-}
-
-/**
- * Sync pending forms (placeholder for Google Forms integration)
- * In a real implementation, this would check for new form submissions
- * and add them to the profiles table
- */
-export async function syncPendingForms(): Promise<ApiResponse<{ success: boolean; synced: number }>> {
-  // This is a placeholder - in a real app, you would:
-  // 1. Check Google Forms or other source for new submissions
-  // 2. Parse and validate the data
-  // 3. Insert new profiles or update existing ones
-  // 4. Return the count of newly synced profiles
-  
-  // For now, return success with 0 synced (no actual implementation)
-  return { success: true, data: { success: true, synced: 0 } };
-}
 
 /**
  * Convert a Profile to AdminRecord format (matching googleSheetsApi shape)
@@ -929,13 +902,9 @@ export function convertToAdminRecord(p: Profile): AdminRecord {
     ? 0
     : new Date().getFullYear() - birthDate.getFullYear();
   const rawStatus = verificationStatus.toUpperCase();
-  const sheetVerified = rawStatus === "VERIFIED";
-  const hasBloodGroup = Boolean(bloodGroup.trim() && bloodGroup.trim() !== "—");
-  const isPending = !sheetVerified || !hasBloodGroup;
   const consentStatus =
-    storageConsent.toUpperCase() === "YES" ? "Yes" :
-    storageConsent.toUpperCase() === "NO" ? "No" : "Pending";
-  const donorConsentBool = isPending ? null : donationConsent.toUpperCase() === "YES";
+    storageConsent.toUpperCase() === "YES" ? "Yes" : "No";
+  const donorConsentBool = donationConsent.toUpperCase() === "YES";
 
   // Real timestamps parsed from the stored columns. The previous code returned
   // `new Date()` for any non-empty value, so every record displayed "now" as
@@ -980,7 +949,7 @@ export function convertToAdminRecord(p: Profile): AdminRecord {
     gender, mobile, email,
     group: bloodGroup,
     location: city, area,
-    status: isPending ? "Pending" : "Verified",
+    status: "Verified",
     consent: consentStatus === "Yes",
     consentStatus,
     availability,
@@ -1118,8 +1087,11 @@ export async function getPublicProfiles(): Promise<ApiResponse<Profile[]>> {
     // nothing, so the public directory always rendered empty.
     //
     // Columns are listed explicitly: this endpoint is PUBLIC, so it must never
-    // return donor contact details. `select('*')` previously shipped every
-    // donor's "Phone Number" and Email to any anonymous caller.
+    // return donor contact details or exact dates of birth. `select('*')`
+    // previously shipped every donor's "Phone Number" and Email to any
+    // anonymous caller; DOB is read only to derive the display age and is
+    // stripped from the response (a full birthdate is an identity-theft
+    // vector — the directory only shows "N years").
     const { data, error } = await supabase
       .from('profiles')
       .select(
@@ -1131,7 +1103,25 @@ export async function getPublicProfiles(): Promise<ApiResponse<Profile[]>> {
       .neq('Blood Group', '—'); // Ensure they have a blood group
     
     if (error) throw error;
-    return { success: true, data: normalizeRows(data) };
+
+    const safeRows = normalizeRows(data).map(p => {
+      const dob = p["Date of Birth"];
+      let age: number | undefined;
+      if (dob) {
+        const birth = new Date(dob);
+        if (!Number.isNaN(birth.getTime())) {
+          const now = new Date();
+          age = now.getFullYear() - birth.getFullYear();
+          const m = now.getMonth() - birth.getMonth();
+          if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+          if (age < 0 || age > 120) age = undefined;
+        }
+      }
+      const { "Date of Birth": _dob, ...publicSafe } = p;
+      return { ...publicSafe, age };
+    });
+
+    return { success: true, data: safeRows as unknown as Profile[] };
   } catch (error) {
     console.error("[Supabase] Failed to get public profiles:", error);
     return { success: false, error: "Failed to get public profiles" };
@@ -1155,28 +1145,11 @@ export async function addPerson(input: {
   dataStorageConsent?: "YES" | "NO";
 }): Promise<ApiResponse<{ success: boolean; hrs_id: string }>> {
   try {
-    // Next HRS ID. All existing IDs follow "HRS-####" (4 digits, zero-padded),
-    // so ordering the text column lexicographically is unreliable — scan the
-    // ids and take the highest numeric suffix. The previous code produced
-    // "HRS00001", breaking the existing convention.
-    const { data: idRows, error: maxIdError } = await supabase
-      .from('profiles')
-      .select('"HRS ID"');
-
-    if (maxIdError) throw maxIdError;
-
-    let maxNum = 0;
-    for (const row of idRows ?? []) {
-      const n = parseInt(String(row["HRS ID"] ?? "").replace(/\D/g, ""), 10);
-      if (!Number.isNaN(n) && n > maxNum) maxNum = n;
-    }
-    const nextHrsId = `HRS-${String(maxNum + 1).padStart(4, "0")}`;
-
     // Prepare profile data — note the lower-case gender/email/city/area
     // columns are the real column names in the table.
     const now = new Date().toISOString();
     const profileData: Record<string, unknown> = {
-      "HRS ID": nextHrsId,
+      // "HRS ID" is assigned inside the retry loop below (max+1, collision-safe).
       "Full Name": input.fullName,
       "Date of Birth": input.dateOfBirth || null,
       gender: input.gender || null,
@@ -1203,19 +1176,49 @@ export async function addPerson(input: {
       (profileData[key] === null || profileData[key] === undefined) && delete profileData[key]
     );
     
-    const { data, error } = await supabase
-      .from('profiles')
-      .insert(profileData)
-      .select()
-      .single();
+    // HRS ID generation with retry: concurrent registrations can compute the
+    // same next ID. On a unique-constraint collision, re-read the max and
+    // retry (bounded) instead of failing the registration.
+    let data: Record<string, unknown> | null = null;
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data: idRows, error: maxIdError } = await supabase
+        .from('profiles')
+        .select('"HRS ID"');
+      if (maxIdError) throw maxIdError;
+
+      let maxNum = 0;
+      for (const row of idRows ?? []) {
+        const n = parseInt(String(row["HRS ID"] ?? "").replace(/\D/g, ""), 10);
+        if (!Number.isNaN(n) && n > maxNum) maxNum = n;
+      }
+      profileData["HRS ID"] = `HRS-${String(maxNum + 1).padStart(4, "0")}`;
+
+      const { data: inserted, error } = await supabase
+        .from('profiles')
+        .insert(profileData)
+        .select()
+        .single();
+      if (!error) {
+        data = inserted as Record<string, unknown>;
+        break;
+      }
+      lastError = error;
+      // Only retry on uniqueness collisions; other errors are fatal.
+      const code = (error as { code?: string }).code ?? "";
+      if (code !== "23505" && !String(error).includes("duplicate")) break;
+      // small jitter so racing writers diverge on the next attempt
+      await new Promise(r => setTimeout(r, 60 + Math.floor(Math.random() * 90)));
+    }
     
-    if (error) throw error;
+    if (!data) throw lastError ?? new Error("insert failed");
+    invalidateProfilesSnapshot();
     
     return { 
       success: true, 
       data: { 
         success: true, 
-        hrs_id: data["HRS ID"] 
+        hrs_id: data["HRS ID"] as string 
       } 
     };
   } catch (error) {
@@ -1230,10 +1233,7 @@ export async function addPerson(input: {
  */
 export async function dataHealth(): Promise<ApiResponse<{ success: boolean; issues: string[]; totalProfiles: number }>> {
   try {
-    const { data, error } = await supabase.from('profiles').select('*');
-
-    if (error) throw error;
-    const profiles = normalizeRows(data);
+    const profiles = await getProfilesSnapshot();
     const issues: string[] = [];
 
     // Check for missing essential fields
@@ -1262,10 +1262,10 @@ export async function dataHealth(): Promise<ApiResponse<{ success: boolean; issu
         issues.push(`${hrsId}: Missing phone number`);
       }
       
-      // Check verification status consistency
+      // Check verification status consistency — all profiles must be VERIFIED
       const verificationStatus = p["Verification Status"];
-      if (verificationStatus && !["PENDING", "VERIFIED"].includes(verificationStatus.toUpperCase())) {
-        issues.push(`${hrsId}: Invalid verification status: ${verificationStatus}`);
+      if (verificationStatus && verificationStatus.toUpperCase() !== "VERIFIED") {
+        issues.push(`${hrsId}: Not verified (pending concept removed)`);
       }
       
       // Check donor consent consistency
@@ -1282,7 +1282,7 @@ export async function dataHealth(): Promise<ApiResponse<{ success: boolean; issu
       
       // Check availability status
       const availabilityStatus = p["Availability Status"];
-      const validStatuses = ["AVAILABLE", "UNAVAILABLE", "TEMPORARILY UNAVAILABLE", "NOT PARTICIPATING", "PENDING"];
+      const validStatuses = ["AVAILABLE", "UNAVAILABLE", "TEMPORARILY UNAVAILABLE", "NOT PARTICIPATING"];
       if (availabilityStatus && !validStatuses.includes(String(availabilityStatus).toUpperCase())) {
         issues.push(`${hrsId}: Invalid availability status: ${availabilityStatus}`);
       }
