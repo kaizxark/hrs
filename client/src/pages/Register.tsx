@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
@@ -14,6 +14,7 @@ import {
   Copy,
   Home,
   AlertCircle,
+  X,
 } from "lucide-react";
 
 /* ------------------------------------------------------------------ */
@@ -43,10 +44,20 @@ const YEARS: number[] = (() => {
   return years;
 })();
 
-/** Days in the selected month (leap-year aware). */
+/** Days in the selected month (leap-year aware). month is 1-based. */
 function daysInMonth(month: number, year: number): number {
-  if (month === 0) return 31;
-  return new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, 0).getDate();
+}
+
+/** Exact age in completed years. */
+function exactAge(iso: string): number {
+  const birth = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(birth.getTime())) return 0;
+  const now = new Date();
+  let a = now.getFullYear() - birth.getFullYear();
+  const m = now.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) a--;
+  return a;
 }
 
 /* ------------------------------------------------------------------ */
@@ -166,6 +177,7 @@ export default function Register() {
   const registerMutation = trpc.hrs.registerDonor.useMutation({
     onSuccess: result => {
       if (result.success) {
+        setErrors({});
         setSubmittedHrsId(result.hrsId);
         window.scrollTo({ top: 0, behavior: "smooth" });
       } else {
@@ -186,6 +198,27 @@ export default function Register() {
     });
   };
 
+  /* ---------------- DOB coherence ---------------- */
+
+  // The selected day must exist in the selected month/year. If the user picks
+  // 31 and then switches to a 30-day month, clamp instead of sending an
+  // impossible date (JS would silently roll 2026-02-31 over to March 3).
+  const maxDay = form.dobMonth
+    ? daysInMonth(Number(form.dobMonth), form.dobYear ? Number(form.dobYear) : new Date().getFullYear())
+    : 31;
+
+  useEffect(() => {
+    if (form.dobDay && Number(form.dobDay) > maxDay) {
+      set("dobDay", String(maxDay));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maxDay]);
+
+  const dayOptions = useMemo(
+    () => Array.from({ length: maxDay }, (_, i) => i + 1),
+    [maxDay]
+  );
+
   const dobIso = useMemo(() => {
     if (!form.dobDay || !form.dobMonth || !form.dobYear) return "";
     const y = Number(form.dobYear);
@@ -194,23 +227,14 @@ export default function Register() {
     return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   }, [form.dobDay, form.dobMonth, form.dobYear]);
 
-  const age = useMemo(() => {
-    if (!dobIso) return null;
-    const birth = new Date(dobIso + "T00:00:00");
-    if (Number.isNaN(birth.getTime())) return null;
-    const now = new Date();
-    let a = now.getFullYear() - birth.getFullYear();
-    const monthDiff = now.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birth.getDate())) a--;
-    return a;
-  }, [dobIso]);
+  const age = useMemo(() => (dobIso ? exactAge(dobIso) : null), [dobIso]);
 
-  const dayOptions = useMemo(() => {
-    const month = form.dobMonth ? Number(form.dobMonth) : null;
-    const year = form.dobYear ? Number(form.dobYear) : new Date().getFullYear();
-    const max = month ? daysInMonth(month - 1, year) : 31;
-    return Array.from({ length: max }, (_, i) => i + 1);
-  }, [form.dobMonth, form.dobYear]);
+  /** "14 May 1999" — what the user actually picked, for the review panel. */
+  const dobPretty = useMemo(() => {
+    if (!dobIso) return "";
+    const d = new Date(`${dobIso}T00:00:00`);
+    return `${Number(form.dobDay)} ${MONTHS[Number(form.dobMonth) - 1]} ${form.dobYear}`;
+  }, [dobIso, form.dobDay, form.dobMonth, form.dobYear]);
 
   /* ---------------- validation ---------------- */
 
@@ -222,8 +246,8 @@ export default function Register() {
       e.dob = "Date of birth cannot be in the future.";
     if (!form.gender) e.gender = "Select a gender.";
     const digits = form.phone.replace(/\D/g, "");
-    if (digits.length < 10 || digits.length > 12)
-      e.phone = "Enter a valid mobile number (10–12 digits).";
+    if (digits.length < 10 || digits.length > 15)
+      e.phone = "Enter a valid mobile number (10–15 digits).";
     if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
       e.email = "Enter a valid email, or leave it empty.";
     if (!form.city) e.city = "Select a city.";
@@ -244,7 +268,17 @@ export default function Register() {
   }
 
   function next() {
-    if (step === 1 && validateStep1()) setStep(2);
+    if (step === 1 && validateStep1()) {
+      setErrors({});
+      setStep(2);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  function back() {
+    setStep(1);
+    setErrors({});
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function submit() {
@@ -261,6 +295,15 @@ export default function Register() {
       donorConsent: form.donorConsent ? "YES" : "NO",
       dataStorageConsent: "YES",
     });
+  }
+
+  function resetAll() {
+    setForm(INITIAL);
+    setErrors({});
+    setStep(1);
+    setSubmittedHrsId(null);
+    setCopied(false);
+    window.scrollTo({ top: 0 });
   }
 
   function copyId() {
@@ -285,8 +328,8 @@ export default function Register() {
           </div>
           <h1>Welcome to the HRS donor network!</h1>
           <p className="reg-success-sub">
-            Your profile is <strong>verified and active</strong>. Keep this ID —
-            it identifies you at every future camp or donation.
+            Your profile has been saved{form.donorConsent ? " and you're listed as a willing donor" : ""}.
+            Keep this ID — it identifies you at every future camp or donation.
           </p>
           <div className="reg-id-box">
             <span className="reg-id-label">Your HRS Donor ID</span>
@@ -300,15 +343,7 @@ export default function Register() {
             <Link href="/" className="reg-btn reg-btn-primary">
               <Home size={16} /> Back to home
             </Link>
-            <button
-              type="button"
-              className="reg-btn reg-btn-ghost"
-              onClick={() => {
-                setForm(INITIAL);
-                setSubmittedHrsId(null);
-                setStep(1);
-              }}
-            >
+            <button type="button" className="reg-btn reg-btn-ghost" onClick={resetAll}>
               Register another person
             </button>
           </div>
@@ -331,12 +366,16 @@ export default function Register() {
       </header>
 
       <div className="reg-card">
-        <div className="reg-steps" role="tablist" aria-label="Registration steps">
+        <div className="reg-steps" aria-label="Registration steps">
           <StepBadge n={1} active={step === 1} done={step > 1} />
-          <span className="reg-step-label">Personal details</span>
+          <span className={`reg-step-label${step === 1 ? " current" : ""}`}>
+            Personal details
+          </span>
           <span className="reg-step-line" />
           <StepBadge n={2} active={step === 2} done={false} />
-          <span className="reg-step-label">Blood group & consent</span>
+          <span className={`reg-step-label${step === 2 ? " current" : ""}`}>
+            Blood group & consent
+          </span>
         </div>
 
         {errors.form && (
@@ -346,7 +385,15 @@ export default function Register() {
         )}
 
         {step === 1 && (
-          <section className="reg-step-panel">
+          <section
+            className="reg-step-panel"
+            onKeyDown={e => {
+              if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "SELECT") {
+                e.preventDefault();
+                next();
+              }
+            }}
+          >
             <div className="reg-grid-2">
               <Field label="Full name" required error={errors.fullName}>
                 <input
@@ -356,6 +403,7 @@ export default function Register() {
                   onChange={e => set("fullName", e.target.value)}
                   placeholder="As printed on your ID"
                   autoComplete="name"
+                  autoFocus
                 />
               </Field>
               <Field
@@ -369,9 +417,10 @@ export default function Register() {
                   type="tel"
                   inputMode="numeric"
                   value={form.phone}
-                  onChange={e => set("phone", e.target.value)}
+                  onChange={e => set("phone", e.target.value.replace(/[^\d+]/g, ""))}
                   placeholder="10-digit mobile number"
                   autoComplete="tel"
+                  maxLength={15}
                 />
               </Field>
             </div>
@@ -503,7 +552,7 @@ export default function Register() {
                   className={`reg-consent-btn no${form.donorConsent === false ? " selected" : ""}`}
                   onClick={() => set("donorConsent", false)}
                 >
-                  Not now
+                  <X size={18} /> Not now
                 </button>
               </div>
               {errors.donorConsent && (
@@ -539,25 +588,40 @@ export default function Register() {
             </div>
 
             <div className="reg-review">
-              <span className="reg-review-title">Review</span>
+              <span className="reg-review-title">Review your details</span>
+              <button
+                type="button"
+                className="reg-review-edit"
+                onClick={back}
+              >
+                Edit
+              </button>
               <div className="reg-review-grid">
+                <span className="reg-review-k">Name</span>
                 <span>{form.fullName || "—"}</span>
-                <span>{dobIso ? `${dobIso} (${age} yrs)` : "—"}</span>
-                <span>{form.gender || "—"}</span>
-                <span>{form.phone || "—"}</span>
+                <span className="reg-review-k">Date of birth</span>
                 <span>
-                  {form.area ? `${form.area}, ${form.city}` : "—"}
+                  {dobPretty ? `${dobPretty}${age !== null ? ` · ${age} yrs` : ""}` : "—"}
                 </span>
+                <span className="reg-review-k">Gender</span>
+                <span>{form.gender || "—"}</span>
+                <span className="reg-review-k">Mobile</span>
+                <span>{form.phone || "—"}</span>
+                {form.email.trim() && (
+                  <>
+                    <span className="reg-review-k">Email</span>
+                    <span>{form.email}</span>
+                  </>
+                )}
+                <span className="reg-review-k">Location</span>
+                <span>{form.area ? `${form.area}, ${form.city}` : "—"}</span>
+                <span className="reg-review-k">Blood group</span>
                 <span>{form.bloodGroup || "—"}</span>
               </div>
             </div>
 
             <div className="reg-actions">
-              <button
-                type="button"
-                className="reg-btn reg-btn-ghost"
-                onClick={() => setStep(1)}
-              >
+              <button type="button" className="reg-btn reg-btn-ghost" onClick={back}>
                 <ArrowLeft size={16} /> Back
               </button>
               <button

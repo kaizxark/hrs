@@ -17049,3 +17049,33 @@ img {
   background: rgba(201, 47, 59, 0.09);
   color: var(--primary);
 }
+
+/* Review panel: labeled grid + edit affordance */
+.reg-review { position: relative; }
+.reg-review-edit {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+.reg-review-edit:hover { background: rgba(201, 47, 59, 0.08); }
+.reg-review-grid { grid-template-columns: 130px 1fr; align-items: baseline; margin-top: 10px; }
+@media (max-width: 480px) {
+  .reg-review-grid { grid-template-columns: 1fr; gap: 2px; }
+  .reg-review-k { margin-top: 8px; }
+}
+.reg-review-k {
+  font-weight: 600;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+}
+.reg-review-grid > span:not(.reg-review-k) { font-weight: 700; color: var(--foreground); }
+.reg-step-label.current { color: var(--foreground); }
