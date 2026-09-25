@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
@@ -182,10 +182,9 @@ export default function Register() {
         window.scrollTo({ top: 0, behavior: "smooth" });
       } else {
         setErrors({ form: result.error || "Registration failed. Please try again." });
+        window.scrollTo({ top: 0, behavior: "smooth" });
       }
     },
-    onError: err =>
-      setErrors({ form: err.message || "Registration failed. Please try again." }),
   });
 
   const set = <K extends keyof FormData>(key: K, value: FormData[K]) => {
@@ -200,24 +199,33 @@ export default function Register() {
 
   /* ---------------- DOB coherence ---------------- */
 
-  // The selected day must exist in the selected month/year. If the user picks
-  // 31 and then switches to a 30-day month, clamp instead of sending an
-  // impossible date (JS would silently roll 2026-02-31 over to March 3).
-  const maxDay = form.dobMonth
-    ? daysInMonth(Number(form.dobMonth), form.dobYear ? Number(form.dobYear) : new Date().getFullYear())
-    : 31;
+  /** Clamp the chosen day to what exists in the given month/year. */
+  function clampDay(day: string, month: string, year: string): string {
+    if (!day) return day;
+    const m = month ? Number(month) : null;
+    const y = year ? Number(year) : new Date().getFullYear();
+    const max = m ? daysInMonth(m, y) : 31;
+    const n = Number(day);
+    return n > max ? String(max) : day;
+  }
 
-  useEffect(() => {
-    if (form.dobDay && Number(form.dobDay) > maxDay) {
-      set("dobDay", String(maxDay));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [maxDay]);
+  /** Month/year changes re-clamp the day IN THE SAME STROKE — no flicker,
+   * and an impossible date can never be staged (Feb 31 → Feb 28). */
+  function setDobMonth(v: string) {
+    setForm(prev => ({ ...prev, dobMonth: v, dobDay: clampDay(prev.dobDay, v, prev.dobYear) }));
+    setErrors(prev => (prev.dob ? { ...prev, dob: undefined as unknown as string } : prev));
+  }
+  function setDobYear(v: string) {
+    setForm(prev => ({ ...prev, dobYear: v, dobDay: clampDay(prev.dobDay, prev.dobMonth, v) }));
+    setErrors(prev => (prev.dob ? { ...prev, dob: undefined as unknown as string } : prev));
+  }
 
-  const dayOptions = useMemo(
-    () => Array.from({ length: maxDay }, (_, i) => i + 1),
-    [maxDay]
-  );
+  const dayOptions = useMemo(() => {
+    const m = form.dobMonth ? Number(form.dobMonth) : null;
+    const y = form.dobYear ? Number(form.dobYear) : new Date().getFullYear();
+    const max = m ? daysInMonth(m, y) : 31;
+    return Array.from({ length: max }, (_, i) => i + 1);
+  }, [form.dobMonth, form.dobYear]);
 
   const dobIso = useMemo(() => {
     if (!form.dobDay || !form.dobMonth || !form.dobYear) return "";
@@ -281,20 +289,32 @@ export default function Register() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  function submit() {
+  async function submit() {
     if (!validateStep2()) return;
-    registerMutation.mutate({
-      fullName: form.fullName.trim(),
-      dateOfBirth: dobIso || undefined,
-      gender: form.gender,
-      phoneNumber: form.phone.replace(/[^\d+]/g, ""),
-      email: form.email.trim() || undefined,
-      city: form.city,
-      area: form.area,
-      bloodGroup: form.bloodGroup,
-      donorConsent: form.donorConsent ? "YES" : "NO",
-      dataStorageConsent: "YES",
-    });
+    // Loud failure: ANY error — network, validation, database — surfaces
+    // here. No silent deaths, no opaque server strings.
+    try {
+      await registerMutation.mutateAsync({
+        fullName: form.fullName.trim(),
+        dateOfBirth: dobIso || undefined,
+        gender: form.gender,
+        phoneNumber: form.phone.replace(/[^\d+]/g, ""),
+        email: form.email.trim() || undefined,
+        city: form.city,
+        area: form.area,
+        bloodGroup: form.bloodGroup,
+        donorConsent: form.donorConsent ? "YES" : "NO",
+        dataStorageConsent: "YES",
+      });
+    } catch (err) {
+      const msg = err instanceof Error && err.message ? err.message : "";
+      setErrors({
+        form: msg
+          ? `Could not save: ${msg.slice(0, 160)}`
+          : "Network problem — check your connection and try again.",
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }
 
   function resetAll() {
@@ -438,13 +458,13 @@ export default function Register() {
                 />
                 <SelectBox
                   value={form.dobMonth}
-                  onChange={v => set("dobMonth", v)}
+                  onChange={setDobMonth}
                   options={MONTHS as unknown as string[]}
                   placeholder="Month"
                 />
                 <SelectBox
                   value={form.dobYear}
-                  onChange={v => set("dobYear", v)}
+                  onChange={setDobYear}
                   options={YEARS}
                   placeholder="Year"
                 />

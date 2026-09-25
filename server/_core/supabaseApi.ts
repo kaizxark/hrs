@@ -1233,7 +1233,17 @@ export async function addPerson(input: {
     };
   } catch (error) {
     console.error("[Supabase] Failed to add person:", error);
-    return { success: false, error: "Failed to add person" };
+    // Surface a specific, user-actionable message instead of a blanket
+    // "Failed to add person" — the common case is an invalid date that
+    // Postgres rejects (e.g. February 31st from a broken client form).
+    const raw = String((error as { message?: string })?.message ?? error);
+    if (/date\/time|invalid date|out of range/i.test(raw)) {
+      return { success: false, error: "Invalid date of birth — please check the day, month and year." };
+    }
+    if ((error as { code?: string })?.code === "23505" || /duplicate/i.test(raw)) {
+      return { success: false, error: "That record was just created by someone else — please submit again." };
+    }
+    return { success: false, error: "Could not save the registration — please try again." };
   }
 }
 
