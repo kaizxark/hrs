@@ -52,7 +52,9 @@ function lazyClient(): SupabaseClient {
   return new Proxy({} as SupabaseClient, {
     get(_target, prop) {
       const client = getClient();
-      const value = (client as unknown as Record<string | symbol, unknown>)[prop];
+      const value = (client as unknown as Record<string | symbol, unknown>)[
+        prop
+      ];
       return typeof value === "function" ? value.bind(client) : value;
     },
   });
@@ -64,7 +66,10 @@ export const supabase = lazyClient();
 export const supabaseAdmin = lazyClient();
 
 // Email service for sending verification emails
-import { sendVerificationEmail as sendEmailViaSmtp, isSmtpConfigured } from "./emailService";
+import {
+  sendVerificationEmail as sendEmailViaSmtp,
+  isSmtpConfigured,
+} from "./emailService";
 // Type-only import (erased at compile time) so the AdminRecord shape the UI and
 // email templates expect stays in one place.
 import type { AdminRecord } from "./adminRecord";
@@ -119,10 +124,11 @@ export interface Statistics {
   donorConsentNo: number;
   bloodGroupCounts: Record<string, number>;
   cityCounts: Record<string, number>;
-  availabilityCounts: {      available: number;
-      temporarilyUnavailable: number;
-      notParticipating: number;
-    };
+  availabilityCounts: {
+    available: number;
+    temporarilyUnavailable: number;
+    notParticipating: number;
+  };
   donationCounts: {
     total: number;
     average: number;
@@ -148,9 +154,12 @@ export interface ApiResponse<T = unknown> {
  * public directory empty and reported 0 verified profiles.
  */
 function eqCI(value: unknown, expected: string): boolean {
-  return String(value ?? "").trim().toUpperCase() === expected;
+  return (
+    String(value ?? "")
+      .trim()
+      .toUpperCase() === expected
+  );
 }
-
 
 /** Exact age in completed years (correct even before the birthday). */
 function exactAge(birth: Date): number {
@@ -169,7 +178,7 @@ function isVerifiedRecord(p: Profile): boolean {
 /**
  * The Postgres table stores four columns in lowercase — `gender`, `email`,
  * `city`, `area` — while every other column is quoted TitleCase ("HRS ID",
- * "Full Name", …). The application (and the 
+ * "Full Name", …). The application (and the
  * clients) speak the TitleCase vocabulary, so rows are normalised at this
  * boundary: queries use the real lower-case names, and everything downstream
  * keeps reading `p.City` / `p.Area` / `p.Gender` / `p.Email`.
@@ -190,7 +199,9 @@ function normalizeRow(row: Record<string, any> | null | undefined): Profile {
   return out as Profile;
 }
 
-function normalizeRows(rows: Record<string, any>[] | null | undefined): Profile[] {
+function normalizeRows(
+  rows: Record<string, any>[] | null | undefined
+): Profile[] {
   return (rows ?? []).map(normalizeRow);
 }
 
@@ -210,11 +221,26 @@ const WRITE_COLUMN_MAP: Record<string, string> = {
 
 /** Columns that may be written directly (identity mapping). */
 const WRITABLE_COLUMNS = new Set([
-  "HRS ID", "Full Name", "Date of Birth", "gender", "Phone Number", "email",
-  "city", "area", "Blood Group", "Blood Group Status", "Registration Time",
-  "Data Storage Consent", "Donor Consent", "Verification Status",
-  "Verification Time", "Blood Donation Count", "Last Donation Time",
-  "Next Eligible Time", "Availability Status", "Public Directory Visibility",
+  "HRS ID",
+  "Full Name",
+  "Date of Birth",
+  "gender",
+  "Phone Number",
+  "email",
+  "city",
+  "area",
+  "Blood Group",
+  "Blood Group Status",
+  "Registration Time",
+  "Data Storage Consent",
+  "Donor Consent",
+  "Verification Status",
+  "Verification Time",
+  "Blood Donation Count",
+  "Last Donation Time",
+  "Next Eligible Time",
+  "Availability Status",
+  "Public Directory Visibility",
 ]);
 
 /** Resolve an incoming field name to a real column, or undefined if unknown. */
@@ -309,12 +335,14 @@ export async function getProfiles(): Promise<ApiResponse<Profile[]>> {
  * Get profile by HRS ID
  * Replaces getProfileByHrsId() from googleSheetsApi
  */
-export async function getProfileByHrsId(hrsId: string): Promise<ApiResponse<Profile>> {
+export async function getProfileByHrsId(
+  hrsId: string
+): Promise<ApiResponse<Profile>> {
   try {
     const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('HRS ID', hrsId)
+      .from("profiles")
+      .select("*")
+      .eq("HRS ID", hrsId)
       .single();
 
     if (error) throw error;
@@ -330,12 +358,14 @@ export async function getProfileByHrsId(hrsId: string): Promise<ApiResponse<Prof
  * Get profiles by city
  * Replaces getProfilesByCity() from googleSheetsApi
  */
-export async function getProfilesByCity(city: string): Promise<ApiResponse<Profile[]>> {
+export async function getProfilesByCity(
+  city: string
+): Promise<ApiResponse<Profile[]>> {
   try {
     const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('city', city);
+      .from("profiles")
+      .select("*")
+      .eq("city", city);
 
     if (error) throw error;
     return { success: true, data: normalizeRows(data) };
@@ -349,12 +379,14 @@ export async function getProfilesByCity(city: string): Promise<ApiResponse<Profi
  * Get profiles by area
  * Replaces getProfilesByArea() from googleSheetsApi
  */
-export async function getProfilesByArea(area: string): Promise<ApiResponse<Profile[]>> {
+export async function getProfilesByArea(
+  area: string
+): Promise<ApiResponse<Profile[]>> {
   try {
     const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('area', area);
+      .from("profiles")
+      .select("*")
+      .eq("area", area);
 
     if (error) throw error;
     return { success: true, data: normalizeRows(data) };
@@ -368,12 +400,14 @@ export async function getProfilesByArea(area: string): Promise<ApiResponse<Profi
  * Get profiles by blood group
  * Replaces getProfilesByBloodGroup() from googleSheetsApi
  */
-export async function getProfilesByBloodGroup(bloodGroup: string): Promise<ApiResponse<Profile[]>> {
+export async function getProfilesByBloodGroup(
+  bloodGroup: string
+): Promise<ApiResponse<Profile[]>> {
   try {
     const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('Blood Group', bloodGroup);
+      .from("profiles")
+      .select("*")
+      .eq("Blood Group", bloodGroup);
 
     if (error) throw error;
     return { success: true, data: normalizeRows(data) };
@@ -387,18 +421,26 @@ export async function getProfilesByBloodGroup(bloodGroup: string): Promise<ApiRe
  * Get profiles by verification status
  * Replaces getProfilesByVerificationStatus() from googleSheetsApi
  */
-export async function getProfilesByVerificationStatus(status: string): Promise<ApiResponse<Profile[]>> {
+export async function getProfilesByVerificationStatus(
+  status: string
+): Promise<ApiResponse<Profile[]>> {
   try {
     const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('Verification Status', status);
+      .from("profiles")
+      .select("*")
+      .eq("Verification Status", status);
 
     if (error) throw error;
     return { success: true, data: normalizeRows(data) };
   } catch (error) {
-    console.error("[Supabase] Failed to fetch profiles by verification status:", error);
-    return { success: false, error: "Failed to fetch profiles by verification status" };
+    console.error(
+      "[Supabase] Failed to fetch profiles by verification status:",
+      error
+    );
+    return {
+      success: false,
+      error: "Failed to fetch profiles by verification status",
+    };
   }
 }
 
@@ -406,18 +448,26 @@ export async function getProfilesByVerificationStatus(status: string): Promise<A
  * Get profiles by availability status
  * Replaces getProfilesByAvailabilityStatus() from googleSheetsApi
  */
-export async function getProfilesByAvailabilityStatus(status: string): Promise<ApiResponse<Profile[]>> {
+export async function getProfilesByAvailabilityStatus(
+  status: string
+): Promise<ApiResponse<Profile[]>> {
   try {
     const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('Availability Status', status);
+      .from("profiles")
+      .select("*")
+      .eq("Availability Status", status);
 
     if (error) throw error;
     return { success: true, data: normalizeRows(data) };
   } catch (error) {
-    console.error("[Supabase] Failed to fetch profiles by availability status:", error);
-    return { success: false, error: "Failed to fetch profiles by availability status" };
+    console.error(
+      "[Supabase] Failed to fetch profiles by availability status:",
+      error
+    );
+    return {
+      success: false,
+      error: "Failed to fetch profiles by availability status",
+    };
   }
 }
 
@@ -433,8 +483,12 @@ export async function getStatistics(): Promise<ApiResponse<Statistics>> {
     // stored values are UPPERCASE).
     const totalProfiles = profiles.length;
     const verifiedProfiles = profiles.filter(isVerifiedRecord).length;
-    const donorConsentYes = profiles.filter(p => eqCI(p["Donor Consent"], "YES")).length;
-    const donorConsentNo = profiles.filter(p => eqCI(p["Donor Consent"], "NO")).length;
+    const donorConsentYes = profiles.filter(p =>
+      eqCI(p["Donor Consent"], "YES")
+    ).length;
+    const donorConsentNo = profiles.filter(p =>
+      eqCI(p["Donor Consent"], "NO")
+    ).length;
 
     // Blood group counts
     const bloodGroupCounts: Record<string, number> = {};
@@ -452,9 +506,15 @@ export async function getStatistics(): Promise<ApiResponse<Statistics>> {
 
     // Availability counts (case-insensitive — stored UPPERCASE)
     const availabilityCounts = {
-      available: profiles.filter(p => eqCI(p["Availability Status"], "AVAILABLE")).length,
-      temporarilyUnavailable: profiles.filter(p => eqCI(p["Availability Status"], "TEMPORARILY UNAVAILABLE")).length,
-      notParticipating: profiles.filter(p => eqCI(p["Availability Status"], "NOT PARTICIPATING")).length,
+      available: profiles.filter(p =>
+        eqCI(p["Availability Status"], "AVAILABLE")
+      ).length,
+      temporarilyUnavailable: profiles.filter(p =>
+        eqCI(p["Availability Status"], "TEMPORARILY UNAVAILABLE")
+      ).length,
+      notParticipating: profiles.filter(p =>
+        eqCI(p["Availability Status"], "NOT PARTICIPATING")
+      ).length,
     };
 
     // Donation counts
@@ -493,10 +553,19 @@ export async function getStatistics(): Promise<ApiResponse<Statistics>> {
  */
 export async function getCities(): Promise<ApiResponse<string[]>> {
   try {
-    const { data, error } = await supabase.from('profiles').select('city');
+    const { data, error } = await supabase.from("profiles").select("city");
 
     if (error) throw error;
-    const cities = Array.from(new Set(normalizeRows(data).map(p => p.City).filter((city): city is string => city !== undefined && city !== null && city !== "")));
+    const cities = Array.from(
+      new Set(
+        normalizeRows(data)
+          .map(p => p.City)
+          .filter(
+            (city): city is string =>
+              city !== undefined && city !== null && city !== ""
+          )
+      )
+    );
     return { success: true, data: cities };
   } catch (error) {
     console.error("[Supabase] Failed to get cities:", error);
@@ -510,10 +579,19 @@ export async function getCities(): Promise<ApiResponse<string[]>> {
  */
 export async function getAreas(): Promise<ApiResponse<string[]>> {
   try {
-    const { data, error } = await supabase.from('profiles').select('area');
+    const { data, error } = await supabase.from("profiles").select("area");
 
     if (error) throw error;
-    const areas = Array.from(new Set(normalizeRows(data).map(p => p.Area).filter((area): area is string => area !== undefined && area !== null && area !== "")));
+    const areas = Array.from(
+      new Set(
+        normalizeRows(data)
+          .map(p => p.Area)
+          .filter(
+            (area): area is string =>
+              area !== undefined && area !== null && area !== ""
+          )
+      )
+    );
     return { success: true, data: areas };
   } catch (error) {
     console.error("[Supabase] Failed to get areas:", error);
@@ -554,13 +632,16 @@ export async function getLocations(): Promise<ApiResponse<LocationsResponse>> {
   try {
     const profiles = await getProfilesSnapshot();
 
-    const areaMap: Record<string, {
-      total: number;
-      verified: number;
-      donors: number;
-      available: number;
-      bloodGroupCounts: Record<string, number>;
-    }> = {};
+    const areaMap: Record<
+      string,
+      {
+        total: number;
+        verified: number;
+        donors: number;
+        available: number;
+        bloodGroupCounts: Record<string, number>;
+      }
+    > = {};
 
     let totalDonors = 0;
     let totalAvailable = 0;
@@ -569,7 +650,8 @@ export async function getLocations(): Promise<ApiResponse<LocationsResponse>> {
     profiles.forEach(p => {
       const city = (p.City || "").trim();
       const area = (p.Area || "").trim() || "Unknown";
-      const isTumkur = city.toLowerCase() === "tumkur" || city.toLowerCase() === "tumakuru";
+      const isTumkur =
+        city.toLowerCase() === "tumkur" || city.toLowerCase() === "tumakuru";
 
       if (!isTumkur && city) {
         outsideTumkur++;
@@ -588,7 +670,8 @@ export async function getLocations(): Promise<ApiResponse<LocationsResponse>> {
       const stats = areaMap[area];
       stats.total++;
 
-      const isVerified = (p["Verification Status"] || "").toLowerCase() === "verified";
+      const isVerified =
+        (p["Verification Status"] || "").toLowerCase() === "verified";
       if (isVerified) stats.verified++;
 
       const isConsent = (p["Donor Consent"] || "").toLowerCase() === "yes";
@@ -597,7 +680,8 @@ export async function getLocations(): Promise<ApiResponse<LocationsResponse>> {
         totalDonors++;
       }
 
-      const isAvailable = (p["Availability Status"] || "").toLowerCase() === "available";
+      const isAvailable =
+        (p["Availability Status"] || "").toLowerCase() === "available";
       if (isAvailable) {
         stats.available++;
         totalAvailable++;
@@ -652,34 +736,42 @@ export async function getLocations(): Promise<ApiResponse<LocationsResponse>> {
  * Record a donation for a profile
  * Replaces recordDonation() from googleSheetsApi
  */
-export async function recordDonation(hrsId: string): Promise<ApiResponse<{ success: boolean; newCount: number }>> {
+export async function recordDonation(
+  hrsId: string
+): Promise<ApiResponse<{ success: boolean; newCount: number }>> {
   try {
     // First get current profile to get donation count and donor consent
     const { data: profileData, error: profileError } = await supabase
-      .from('profiles')
+      .from("profiles")
       .select('"Blood Donation Count", "Donor Consent"')
-      .eq('HRS ID', hrsId)
+      .eq("HRS ID", hrsId)
       .single();
 
     if (profileError) throw profileError;
     if (!profileData) return { success: false, error: "Profile not found" };
 
-    const currentCount = parseInt(profileData["Blood Donation Count"] || "0", 10);
+    const currentCount = parseInt(
+      profileData["Blood Donation Count"] || "0",
+      10
+    );
     const newCount = isNaN(currentCount) ? 1 : currentCount + 1;
     const donorConsent = (profileData as any)["Donor Consent"];
 
     // Update donation count and last donation time
     const { data, error } = await supabase
-      .from('profiles')
+      .from("profiles")
       .update({
         "Blood Donation Count": newCount.toString(),
         "Last Donation Time": new Date().toISOString(),
         // Update next eligible time (120 days from now)
-        "Next Eligible Time": new Date(Date.now() + 120 * 24 * 60 * 60 * 1000).toISOString(),
+        "Next Eligible Time": new Date(
+          Date.now() + 120 * 24 * 60 * 60 * 1000
+        ).toISOString(),
         // Update availability based on donor consent (UPPERCASE convention)
-        "Availability Status": donorConsent === "YES" ? "AVAILABLE" : "NOT PARTICIPATING"
+        "Availability Status":
+          donorConsent === "YES" ? "AVAILABLE" : "NOT PARTICIPATING",
       })
-      .eq('HRS ID', hrsId)
+      .eq("HRS ID", hrsId)
       .select();
 
     if (error) throw error;
@@ -695,16 +787,18 @@ export async function recordDonation(hrsId: string): Promise<ApiResponse<{ succe
  * Delete profiles by HRS IDs
  * Replaces deleteProfiles() from googleSheetsApi
  */
-export async function deleteProfiles(hrsIds: string[]): Promise<ApiResponse<{ success: boolean; count: number }>> {
+export async function deleteProfiles(
+  hrsIds: string[]
+): Promise<ApiResponse<{ success: boolean; count: number }>> {
   try {
     if (hrsIds.length === 0) {
       return { success: true, data: { success: true, count: 0 } };
     }
 
     const { data, error } = await supabase
-      .from('profiles')
+      .from("profiles")
       .delete()
-      .in('HRS ID', hrsIds)
+      .in("HRS ID", hrsIds)
       .select('"HRS ID"');
 
     if (error) throw error;
@@ -721,7 +815,10 @@ export async function deleteProfiles(hrsIds: string[]): Promise<ApiResponse<{ su
  * Update a profile
  * Replaces updateProfile() from googleSheetsApi
  */
-export async function updateProfile(hrsId: string, updates: Partial<Profile>): Promise<ApiResponse<{ success: boolean }>> {
+export async function updateProfile(
+  hrsId: string,
+  updates: Partial<Profile>
+): Promise<ApiResponse<{ success: boolean }>> {
   try {
     // Map the caller's field names to the real database columns and drop
     // anything unknown. The previous pass-through wrote keys like `name`,
@@ -741,9 +838,9 @@ export async function updateProfile(hrsId: string, updates: Partial<Profile>): P
     // Note: "Verification Time" is deliberately NOT touched here. An edit is
     // not a verification, and overwriting it corrupted the verification trail.
     const { data, error } = await supabase
-      .from('profiles')
+      .from("profiles")
       .update(updateData)
-      .eq('HRS ID', hrsId)
+      .eq("HRS ID", hrsId)
       .select();
 
     if (error) throw error;
@@ -762,14 +859,22 @@ export async function updateProfile(hrsId: string, updates: Partial<Profile>): P
 export async function sendVerificationEmail(
   hrsId: string,
   extras?: { bloodGroup?: string; donorConsent?: string }
-): Promise<ApiResponse<{ sent: boolean; skipped?: boolean; reason?: string; to?: string; via?: string }>> {
+): Promise<
+  ApiResponse<{
+    sent: boolean;
+    skipped?: boolean;
+    reason?: string;
+    to?: string;
+    via?: string;
+  }>
+> {
   try {
     // Resolve the FULL profile from the database — the email body is built from
     // it. Previously the router called emailService directly, which looked the
     // donor up in the legacy Google Sheets cache instead.
     const { data: profileData, error: profileError } = await supabase
       .from("profiles")
-      .select('*')
+      .select("*")
       .eq("HRS ID", hrsId)
       .single();
 
@@ -785,8 +890,8 @@ export async function sendVerificationEmail(
           sent: false,
           skipped: true,
           reason: "No email on file",
-          to: undefined
-        }
+          to: undefined,
+        },
       };
     }
 
@@ -798,7 +903,7 @@ export async function sendVerificationEmail(
     // Send via SMTP, using the database record (Apps Script stays as the
     // fallback inside emailService when SMTP is not configured).
     const emailResult = await sendEmailViaSmtp(hrsId, emailExtras, record);
-    
+
     return {
       success: true,
       data: {
@@ -806,14 +911,16 @@ export async function sendVerificationEmail(
         skipped: emailResult.response.data?.skipped ?? false,
         reason: emailResult.response.data?.reason ?? undefined,
         to: emailResult.response.data?.to ?? to,
-        via: emailResult.via
-      }
+        via: emailResult.via,
+      },
     };
   } catch (error: any) {
     console.error("[Supabase] Failed to send verification email:", error);
     return {
       success: false,
-      error: "Failed to send verification email: " + (error?.message || "Unknown error")
+      error:
+        "Failed to send verification email: " +
+        (error?.message || "Unknown error"),
     };
   }
 }
@@ -823,7 +930,10 @@ export async function sendVerificationEmail(
  */
 export async function ping(): Promise<ApiResponse<{ success: boolean }>> {
   try {
-    const { data, error } = await supabase.from('profiles').select('"HRS ID"').limit(1);
+    const { data, error } = await supabase
+      .from("profiles")
+      .select('"HRS ID"')
+      .limit(1);
     if (error) throw error;
     return { success: true, data: { success: true } };
   } catch (error) {
@@ -835,7 +945,9 @@ export async function ping(): Promise<ApiResponse<{ success: boolean }>> {
 /**
  * Add a new profile
  */
-export async function addProfile(data: Partial<Profile>): Promise<ApiResponse<{ success: boolean }>> {
+export async function addProfile(
+  data: Partial<Profile>
+): Promise<ApiResponse<{ success: boolean }>> {
   try {
     // Map to real column names, dropping unknown fields.
     const cleanData: Record<string, unknown> = {};
@@ -846,7 +958,7 @@ export async function addProfile(data: Partial<Profile>): Promise<ApiResponse<{ 
     }
 
     const { data: result, error } = await supabase
-      .from('profiles')
+      .from("profiles")
       .insert(cleanData)
       .select();
 
@@ -863,7 +975,6 @@ export async function addProfile(data: Partial<Profile>): Promise<ApiResponse<{ 
  * Reset all profiles' verification bookkeeping (legacy helper — retained as a
  * no-op placeholder since every profile is already verified at creation).
  */
-
 
 /**
  * Convert a Profile to AdminRecord format (matching googleSheetsApi shape)
@@ -908,12 +1019,9 @@ export function convertToAdminRecord(p: Profile): AdminRecord {
   const publicVisibility = p["Public Directory Visibility"] || "";
 
   const birthDate = new Date(dob);
-  const age = Number.isNaN(birthDate.getTime())
-    ? 0
-    : exactAge(birthDate);
+  const age = Number.isNaN(birthDate.getTime()) ? 0 : exactAge(birthDate);
   const rawStatus = verificationStatus.toUpperCase();
-  const consentStatus =
-    storageConsent.toUpperCase() === "YES" ? "Yes" : "No";
+  const consentStatus = storageConsent.toUpperCase() === "YES" ? "Yes" : "No";
   const donorConsentBool = donationConsent.toUpperCase() === "YES";
 
   // Real timestamps parsed from the stored columns. The previous code returned
@@ -928,9 +1036,7 @@ export function convertToAdminRecord(p: Profile): AdminRecord {
   const isEligibleNow =
     nextEligibleAt === null || Date.parse(nextEligibleAt) <= Date.now();
   const availability =
-    isEligibleNow && donorConsentBool
-      ? "Available"
-      : "Unavailable";
+    isEligibleNow && donorConsentBool ? "Available" : "Unavailable";
 
   // Donation dates are stored per-slot ("Donation 1 Date" … "Donation N Date") —
   // collect whatever exists so the UI can show the real history.
@@ -941,24 +1047,36 @@ export function convertToAdminRecord(p: Profile): AdminRecord {
   }
 
   const publicVisible = Boolean(
-    id && rawStatus === "VERIFIED" && donorConsentBool === true &&
-    bloodGroup && bloodGroup !== "—" && publicVisibility.toUpperCase() === "YES" &&
-    isEligibleNow
+    id &&
+      rawStatus === "VERIFIED" &&
+      donorConsentBool === true &&
+      bloodGroup &&
+      bloodGroup !== "—" &&
+      publicVisibility.toUpperCase() === "YES" &&
+      isEligibleNow
   );
-  const initials = name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() || "?";
+  const initials =
+    name
+      .split(" ")
+      .map(n => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "?";
   const lastDonationAt =
     parseSheetDate(lastDonationTime) ??
-    (donationDates.length > 0
-      ? donationDates[donationDates.length - 1]
-      : null);
+    (donationDates.length > 0 ? donationDates[donationDates.length - 1] : null);
 
   return {
-    id, name,
+    id,
+    name,
     dateOfBirth: dob || "Not recorded",
     age: isNaN(age) ? 0 : age,
-    gender, mobile, email,
+    gender,
+    mobile,
+    email,
     group: bloodGroup,
-    location: city, area,
+    location: city,
+    area,
     status: "Verified",
     consent: consentStatus === "Yes",
     consentStatus,
@@ -980,20 +1098,22 @@ export function convertToAdminRecord(p: Profile): AdminRecord {
  * Get all profiles formatted as AdminRecord (for admin panel and volunteer access)
  * Replaces getAdminRecords() concept from googleSheetsApi
  */
-export async function getAdminRecords(): Promise<ApiResponse<{ records: any[]; count: number }>> {
+export async function getAdminRecords(): Promise<
+  ApiResponse<{ records: any[]; count: number }>
+> {
   try {
-    const { data, error } = await supabase.from('profiles').select('*');
-    
+    const { data, error } = await supabase.from("profiles").select("*");
+
     if (error) throw error;
-    
+
     const adminRecords = normalizeRows(data).map(convertToAdminRecord);
-    
-    return { 
-      success: true, 
-      data: { 
-        records: adminRecords, 
-        count: adminRecords.length 
-      } 
+
+    return {
+      success: true,
+      data: {
+        records: adminRecords,
+        count: adminRecords.length,
+      },
     };
   } catch (error) {
     console.error("[Supabase] Failed to get admin records:", error);
@@ -1005,33 +1125,55 @@ export async function getAdminRecords(): Promise<ApiResponse<{ records: any[]; c
  * Build directory CSV file from profiles
  * Replaces buildDirectoryCsv() from googleSheetsApi
  */
-export async function buildDirectoryCsv(): Promise<ApiResponse<{ filename: string; csv: string }>> {
+export async function buildDirectoryCsv(): Promise<
+  ApiResponse<{ filename: string; csv: string }>
+> {
   try {
-    const { data: profileRows, error } = await supabase.from('profiles').select('*');
-    
+    const { data: profileRows, error } = await supabase
+      .from("profiles")
+      .select("*");
+
     if (error) throw error;
     const profiles = normalizeRows(profileRows);
-    
+
     // Convert profiles to CSV format
     if (profiles.length === 0) {
-      return { 
-        success: true, 
-        data: { 
-          filename: `HRS_Directory_${new Date().toISOString().slice(0,10)}.csv`, 
-          csv: "" 
-        } 
+      return {
+        success: true,
+        data: {
+          filename: `HRS_Directory_${new Date().toISOString().slice(0, 10)}.csv`,
+          csv: "",
+        },
       };
     }
-    
+
     // Define CSV columns (matching the AdminRecord shape for consistency)
     const columns = [
-      "ID", "Name", "Date of Birth", "Age", "Gender", "Mobile", "Email", 
-      "Blood Group", "City", "Area", "Status", "Consent", "Consent Status", 
-      "Availability", "Donor Consent", "Submitted", "Registered At", 
-      "Verified At", "Donation Count", "Next Eligible At", 
-      "Public Visible", "Initials", "Last Donation At"
+      "ID",
+      "Name",
+      "Date of Birth",
+      "Age",
+      "Gender",
+      "Mobile",
+      "Email",
+      "Blood Group",
+      "City",
+      "Area",
+      "Status",
+      "Consent",
+      "Consent Status",
+      "Availability",
+      "Donor Consent",
+      "Submitted",
+      "Registered At",
+      "Verified At",
+      "Donation Count",
+      "Next Eligible At",
+      "Public Visible",
+      "Initials",
+      "Last Donation At",
     ];
-    
+
     const csvRows = [
       columns.join(","), // header
       ...profiles.map(profile => {
@@ -1060,25 +1202,27 @@ export async function buildDirectoryCsv(): Promise<ApiResponse<{ filename: strin
           adminRecord.publicVisible,
           adminRecord.initials,
           adminRecord.lastDonationAt ?? "",
-        ].map(value => {
-          // Escape quotes and wrap in quotes if contains comma, quote, or newline
-          const str = String(value);
-          if (str.includes('"') || str.includes(',') || str.includes('\n')) {
-            return `"${str.replace(/"/g, '""')}"`;
-          }
-          return str;
-        }).join(",")
-      })
+        ]
+          .map(value => {
+            // Escape quotes and wrap in quotes if contains comma, quote, or newline
+            const str = String(value);
+            if (str.includes('"') || str.includes(",") || str.includes("\n")) {
+              return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+          })
+          .join(",");
+      }),
     ];
-    
+
     const csv = csvRows.join("\n");
-    
-    return { 
-      success: true, 
-      data: { 
-        filename: `HRS_Directory_${new Date().toISOString().slice(0,10)}.csv`, 
-        csv 
-      } 
+
+    return {
+      success: true,
+      data: {
+        filename: `HRS_Directory_${new Date().toISOString().slice(0, 10)}.csv`,
+        csv,
+      },
     };
   } catch (error) {
     console.error("[Supabase] Failed to build directory CSV:", error);
@@ -1103,15 +1247,15 @@ export async function getPublicProfiles(): Promise<ApiResponse<Profile[]>> {
     // stripped from the response (a full birthdate is an identity-theft
     // vector — the directory only shows "N years").
     const { data, error } = await supabase
-      .from('profiles')
+      .from("profiles")
       .select(
         '"HRS ID","Full Name","Blood Group","Date of Birth",gender,city,area,"Blood Donation Count","Last Donation Time","Availability Status","Verification Time"'
       )
-      .ilike('Public Directory Visibility', 'YES')
-      .ilike('Verification Status', 'Verified')
-      .ilike('Donor Consent', 'YES')
-      .neq('Blood Group', '—'); // Ensure they have a blood group
-    
+      .ilike("Public Directory Visibility", "YES")
+      .ilike("Verification Status", "Verified")
+      .ilike("Donor Consent", "YES")
+      .neq("Blood Group", "—"); // Ensure they have a blood group
+
     if (error) throw error;
 
     const safeRows = normalizeRows(data).map(p => {
@@ -1177,15 +1321,27 @@ export async function addPerson(input: {
       "Blood Donation Count": "0",
       "Last Donation Time": null,
       "Next Eligible Time": null,
-      "Availability Status": input.donorConsent === "YES" ? "AVAILABLE" : "NOT PARTICIPATING",
-      "Public Directory Visibility": "NO", // Default to not public until approved
+      "Availability Status":
+        input.donorConsent === "YES" ? "AVAILABLE" : "NOT PARTICIPATING",
+      // Visibility follows consent: a person who agreed to donate (and whose
+      // record is stored with consent) appears in the public directory
+      // immediately. The homepage filters on Visibility YES + Verification
+      // Verified + Donor Consent YES, so "NO" here hid every new donor even
+      // when they had consented.
+      "Public Directory Visibility":
+        input.donorConsent === "YES" &&
+        (input.dataStorageConsent ?? "NO") === "YES"
+          ? "YES"
+          : "NO",
     };
-    
+
     // Remove null values to let Supabase use defaults
-    Object.keys(profileData).forEach(key => 
-      (profileData[key] === null || profileData[key] === undefined) && delete profileData[key]
+    Object.keys(profileData).forEach(
+      key =>
+        (profileData[key] === null || profileData[key] === undefined) &&
+        delete profileData[key]
     );
-    
+
     // HRS ID generation with retry: concurrent registrations can compute the
     // same next ID. On a unique-constraint collision, re-read the max and
     // retry (bounded) instead of failing the registration.
@@ -1193,7 +1349,7 @@ export async function addPerson(input: {
     let lastError: unknown = null;
     for (let attempt = 0; attempt < 5; attempt++) {
       const { data: idRows, error: maxIdError } = await supabase
-        .from('profiles')
+        .from("profiles")
         .select('"HRS ID"');
       if (maxIdError) throw maxIdError;
 
@@ -1205,7 +1361,7 @@ export async function addPerson(input: {
       profileData["HRS ID"] = `HRS-${String(maxNum + 1).padStart(4, "0")}`;
 
       const { data: inserted, error } = await supabase
-        .from('profiles')
+        .from("profiles")
         .insert(profileData)
         .select()
         .single();
@@ -1218,18 +1374,20 @@ export async function addPerson(input: {
       const code = (error as { code?: string }).code ?? "";
       if (code !== "23505" && !String(error).includes("duplicate")) break;
       // small jitter so racing writers diverge on the next attempt
-      await new Promise(r => setTimeout(r, 60 + Math.floor(Math.random() * 90)));
+      await new Promise(r =>
+        setTimeout(r, 60 + Math.floor(Math.random() * 90))
+      );
     }
-    
+
     if (!data) throw lastError ?? new Error("insert failed");
     invalidateProfilesSnapshot();
-    
-    return { 
-      success: true, 
-      data: { 
-        success: true, 
-        hrs_id: data["HRS ID"] as string 
-      } 
+
+    return {
+      success: true,
+      data: {
+        success: true,
+        hrs_id: data["HRS ID"] as string,
+      },
     };
   } catch (error) {
     console.error("[Supabase] Failed to add person:", error);
@@ -1238,12 +1396,25 @@ export async function addPerson(input: {
     // Postgres rejects (e.g. February 31st from a broken client form).
     const raw = String((error as { message?: string })?.message ?? error);
     if (/date\/time|invalid date|out of range/i.test(raw)) {
-      return { success: false, error: "Invalid date of birth — please check the day, month and year." };
+      return {
+        success: false,
+        error: "Invalid date of birth — please check the day, month and year.",
+      };
     }
-    if ((error as { code?: string })?.code === "23505" || /duplicate/i.test(raw)) {
-      return { success: false, error: "That record was just created by someone else — please submit again." };
+    if (
+      (error as { code?: string })?.code === "23505" ||
+      /duplicate/i.test(raw)
+    ) {
+      return {
+        success: false,
+        error:
+          "That record was just created by someone else — please submit again.",
+      };
     }
-    return { success: false, error: "Could not save the registration — please try again." };
+    return {
+      success: false,
+      error: "Could not save the registration — please try again.",
+    };
   }
 }
 
@@ -1251,7 +1422,9 @@ export async function addPerson(input: {
  * Perform data health check on profiles table
  * Replaces dataHealth() concept
  */
-export async function dataHealth(): Promise<ApiResponse<{ success: boolean; issues: string[]; totalProfiles: number }>> {
+export async function dataHealth(): Promise<
+  ApiResponse<{ success: boolean; issues: string[]; totalProfiles: number }>
+> {
   try {
     const profiles = await getProfilesSnapshot();
     const issues: string[] = [];
@@ -1259,14 +1432,18 @@ export async function dataHealth(): Promise<ApiResponse<{ success: boolean; issu
     // Check for missing essential fields
     profiles.forEach((p, index) => {
       const hrsId = p["HRS ID"] || `ROW_${index + 1}`;
-      
+
       if (!p["Full Name"] || p["Full Name"].trim() === "") {
         issues.push(`${hrsId}: Missing full name`);
       }
       if (!p.Email || p.Email.trim() === "") {
         issues.push(`${hrsId}: Missing email`);
       }
-      if (!p["Blood Group"] || p["Blood Group"].trim() === "" || p["Blood Group"] === "—") {
+      if (
+        !p["Blood Group"] ||
+        p["Blood Group"].trim() === "" ||
+        p["Blood Group"] === "—"
+      ) {
         issues.push(`${hrsId}: Missing blood group`);
       }
       if (!p.City || p.City.trim() === "") {
@@ -1281,46 +1458,69 @@ export async function dataHealth(): Promise<ApiResponse<{ success: boolean; issu
       if (!p["Phone Number"] || p["Phone Number"].trim() === "") {
         issues.push(`${hrsId}: Missing phone number`);
       }
-      
+
       // Check verification status consistency — all profiles must be VERIFIED
       const verificationStatus = p["Verification Status"];
-      if (verificationStatus && verificationStatus.toUpperCase() !== "VERIFIED") {
+      if (
+        verificationStatus &&
+        verificationStatus.toUpperCase() !== "VERIFIED"
+      ) {
         issues.push(`${hrsId}: Not verified (pending concept removed)`);
       }
-      
+
       // Check donor consent consistency
       const donorConsent = p["Donor Consent"];
       if (donorConsent && !["YES", "NO"].includes(donorConsent)) {
         issues.push(`${hrsId}: Invalid donor consent: ${donorConsent}`);
       }
-      
+
       // Check data storage consent
       const storageConsent = p["Data Storage Consent"];
       if (storageConsent && !["YES", "NO"].includes(storageConsent)) {
-        issues.push(`${hrsId}: Invalid data storage consent: ${storageConsent}`);
+        issues.push(
+          `${hrsId}: Invalid data storage consent: ${storageConsent}`
+        );
       }
-      
+
       // Check availability status
       const availabilityStatus = p["Availability Status"];
-      const validStatuses = ["AVAILABLE", "UNAVAILABLE", "TEMPORARILY UNAVAILABLE", "NOT PARTICIPATING"];
-      if (availabilityStatus && !validStatuses.includes(String(availabilityStatus).toUpperCase())) {
-        issues.push(`${hrsId}: Invalid availability status: ${availabilityStatus}`);
+      const validStatuses = [
+        "AVAILABLE",
+        "UNAVAILABLE",
+        "TEMPORARILY UNAVAILABLE",
+        "NOT PARTICIPATING",
+      ];
+      if (
+        availabilityStatus &&
+        !validStatuses.includes(String(availabilityStatus).toUpperCase())
+      ) {
+        issues.push(
+          `${hrsId}: Invalid availability status: ${availabilityStatus}`
+        );
       }
-      
+
       // Check public visibility
       const publicVisibility = p["Public Directory Visibility"];
       if (publicVisibility && !["YES", "NO"].includes(publicVisibility)) {
         issues.push(`${hrsId}: Invalid public visibility: ${publicVisibility}`);
       }
-      
+
       // Check numeric fields
       const donationCount = parseInt(p["Blood Donation Count"] || "0", 10);
       if (isNaN(donationCount) || donationCount < 0) {
-        issues.push(`${hrsId}: Invalid donation count: ${p["Blood Donation Count"]}`);
+        issues.push(
+          `${hrsId}: Invalid donation count: ${p["Blood Donation Count"]}`
+        );
       }
-      
+
       // Check date formats (basic check)
-      const dateFields = ["Date of Birth", "Registration Time", "Verification Time", "Last Donation Time", "Next Eligible Time"];
+      const dateFields = [
+        "Date of Birth",
+        "Registration Time",
+        "Verification Time",
+        "Last Donation Time",
+        "Next Eligible Time",
+      ];
       dateFields.forEach(field => {
         const value = p[field as keyof Profile];
         if (value && value !== "" && value !== null) {
@@ -1338,8 +1538,8 @@ export async function dataHealth(): Promise<ApiResponse<{ success: boolean; issu
       data: {
         success: issues.length === 0,
         issues,
-        totalProfiles: profiles.length
-      }
+        totalProfiles: profiles.length,
+      },
     };
   } catch (error) {
     console.error("[Supabase] Failed to perform data health check:", error);

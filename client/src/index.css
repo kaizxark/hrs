@@ -17507,20 +17507,42 @@ img {
 
 /* Keyframes used across the system */
 @keyframes rise-in {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 @keyframes fade-scale-in {
-  from { opacity: 0; transform: scale(0.985); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 @keyframes modal-pop {
-  from { opacity: 0; transform: translateY(12px) scale(0.97); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 @keyframes backdrop-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* ── Page-level entrances (each routed view rises softly) ─────────── */
@@ -17538,13 +17560,34 @@ img {
 .staff-member {
   animation: rise-in var(--motion-med) var(--ease-soft) both;
 }
-.donor-card:nth-child(1), .vol-card:nth-child(1) { animation-delay: 0.02s; }
-.donor-card:nth-child(2), .vol-card:nth-child(2) { animation-delay: 0.06s; }
-.donor-card:nth-child(3), .vol-card:nth-child(3) { animation-delay: 0.1s; }
-.donor-card:nth-child(4), .vol-card:nth-child(4) { animation-delay: 0.14s; }
-.donor-card:nth-child(5), .vol-card:nth-child(5) { animation-delay: 0.18s; }
-.donor-card:nth-child(6), .vol-card:nth-child(6) { animation-delay: 0.22s; }
-.donor-card:nth-child(n+7), .vol-card:nth-child(n+7) { animation-delay: 0.24s; }
+.donor-card:nth-child(1),
+.vol-card:nth-child(1) {
+  animation-delay: 0.02s;
+}
+.donor-card:nth-child(2),
+.vol-card:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.donor-card:nth-child(3),
+.vol-card:nth-child(3) {
+  animation-delay: 0.1s;
+}
+.donor-card:nth-child(4),
+.vol-card:nth-child(4) {
+  animation-delay: 0.14s;
+}
+.donor-card:nth-child(5),
+.vol-card:nth-child(5) {
+  animation-delay: 0.18s;
+}
+.donor-card:nth-child(6),
+.vol-card:nth-child(6) {
+  animation-delay: 0.22s;
+}
+.donor-card:nth-child(n + 7),
+.vol-card:nth-child(n + 7) {
+  animation-delay: 0.24s;
+}
 
 /* ── Buttons & tiles: consistent lift + press everywhere ──────────── */
 .primary-button,
@@ -17632,5 +17675,159 @@ img {
   .donor-card:hover,
   .vol-card:hover {
     transform: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   REGISTER FORM — mobile refinement (≤640px)
+   Measured on 390px viewport: card 350px wide, inputs 49px tall (good),
+   but the DOB row cramps (304px ÷ 3 selects), consent buttons stack their
+   labels, and the action bar sits far from the thumb. This block makes the
+   two-step form feel native on phones without touching desktop.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* Tighter page rhythm: less top space, more breathing at the bottom */
+  .register-page {
+    padding: 24px 14px 96px;
+    gap: 18px;
+  }
+
+  /* Compact header — the hero copy must not eat half the screen */
+  .reg-head {
+    margin-bottom: -4px;
+  }
+  .reg-head p {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Card hugs the screen; sticky footer friendliness */
+  .reg-card {
+    border-radius: 18px;
+    padding: 18px 16px 20px;
+  }
+
+  /* Step indicator: shrink labels so it never wraps on 320px screens */
+  .reg-steps {
+    gap: 7px;
+    margin-bottom: 18px;
+  }
+  .reg-step-label {
+    font-size: 11.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 34vw;
+  }
+
+  /* Inputs: comfortable thumb targets with iOS-safe font size (16px
+     prevents the auto-zoom on focus) */
+  .reg-input,
+  .reg-select {
+    font-size: 16px;
+    padding: 13px 14px;
+  }
+  .reg-select {
+    padding-right: 34px;
+  }
+
+  /* Name/phone and gender/city/area grids: single column, tighter gaps */
+  .reg-grid-2,
+  .reg-grid-3 {
+    gap: 12px;
+  }
+
+  /* DOB: keep the 3 dropdowns on ONE row but give day/year fixed compact
+     widths and let the month take the rest — "15 | June | 2001" reads
+     naturally and needs no scrolling. Slightly taller for easy tapping. */
+  .reg-dob-row {
+    grid-template-columns: 74px 1fr 84px;
+    gap: 8px;
+  }
+  .reg-dob-row .reg-select {
+    padding-left: 10px;
+    padding-right: 26px;
+  }
+  .reg-dob-row .reg-select-caret {
+    right: 9px;
+  }
+
+  /* Blood group tiles: 4 columns still fit (70px each is fine), but make
+     them taller thumb targets */
+  .reg-blood-grid {
+    gap: 8px;
+  }
+  .reg-blood-tile {
+    padding: 16px 4px;
+    font-size: 16px;
+    border-radius: 12px;
+  }
+
+  /* Consent buttons: full-width stacked, labels never clipped */
+  .reg-consent-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .reg-consent-btn {
+    justify-content: flex-start;
+    padding: 14px 16px;
+  }
+
+  /* Review block: single column reads better on phones */
+  .reg-review-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  /* Action bar: buttons span the width, primary last = thumb reach */
+  .reg-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .reg-actions .reg-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Success card: compact */
+  .reg-success {
+    padding: 10px 4px;
+  }
+  .reg-id-box {
+    width: 100%;
+  }
+}
+
+/* Very small phones (≤360px): DOB collapses to two rows */
+@media (max-width: 360px) {
+  .reg-dob-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .reg-dob-row .reg-select:nth-child(3) {
+    grid-column: span 2;
+  }
+  .reg-step-label {
+    display: none; /* badges alone are clear at this width */
+  }
+  .reg-step-line {
+    min-width: 12px;
+  }
+}
+
+/* Sticky action bar on touch devices: submit always in thumb reach while
+   filling the (long) consent step. Only when the actions bar is in view at
+   the bottom of the card — pure CSS, no JS. */
+@media (max-width: 640px) and (pointer: coarse) {
+  .reg-actions {
+    position: sticky;
+    bottom: 0;
+    /* float above content while scrolling the card */
+    margin: 10px -16px -20px;
+    padding: 10px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(to top, var(--card) 78%, transparent);
+    border-radius: 0 0 18px 18px;
+    z-index: 5;
   }
 }
