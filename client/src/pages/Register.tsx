@@ -21,16 +21,53 @@ import {
 /* Constants                                                           */
 /* ------------------------------------------------------------------ */
 
-const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const;
-
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+const BLOOD_GROUPS = [
+  "A+",
+  "A-",
+  "B+",
+  "B-",
+  "AB+",
+  "AB-",
+  "O+",
+  "O-",
 ] as const;
 
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+/** Month dropdown options: the user sees the name, the form stores the
+ *  1-based number as a string ("1"…"12") so date math stays numeric.
+ *  (Previously the dropdown stored the NAME, and Number("June") === NaN
+ *  poisoned the ISO date → age showed 0 and Postgres rejected the insert.) */
+export const MONTH_OPTIONS = MONTHS.map((name, i) => ({
+  value: String(i + 1),
+  label: name,
+}));
+
+/** Strict ISO date (YYYY-MM-DD) — what the server and Postgres expect. */
+export const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 const AREAS = [
-  "Tumkur City", "Ashok Nagar", "SIT", "Kyathsandra",
-  "Gulur", "Gubbi Gate", "SS Puram", "Other",
+  "Tumkur City",
+  "Ashok Nagar",
+  "SIT",
+  "Kyathsandra",
+  "Gulur",
+  "Gubbi Gate",
+  "SS Puram",
+  "Other",
 ] as const;
 
 const CITIES = ["Tumkur", "Bangalore", "Hassan", "Other"] as const;
@@ -49,10 +86,14 @@ function daysInMonth(month: number, year: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-/** Exact age in completed years. */
-function exactAge(iso: string): number {
+/**
+ * Exact age in completed years. Returns null for a malformed date — the
+ * caller hides the age badge instead of displaying a nonsense "0 years".
+ */
+function exactAge(iso: string): number | null {
+  if (!ISO_DATE_RE.test(iso)) return null;
   const birth = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(birth.getTime())) return 0;
+  if (Number.isNaN(birth.getTime())) return null;
   const now = new Date();
   let a = now.getFullYear() - birth.getFullYear();
   const m = now.getMonth() - birth.getMonth();
@@ -64,7 +105,15 @@ function exactAge(iso: string): number {
 /* Small building blocks                                               */
 /* ------------------------------------------------------------------ */
 
-function StepBadge({ n, active, done }: { n: number; active: boolean; done: boolean }) {
+function StepBadge({
+  n,
+  active,
+  done,
+}: {
+  n: number;
+  active: boolean;
+  done: boolean;
+}) {
   return (
     <span
       className={`reg-step-badge${active ? " active" : ""}${done ? " done" : ""}`}
@@ -109,7 +158,7 @@ function SelectBox({
 }: {
   value: string;
   onChange: (v: string) => void;
-  options: readonly string[] | number[];
+  options: readonly (string | number | { value: string; label: string })[];
   placeholder: string;
 }) {
   return (
@@ -122,11 +171,15 @@ function SelectBox({
         <option value="" disabled>
           {placeholder}
         </option>
-        {options.map(o => (
-          <option key={String(o)} value={String(o)}>
-            {String(o)}
-          </option>
-        ))}
+        {options.map(o => {
+          const opt =
+            typeof o === "object" ? o : { value: String(o), label: String(o) };
+          return (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          );
+        })}
       </select>
       <ChevronDown size={15} className="reg-select-caret" aria-hidden />
     </span>
@@ -181,7 +234,9 @@ export default function Register() {
         setSubmittedHrsId(result.hrsId);
         window.scrollTo({ top: 0, behavior: "smooth" });
       } else {
-        setErrors({ form: result.error || "Registration failed. Please try again." });
+        setErrors({
+          form: result.error || "Registration failed. Please try again.",
+        });
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
     },
@@ -212,12 +267,24 @@ export default function Register() {
   /** Month/year changes re-clamp the day IN THE SAME STROKE — no flicker,
    * and an impossible date can never be staged (Feb 31 → Feb 28). */
   function setDobMonth(v: string) {
-    setForm(prev => ({ ...prev, dobMonth: v, dobDay: clampDay(prev.dobDay, v, prev.dobYear) }));
-    setErrors(prev => (prev.dob ? { ...prev, dob: undefined as unknown as string } : prev));
+    setForm(prev => ({
+      ...prev,
+      dobMonth: v,
+      dobDay: clampDay(prev.dobDay, v, prev.dobYear),
+    }));
+    setErrors(prev =>
+      prev.dob ? { ...prev, dob: undefined as unknown as string } : prev
+    );
   }
   function setDobYear(v: string) {
-    setForm(prev => ({ ...prev, dobYear: v, dobDay: clampDay(prev.dobDay, prev.dobMonth, v) }));
-    setErrors(prev => (prev.dob ? { ...prev, dob: undefined as unknown as string } : prev));
+    setForm(prev => ({
+      ...prev,
+      dobYear: v,
+      dobDay: clampDay(prev.dobDay, prev.dobMonth, v),
+    }));
+    setErrors(prev =>
+      prev.dob ? { ...prev, dob: undefined as unknown as string } : prev
+    );
   }
 
   const dayOptions = useMemo(() => {
@@ -240,7 +307,6 @@ export default function Register() {
   /** "14 May 1999" — what the user actually picked, for the review panel. */
   const dobPretty = useMemo(() => {
     if (!dobIso) return "";
-    const d = new Date(`${dobIso}T00:00:00`);
     return `${Number(form.dobDay)} ${MONTHS[Number(form.dobMonth) - 1]} ${form.dobYear}`;
   }, [dobIso, form.dobDay, form.dobMonth, form.dobYear]);
 
@@ -248,15 +314,24 @@ export default function Register() {
 
   function validateStep1(): boolean {
     const e: Record<string, string> = {};
-    if (form.fullName.trim().length < 2) e.fullName = "Please enter the full name.";
+    if (form.fullName.trim().length < 2)
+      e.fullName = "Please enter the full name.";
     if (!dobIso) e.dob = "Select the full date of birth.";
+    else if (
+      !ISO_DATE_RE.test(dobIso) ||
+      Number.isNaN(new Date(`${dobIso}T00:00:00`).getTime())
+    )
+      e.dob = "Select a valid date of birth.";
     else if (new Date(`${dobIso}T00:00:00`) > new Date())
       e.dob = "Date of birth cannot be in the future.";
     if (!form.gender) e.gender = "Select a gender.";
     const digits = form.phone.replace(/\D/g, "");
     if (digits.length < 10 || digits.length > 15)
       e.phone = "Enter a valid mobile number (10–15 digits).";
-    if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
+    if (
+      form.email.trim() &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())
+    )
       e.email = "Enter a valid email, or leave it empty.";
     if (!form.city) e.city = "Select a city.";
     if (!form.area) e.area = "Select an area.";
@@ -296,7 +371,9 @@ export default function Register() {
     try {
       await registerMutation.mutateAsync({
         fullName: form.fullName.trim(),
-        dateOfBirth: dobIso || undefined,
+        // Defense in depth: never ship a malformed date to the server —
+        // Postgres would reject it and the user would see a generic failure.
+        dateOfBirth: ISO_DATE_RE.test(dobIso) ? dobIso : undefined,
         gender: form.gender,
         phoneNumber: form.phone.replace(/[^\d+]/g, ""),
         email: form.email.trim() || undefined,
@@ -348,7 +425,8 @@ export default function Register() {
           </div>
           <h1>Welcome to the HRS donor network!</h1>
           <p className="reg-success-sub">
-            Your profile has been saved{form.donorConsent ? " and you're listed as a willing donor" : ""}.
+            Your profile has been saved
+            {form.donorConsent ? " and you're listed as a willing donor" : ""}.
             Keep this ID — it identifies you at every future camp or donation.
           </p>
           <div className="reg-id-box">
@@ -363,7 +441,11 @@ export default function Register() {
             <Link href="/" className="reg-btn reg-btn-primary">
               <Home size={16} /> Back to home
             </Link>
-            <button type="button" className="reg-btn reg-btn-ghost" onClick={resetAll}>
+            <button
+              type="button"
+              className="reg-btn reg-btn-ghost"
+              onClick={resetAll}
+            >
               Register another person
             </button>
           </div>
@@ -408,7 +490,10 @@ export default function Register() {
           <section
             className="reg-step-panel"
             onKeyDown={e => {
-              if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "SELECT") {
+              if (
+                e.key === "Enter" &&
+                (e.target as HTMLElement).tagName !== "SELECT"
+              ) {
                 e.preventDefault();
                 next();
               }
@@ -437,7 +522,9 @@ export default function Register() {
                   type="tel"
                   inputMode="numeric"
                   value={form.phone}
-                  onChange={e => set("phone", e.target.value.replace(/[^\d+]/g, ""))}
+                  onChange={e =>
+                    set("phone", e.target.value.replace(/[^\d+]/g, ""))
+                  }
                   placeholder="10-digit mobile number"
                   autoComplete="tel"
                   maxLength={15}
@@ -459,7 +546,7 @@ export default function Register() {
                 <SelectBox
                   value={form.dobMonth}
                   onChange={setDobMonth}
-                  options={MONTHS as unknown as string[]}
+                  options={MONTH_OPTIONS}
                   placeholder="Month"
                 />
                 <SelectBox
@@ -469,7 +556,9 @@ export default function Register() {
                   placeholder="Year"
                 />
               </div>
-              {errors.dob && <span className="reg-field-error">{errors.dob}</span>}
+              {errors.dob && (
+                <span className="reg-field-error">{errors.dob}</span>
+              )}
               {age !== null && !errors.dob && (
                 <span className="reg-dob-age">
                   <UserRound size={13} /> Age {age} years
@@ -521,7 +610,11 @@ export default function Register() {
 
             <div className="reg-actions">
               <span />
-              <button type="button" className="reg-btn reg-btn-primary" onClick={next}>
+              <button
+                type="button"
+                className="reg-btn reg-btn-primary"
+                onClick={next}
+              >
                 Continue <ArrowRight size={16} />
               </button>
             </div>
@@ -556,8 +649,9 @@ export default function Register() {
                 <HeartHandshake size={14} /> Willing to donate blood? <em>*</em>
               </span>
               <p className="reg-consent-sub">
-                Saying <strong>Yes</strong> simply means HRS may contact you when
-                your blood group is urgently needed. You can change this anytime.
+                Saying <strong>Yes</strong> simply means HRS may contact you
+                when your blood group is urgently needed. You can change this
+                anytime.
               </p>
               <div className="reg-consent-row">
                 <button
@@ -609,11 +703,7 @@ export default function Register() {
 
             <div className="reg-review">
               <span className="reg-review-title">Review your details</span>
-              <button
-                type="button"
-                className="reg-review-edit"
-                onClick={back}
-              >
+              <button type="button" className="reg-review-edit" onClick={back}>
                 Edit
               </button>
               <div className="reg-review-grid">
@@ -621,7 +711,9 @@ export default function Register() {
                 <span>{form.fullName || "—"}</span>
                 <span className="reg-review-k">Date of birth</span>
                 <span>
-                  {dobPretty ? `${dobPretty}${age !== null ? ` · ${age} yrs` : ""}` : "—"}
+                  {dobPretty
+                    ? `${dobPretty}${age !== null ? ` · ${age} yrs` : ""}`
+                    : "—"}
                 </span>
                 <span className="reg-review-k">Gender</span>
                 <span>{form.gender || "—"}</span>
@@ -641,7 +733,11 @@ export default function Register() {
             </div>
 
             <div className="reg-actions">
-              <button type="button" className="reg-btn reg-btn-ghost" onClick={back}>
+              <button
+                type="button"
+                className="reg-btn reg-btn-ghost"
+                onClick={back}
+              >
                 <ArrowLeft size={16} /> Back
               </button>
               <button
