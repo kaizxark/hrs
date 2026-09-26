@@ -8,7 +8,20 @@ import App from "./App";
 import { startLogin } from "./const";
 import "./index.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Sensible app-wide defaults: data is considered fresh for a minute and
+      // is retried once. Individual queries (admin records, etc.) override
+      // where they need different behavior. This kills the wasteful default
+      // of refetch-on-every-window-focus for every hook in the app.
+      staleTime: 60_000,
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;

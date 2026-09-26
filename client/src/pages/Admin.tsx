@@ -1099,25 +1099,11 @@ export default function Admin() {
   }, [profilesQuery.dataUpdatedAt]);
   const outsideTumkur = lok?.outsideTumkur ?? 0;
 
-  // Subscribe to /api/sync-events — server pushes a notification on every cache update
-  useEffect(() => {
-    if (!loggedIn) return;
-    const es = new EventSource("/api/sync-events");
-    es.onmessage = e => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "cache-update") {
-          profilesQuery.refetch();
-          locationsQuery.refetch();
-          // Staff & Access reads from the same sheets cache — refetch it too.
-          utils.staff.list.invalidate();
-        }
-      } catch {
-        /* heartbeat, ignore */
-      }
-    };
-    return () => es.close();
-  }, [loggedIn, profilesQuery, locationsQuery, utils]);
+  // NOTE: the /api/sync-events SSE subscription was removed together with the
+  // server endpoint — it broadcast Google Sheets cache refreshes, and reads
+  // now go straight to Supabase (always current). The 60s refetchInterval on
+  // the queries below keeps multi-tab/views in sync without holding a
+  // serverless connection open.
 
   // Helper: apply a verified record transformation optimistically
   function applyVerifiedRecord(
@@ -1244,13 +1230,9 @@ export default function Admin() {
     []
   );
 
-  // Auto-sync is now driven by the SERVER-side poller (googleSheetsApi.ts),
-  // controlled from the Settings panel via trpc.hrs.setAutoSync. The server
-  // polls Google Sheets on its own interval and pushes `/api/sync-events`
-  // SSE notifications on every cache update, so the client here refetches
-  // profiles/locations automatically (see the sync-events subscription above).
-  // No client-side timer is needed — a second timer would double-poll the CSV
-  // and corrupt the sync counters shown in the panel.
+  // NOTE: there is no server-side poller or SSE channel anymore — every read
+  // goes straight to Supabase and the queries above refetch on a slow
+  // interval, so no auto-sync machinery is needed on either side.
 
   const updateProfileMutation = trpc.hrs.updateProfile.useMutation({
     onSuccess: result => {

@@ -258,30 +258,13 @@ export default function AuditLog() {
     search: search || undefined,
   });
 
-  // Live updates — the server broadcasts /api/sync-events whenever the
-  // sheet cache refreshes, so refetch immediately instead of waiting for
-  // the fallback poll below. An audit entry becomes visible within a few
-  // seconds of the underlying action.
-  useEffect(() => {
-    const es = new EventSource("/api/sync-events");
-    es.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "cache-update") {
-          query.refetch();
-        }
-      } catch {
-        /* heartbeat — ignore */
-      }
-    };
-    return () => es.close();
-  }, [query]);
-
-  // Fallback poll keeps entries fresh even when no sync event fires.
+  // NOTE: the /api/sync-events SSE subscription was removed together with the
+  // server endpoint (the Sheets cache it broadcast is gone). The interval
+  // below keeps entries fresh while the view is open.
   useEffect(() => {
     const interval = setInterval(() => {
       query.refetch();
-    }, 5_000);
+    }, 10_000);
     return () => clearInterval(interval);
   }, [query]);
 

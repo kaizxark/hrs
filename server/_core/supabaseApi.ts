@@ -67,7 +67,7 @@ export const supabaseAdmin = lazyClient();
 import { sendVerificationEmail as sendEmailViaSmtp, isSmtpConfigured } from "./emailService";
 // Type-only import (erased at compile time) so the AdminRecord shape the UI and
 // email templates expect stays in one place.
-import type { AdminRecord } from "./googleSheetsApi";
+import type { AdminRecord } from "./adminRecord";
 
 /**
  * Profile interface matching Supabase table structure

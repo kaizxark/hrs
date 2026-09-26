@@ -4,7 +4,6 @@ import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
-import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -154,7 +153,6 @@ const plugins = [
   react(),
   tailwindcss(),
   jsxLocPlugin(),
-  vitePluginManusRuntime(),
   vitePluginManusDebugCollector(),
 ];
 
@@ -173,6 +171,32 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // ~30 kB smaller payloads for marginal chunks — more, smaller files cache
+    // and load incrementally better than two monoliths.
+    chunkSizeWarningLimit: 400,
+    rollupOptions: {
+      output: {
+        // Split stable vendor libraries out of app chunks. Their content only
+        // changes when a dependency version changes, so returning visitors
+        // keep hitting browser cache even as app code ships daily.
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("@radix-ui")) return "vendor-radix";
+            if (id.includes("recharts") || id.includes("d3-") || id.includes("internmap"))
+              return "vendor-charts";
+            if (
+              id.includes("@tanstack") ||
+              id.includes("@trpc") ||
+              id.includes("superjson")
+            )
+              return "vendor-trpc";
+            if (id.includes("lucide-react")) return "vendor-icons";
+            if (id.includes("date-fns")) return "vendor-date";
+            return "vendor";
+          }
+        },
+      },
+    },
   },
   server: {
     host: true,

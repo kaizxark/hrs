@@ -158,19 +158,12 @@ export const auditRouter = router({
     return { logs: page, total };
   }),
 
-  /**
-   * Clear all audit log entries (admin only).
-   *
-   * Staff deletion tombstones (`staff.deleted:*`) are preserved: the one-time
-   * sheet seed in staffStore reads them to know which accounts must not be
-   * re-imported. Wiping them would resurrect deleted volunteers on the next
-   * cold start.
-   */
+  /** Clear all audit log entries (admin only). */
   clear: adminProcedure.mutation(async () => {
     const { data, error } = await supabase
       .from("audit_logs")
       .delete()
-      .not("action", "like", "staff.deleted:%") // keep deletion tombstones
+      .neq("action", "__never_matches__") // delete all rows
       .select("id");
 
     if (error) {

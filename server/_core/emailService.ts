@@ -11,7 +11,7 @@
  */
 import nodemailer from "nodemailer";
 import { ENV } from "./env";
-import { type AdminRecord, getCachedAdminRecords } from "./googleSheetsApi";
+import type { AdminRecord } from "./adminRecord";
 import * as gasApi from "./googleAppsScriptApi";
 import type { ApiResponse } from "./googleAppsScriptApi";
 
@@ -307,22 +307,15 @@ export function buildVerificationEmailText(
  * Send the verification email for a donor.
  *
  * 1. If SMTP is not configured yet → fall back to Apps Script (current behavior).
- * 2. Look up the full profile in the sheet cache by HRS ID. If it is missing
- *    (the cache can lag the slow Apps Script write) → fall back to Apps Script.
- * 3. If the donor has no email on file → return skipped (client shows the
- *    "no email" toast — same as today).
- * 4. Otherwise build the beautiful HTML card and send it via nodemailer. If the
- *    send throws, log it and fall back to Apps Script so the donor still gets
- *    notified.
+ * 2. Otherwise render the donor record passed by the caller (resolved from
+ *    Supabase — the same record the rest of the app shows) and send via
+ *    nodemailer. If the send throws, log it and fall back to Apps Script so
+ *    the donor still gets notified.
  */
 export async function sendVerificationEmail(
   hrsId: string,
   extras?: { bloodGroup?: string; donorConsent?: string },
-  /**
-   * The donor record to render. Callers now pass the record resolved from the
-   * database (Supabase); when omitted we fall back to the legacy Google Sheets
-   * cache for backwards compatibility.
-   */
+  /** The donor record resolved from the database by the caller. */
   recordOverride?: AdminRecord
 ): Promise<VerificationEmailOutcome> {
   if (!isSmtpConfigured()) {
@@ -330,17 +323,11 @@ export async function sendVerificationEmail(
     return { response, via: "gas" };
   }
 
-  const cached = getCachedAdminRecords();
-  const record =
-    recordOverride ??
-    (cached.success && cached.data
-      ? cached.data.records.find((r) => r.id === hrsId)
-      : undefined);
+  const record = recordOverride;
 
   if (!record) {
-    // Cache may lag the verification write — let Apps Script have a go.
     console.warn(
-      `[emailService] Profile ${hrsId} not in cache yet — falling back to Apps Script email.`
+      `[emailService] No record provided for ${hrsId} — falling back to Apps Script email.`
     );
     const response = await gasApi.sendVerificationEmail(hrsId, extras);
     return { response, via: "gas" };
