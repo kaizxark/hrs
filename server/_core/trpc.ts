@@ -35,12 +35,6 @@ export const adminProcedure = t.procedure.use(
     const isStaffAdmin = ctx.staff?.role === "admin";
 
     if (!isOAuthAdmin && !isStaffAdmin) {
-      // TEMP instrumentation (volunteer-delete diagnosis) — remove after RCA.
-      console.log(`[staff-auth] REJECTED adminProcedure`, {
-        path: opts.path,
-        hasStaffCookie: Boolean(ctx.staff),
-        hasOAuthUser: Boolean(ctx.user),
-      });
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
 
@@ -63,7 +57,8 @@ export const volunteerProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 
-    const isStaff = ctx.staff?.role === "volunteer" || ctx.staff?.role === "admin";
+    const isStaff =
+      ctx.staff?.role === "volunteer" || ctx.staff?.role === "admin";
     const isOAuthAdmin = ctx.user?.role === "admin";
 
     if (!isStaff && !isOAuthAdmin) {

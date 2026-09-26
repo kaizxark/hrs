@@ -394,7 +394,8 @@ function memberInitials(name: string): string {
   return (a + b).toUpperCase() || "?";
 }
 
-/** Staff & Access management view — CRUD for volunteer/admin accounts. */
+/** Staff & Access management view — CRUD for volunteer accounts. The signed-in
+ *  admin's own account is managed outside this panel and is not listed here. */
 function StaffAccessView({ action }: { action?: React.ReactNode }) {
   const { data: staffList, isLoading } = trpc.staff.list.useQuery(undefined, {
     // Keep the directory live: the Google Sheet CSV cache refreshes every
@@ -490,16 +491,12 @@ function StaffAccessView({ action }: { action?: React.ReactNode }) {
     // write lands (reconcile by username — sheet ids shift while the CSV
     // refreshes, usernames don't).
     onMutate: ({ username }) => {
-      // TEMP instrumentation (volunteer-delete diagnosis) — remove after RCA.
-      console.log("[Admin] deleteMutation onMutate", { username });
       if (username)
         setPendingRemoves(prev =>
           new Set(prev).add(username.trim().toLowerCase())
         );
     },
     onSuccess: (result, input) => {
-      // TEMP instrumentation (volunteer-delete diagnosis) — remove after RCA.
-      console.log("[Admin] deleteMutation onSuccess", { result });
       if (!result.success) {
         // Server returns {success:false} as a 200 body when the sheet write
         // was rejected (auth/secret failures etc.) — do NOT claim success:
@@ -520,11 +517,6 @@ function StaffAccessView({ action }: { action?: React.ReactNode }) {
       utils.staff.list.invalidate();
     },
     onError: (error, input) => {
-      // TEMP instrumentation (volunteer-delete diagnosis) — remove after RCA.
-      console.error("[Admin] deleteMutation onError", {
-        input,
-        message: (error as unknown as Error).message ?? String(error),
-      });
       if (input.username) {
         const key = input.username.trim().toLowerCase();
         setPendingRemoves(prev => {
@@ -596,12 +588,6 @@ function StaffAccessView({ action }: { action?: React.ReactNode }) {
   const handleDelete = (id: number, username: string, displayName: string) => {
     if (!window.confirm(`Delete "${displayName}"? This cannot be undone.`))
       return;
-    // TEMP instrumentation (volunteer-delete diagnosis) — remove after RCA.
-    console.log("[Admin] handleDelete confirmed, firing mutate", {
-      id,
-      username,
-      displayName,
-    });
     deleteMutation.mutate({ id, username });
   };
 
@@ -628,7 +614,8 @@ function StaffAccessView({ action }: { action?: React.ReactNode }) {
     }
     const visible = validServer.filter(m => {
       const key = m.username.trim().toLowerCase();
-      return key && !pendingRemoves.has(key);
+      // Admin accounts are not listed — this directory shows volunteers only.
+      return key && m.role === "volunteer" && !pendingRemoves.has(key);
     });
     const extraAdds = pendingAdds.filter(p => {
       const key = p.username.trim().toLowerCase();
@@ -651,7 +638,7 @@ function StaffAccessView({ action }: { action?: React.ReactNode }) {
     <AdminSection
       eyebrow="SYSTEM"
       title="Staff & Access"
-      description="Manage authorized HRS staff accounts."
+      description="Manage authorized HRS volunteer accounts."
       action={action}
     >
       <section className="admin-card staff-access-card">
@@ -660,8 +647,8 @@ function StaffAccessView({ action }: { action?: React.ReactNode }) {
           <div>
             <h2>Authorized directory</h2>
             <p>
-              {members.length} staff account{members.length !== 1 ? "s" : ""} on
-              the HRS portal.
+              {members.length} volunteer account
+              {members.length !== 1 ? "s" : ""} on the HRS portal.
             </p>
           </div>
           <button
@@ -755,12 +742,6 @@ function StaffAccessView({ action }: { action?: React.ReactNode }) {
         {/* Staff list */}
         <div className="staff-list">
           {members.map(member => {
-            const roleLabel =
-              member.role === "admin" ? "Administrator" : "Volunteer";
-            const accessText =
-              member.role === "admin"
-                ? "Full workspace access"
-                : "Can view and contact donors";
             return (
               <div
                 key={member.id}
@@ -772,9 +753,7 @@ function StaffAccessView({ action }: { action?: React.ReactNode }) {
                   </div>
                   <div className="staff-member-info">
                     <strong>{member.displayName}</strong>
-                    <span>
-                      @{member.username} · {roleLabel}
-                    </span>
+                    <span>@{member.username} · Volunteer</span>
                     {(member as any).mobile &&
                       (member as any).mobile !== "" && (
                         <span style={{ fontSize: 12, color: "#6b7280" }}>
@@ -790,23 +769,23 @@ function StaffAccessView({ action }: { action?: React.ReactNode }) {
                   </span>
                 </div>
                 <div className="staff-member-foot">
-                  <span className="staff-member-access">{accessText}</span>
-                  {member.role === "volunteer" && (
-                    <button
-                      className="staff-remove-btn"
-                      type="button"
-                      onClick={() =>
-                        handleDelete(
-                          member.id,
-                          member.username,
-                          member.displayName
-                        )
-                      }
-                      disabled={deleteMutation.isPending}
-                    >
-                      <Trash2 size={13} /> Remove
-                    </button>
-                  )}
+                  <span className="staff-member-access">
+                    Can view and contact donors
+                  </span>
+                  <button
+                    className="staff-remove-btn"
+                    type="button"
+                    onClick={() =>
+                      handleDelete(
+                        member.id,
+                        member.username,
+                        member.displayName
+                      )
+                    }
+                    disabled={deleteMutation.isPending}
+                  >
+                    <Trash2 size={13} /> Remove
+                  </button>
                 </div>
               </div>
             );
@@ -853,16 +832,14 @@ export default function Admin() {
   // Once set, the profilesQuery.data → records sync will stop overwriting
   // optimistic updates (the SSE still triggers refetches for background sync).
   const hasLoadedInitialRecords = useRef(false);
-  // Track whether we've ever confirmed a valid session in this tab lifetime.
-  // Persisted in sessionStorage so it survives page reloads (but clears when
-  // the tab closes). On fresh mount we don't know yet — show the login form
-  // immediately so non-logged-in users never see the skeleton. Once the
-  // query resolves with a valid session we flip this, and subsequent
-  // refetches (window-focus, stale revalidation) can safely show the
-  // skeleton instead of flashing the login form.
+  // Track whether we've ever confirmed a valid session in this browser.
+  // Persisted in localStorage (NOT sessionStorage) so it survives tab closes
+  // and new tabs: the session cookie itself lasts a year, so a browser that
+  // has ever logged in should revalidate with the skeleton instead of
+  // flashing the login form and then "logging itself in". Cleared on logout.
   const hadSessionBefore = (() => {
     try {
-      return sessionStorage.getItem("hrs_had_session") === "1";
+      return localStorage.getItem("hrs_had_session") === "1";
     } catch {
       return false;
     }
@@ -872,7 +849,7 @@ export default function Admin() {
     if (!hasHadSession.current) {
       hasHadSession.current = true;
       try {
-        sessionStorage.setItem("hrs_had_session", "1");
+        localStorage.setItem("hrs_had_session", "1");
       } catch {}
     }
   }
@@ -978,13 +955,7 @@ export default function Admin() {
     setProfileMenuOpen(false);
     setTopProfileMenuOpen(false);
     try {
-      sessionStorage.removeItem("hrs_had_session");
-    } catch {}
-    try {
       await logout();
-    } catch {}
-    try {
-      sessionStorage.removeItem("manus-cookie");
     } catch {}
     toast.success("Signed out securely.");
   };
@@ -1081,7 +1052,13 @@ export default function Admin() {
   // broadcasts to clients connected to the same function instance.
   // Supabase is always live, so polling here only burns serverless invocations
   // — a 60s refresh catches any cross-instance snapshot-cache drift.
+  // `enabled` gates on an active session: `hrs.profiles` requires staff auth,
+  // so firing it before login only produces a 401 that leaves the query stuck
+  // in error state — which is why the dashboard used to show 0 records after
+  // the first login until a manual reload. Once `loggedIn` flips true the
+  // query fetches on its own and the records appear immediately.
   const profilesQuery = trpc.hrs.profiles.useQuery(undefined, {
+    enabled: loggedIn,
     refetchOnWindowFocus: false,
     staleTime: 30_000,
     refetchInterval: 60_000,
@@ -1090,11 +1067,23 @@ export default function Admin() {
 
   // Tumkur locations with real-time stats — same rationale as profiles.
   const locationsQuery = trpc.hrs.locations.useQuery(undefined, {
+    enabled: loggedIn,
     refetchOnWindowFocus: false,
     staleTime: 30_000,
     refetchInterval: 60_000,
     retry: 2,
   });
+
+  // Fresh session begins: allow the profiles sync effect to (re)load records
+  // (it runs once per session) and drop any rows left over from a previous
+  // session — otherwise a logout → login as a different user would show the
+  // old account's data, or the new session would never populate at all.
+  useEffect(() => {
+    if (loggedIn) {
+      hasLoadedInitialRecords.current = false;
+      setRecords([]);
+    }
+  }, [loggedIn]);
 
   const lok = locationsQuery.data?.data;
   const locationStats = lok?.locations ?? [];
@@ -1105,7 +1094,8 @@ export default function Admin() {
 
   // "Last synced" now reflects actual successful data loads (no auto-sync timer).
   useEffect(() => {
-    if (profilesQuery.dataUpdatedAt) setLastSyncedAt(new Date(profilesQuery.dataUpdatedAt));
+    if (profilesQuery.dataUpdatedAt)
+      setLastSyncedAt(new Date(profilesQuery.dataUpdatedAt));
   }, [profilesQuery.dataUpdatedAt]);
   const outsideTumkur = lok?.outsideTumkur ?? 0;
 
@@ -1454,10 +1444,7 @@ export default function Admin() {
       if (recordTab === "donors" && !record.donorConsent) return false;
       if (recordTab === "available" && record.availability !== "Available")
         return false;
-      if (
-        recordTab === "unavailable" &&
-        record.availability !== "Unavailable"
-      )
+      if (recordTab === "unavailable" && record.availability !== "Unavailable")
         return false;
       if (filterGroup !== "All" && record.group !== filterGroup) return false;
       if (filterLocation !== "All" && record.location !== filterLocation)
@@ -1618,9 +1605,10 @@ export default function Admin() {
   };
 
   // While revalidating an existing session, show the dashboard skeleton so
-  // already-authenticated users don't see a login-form flash. On fresh
-  // mounts (no prior session confirmed) we skip straight to the login
-  // form — non-logged-in users never see the skeleton.
+  // already-authenticated users don't see a login-form flash. The flag is
+  // persisted in localStorage, so a browser that has EVER logged in gets the
+  // skeleton on revisit — including brand-new tabs — instead of the login
+  // form that then "logs itself in" a moment later.
   if (staffLoading && hasHadSession.current) {
     return (
       <div className="admin-shell">
@@ -1769,7 +1757,7 @@ export default function Admin() {
   return !loggedIn ? (
     <StaffLogin />
   ) : (
-    <div className="admin-shell">
+    <div className="admin-shell admin-shell-enter">
       {mobileNav && (
         <div className="sidebar-backdrop" onClick={() => setMobileNav(false)} />
       )}
@@ -2059,7 +2047,9 @@ export default function Admin() {
                         <span>Willing donors</span>
                         <HeartHandshake size={17} />
                       </div>
-                      <strong>{records.filter(r => r.donorConsent === true).length}</strong>
+                      <strong>
+                        {records.filter(r => r.donorConsent === true).length}
+                      </strong>
                       <small>Consented to be contacted</small>
                     </div>
                     <div className="metric-card">
@@ -3165,7 +3155,9 @@ function WorkspaceView({
                 <span className="sync-metric-value">
                   {fmtRate(
                     sync?.lastStatus === "idle" ? 1 : 0,
-                    sync?.lastStatus === "idle" || sync?.lastStatus === "error" ? 1 : 0
+                    sync?.lastStatus === "idle" || sync?.lastStatus === "error"
+                      ? 1
+                      : 0
                   )}
                 </span>
               </div>
@@ -3329,8 +3321,7 @@ function WorkspaceView({
                     : "Auto-sync paused"}
               </span>
               <span className="sync-status-time">
-                Last sync:{" "}
-                {formatIndiaSyncTime(lastSyncedAt)}
+                Last sync: {formatIndiaSyncTime(lastSyncedAt)}
               </span>
             </div>
           </section>
@@ -6012,7 +6003,9 @@ function AddPersonModal({
   return (
     <div
       className="modal-backdrop"
-      onMouseDown={event => event.target === event.currentTarget && !isSaving && onClose()}
+      onMouseDown={event =>
+        event.target === event.currentTarget && !isSaving && onClose()
+      }
     >
       <section className="admin-modal" role="dialog" aria-modal="true">
         <button className="modal-close" onClick={onClose} disabled={isSaving}>
@@ -6078,9 +6071,7 @@ function AddPersonModal({
             </Field>
           </div>
           <div>
-            <span className="profile-field-label">
-              Blood group · Required
-            </span>
+            <span className="profile-field-label">Blood group · Required</span>
             <div className="profile-blood-choice-grid">
               {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map(bg => (
                 <button
@@ -6162,7 +6153,9 @@ function AddPersonModal({
             onClick={submit}
             disabled={isSaving}
           >
-            {isSaving ? "Adding…" : (
+            {isSaving ? (
+              "Adding…"
+            ) : (
               <>
                 Add &amp; verify <ArrowRight size={16} />
               </>

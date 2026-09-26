@@ -14,10 +14,74 @@
  * seed admin. The seed is guarded by a `staff_seed_done` row in the audit
  * trail metadata — safer than a separate settings table — and never blocks
  * a failing read: if the sheets are unreachable, we simply serve the table.
+ *
+ * Because the seed marker can be wiped by "Clear audit log", deletions are
+ * additionally recorded as `staff.deleted:<username>` tombstone rows (also in
+ * audit_logs, preserved by the clear endpoint) and the seed skips those
+ * usernames. This prevents deleted sheet volunteers from being resurrected.
  */
 import type { Staff, InsertStaff } from "../../drizzle/schema";
 import { supabase } from "./supabaseApi";
 import { hashPassword, verifyPassword } from "./password";
+
+/**
+ * Marker rows written to `audit_logs` when a volunteer/admin account is
+ * deleted. The one-time sheet seed checks them and skips those usernames, so
+ * a deleted legacy account is never resurrected from the Google Sheet —
+ * even after the admin clears the audit trail (the clear endpoint preserves
+ * tombstones for this reason).
+ */
+const DELETED_STAFF_MARKER_PREFIX = "staff.deleted:";
+
+/** Record a tombstone so the sheet seed skips `username` forever. */
+async function markStaffDeleted(username: string): Promise<void> {
+  try {
+    await supabase.from("audit_logs").insert({
+      action: `${DELETED_STAFF_MARKER_PREFIX}${username.trim().toLowerCase()}`,
+      action_label: "Staff account deleted (tombstone)",
+      actor_role: "admin",
+      target_type: "staff",
+      target_id: username.trim().toLowerCase(),
+      success: true,
+    });
+  } catch (error) {
+    console.warn("[staffStore] Could not record deletion tombstone:", error);
+  }
+}
+
+/** Remove the tombstone when the same username is (re-)created. */
+async function clearStaffDeletedMarker(username: string): Promise<void> {
+  try {
+    await supabase
+      .from("audit_logs")
+      .delete()
+      .eq(
+        "action",
+        `${DELETED_STAFF_MARKER_PREFIX}${username.trim().toLowerCase()}`
+      );
+  } catch (error) {
+    console.warn("[staffStore] Could not clear deletion tombstone:", error);
+  }
+}
+
+/** Usernames that must never be re-imported from the legacy sheet. */
+async function listDeletedStaffUsernames(): Promise<Set<string>> {
+  try {
+    const { data, error } = await supabase
+      .from("audit_logs")
+      .select("action")
+      .like("action", `${DELETED_STAFF_MARKER_PREFIX}%`);
+    if (error) throw error;
+    return new Set(
+      ((data ?? []) as { action: string }[]).map(r =>
+        r.action.slice(DELETED_STAFF_MARKER_PREFIX.length)
+      )
+    );
+  } catch (error) {
+    console.warn("[staffStore] Could not list deletion tombstones:", error);
+    return new Set(); // fail open — behaves like before, no worse
+  }
+}
 import {
   ensureFreshStaffCache,
   findAdminFromCache,
@@ -114,16 +178,21 @@ async function seedFromSheets(): Promise<void> {
 
     // Volunteers: sheet rows may carry a scrypt hash OR a plaintext password
     // (added directly in the sheet). Plaintext is detected by the missing
-    // "scrypt:" prefix and hashed on import.
+    // "scrypt:" prefix and hashed on import. Accounts the admin deleted are
+    // skipped — without this the seed would resurrect them on every fresh
+    // deployment (the seed re-runs whenever its audit-log marker is gone).
+    const deletedUsernames = await listDeletedStaffUsernames();
     const volunteers = listVolunteersFromCache();
     for (const v of volunteers) {
       if (!v.username || !v.passwordHash) continue;
+      const uname = v.username.trim().toLowerCase();
+      if (deletedUsernames.has(uname)) continue;
       const hash = v.passwordHash.startsWith("scrypt:")
         ? v.passwordHash
         : await hashPassword(v.passwordHash);
       await supabase.from("staff").upsert(
         {
-          username: v.username.trim().toLowerCase(),
+          username: uname,
           password_hash: hash,
           display_name: v.displayName || v.username,
           mobile: v.mobile ?? "",
@@ -235,6 +304,9 @@ export async function createStaff(
   entry: InsertStaff
 ): Promise<Staff | undefined> {
   const norm = entry.username.trim().toLowerCase();
+  // The account exists again — lift its deletion tombstone (if any) so a
+  // future seed re-import is allowed.
+  await clearStaffDeletedMarker(norm);
   const { data, error } = await supabase
     .from("staff")
     .upsert(
@@ -269,6 +341,10 @@ export async function deleteStaffByUsername(
     console.error("[staffStore] deleteStaffByUsername failed:", error);
     return false;
   }
+  // Tombstone the deletion so the one-time sheet seed never re-imports this
+  // account on a fresh deployment (the seed marker lives in audit_logs and
+  // can be cleared by the admin).
+  await markStaffDeleted(norm);
   return true;
 }
 

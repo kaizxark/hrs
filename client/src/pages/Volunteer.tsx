@@ -50,8 +50,26 @@ type VolunteerRecord = {
   initials: string;
 };
 
-const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const;
-const AVATAR_TONES = ["coral", "plum", "blue", "sage", "sand", "rose", "gold", "lavender"] as const;
+const BLOOD_GROUPS = [
+  "A+",
+  "A-",
+  "B+",
+  "B-",
+  "AB+",
+  "AB-",
+  "O+",
+  "O-",
+] as const;
+const AVATAR_TONES = [
+  "coral",
+  "plum",
+  "blue",
+  "sage",
+  "sand",
+  "rose",
+  "gold",
+  "lavender",
+] as const;
 
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                    */
@@ -67,7 +85,11 @@ function fmtDate(value: string | null | undefined) {
   if (!value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return d.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function phoneClean(raw: string) {
@@ -133,7 +155,7 @@ function VolunteerCard({
       onClick={onClick}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => {
+      onKeyDown={e => {
         if (e.key === "Enter" || e.key === " ") onClick();
       }}
       aria-label={`View profile of ${donor.name}`}
@@ -235,8 +257,16 @@ function ProfileModal({
   return createPortal(
     <>
       <div className="vol-modal-backdrop" onClick={onClose} />
-      <div className="vol-modal" role="dialog" aria-label={`Profile: ${profile.name}`}>
-        <button className="vol-modal-close" onClick={onClose} aria-label="Close profile">
+      <div
+        className="vol-modal"
+        role="dialog"
+        aria-label={`Profile: ${profile.name}`}
+      >
+        <button
+          className="vol-modal-close"
+          onClick={onClose}
+          aria-label="Close profile"
+        >
           <X size={20} />
         </button>
 
@@ -273,7 +303,10 @@ function ProfileModal({
           {canCall && (
             <div className="vol-modal-row vol-modal-phone-row">
               <PhoneCall size={16} />
-              <a href={`tel:${phoneClean(profile.mobile)}`} className="vol-modal-tel-link">
+              <a
+                href={`tel:${phoneClean(profile.mobile)}`}
+                className="vol-modal-tel-link"
+              >
                 <span className="vol-modal-tel-text">{profile.mobile}</span>
                 <span className="vol-modal-call-icon" aria-hidden="true">
                   <PhoneCall size={20} />
@@ -317,9 +350,7 @@ function ProfileModal({
               <CalendarClock size={16} />
               <div>
                 <strong>
-                  {profile.donationCount > 0
-                    ? `${profile.donationCount}`
-                    : "0"}
+                  {profile.donationCount > 0 ? `${profile.donationCount}` : "0"}
                 </strong>
                 <small>Donations</small>
               </div>
@@ -346,7 +377,10 @@ function ProfileModal({
 
           <div className="vol-modal-actions">
             {canCall && (
-              <a href={`tel:${phoneClean(profile.mobile)}`} className="primary-button">
+              <a
+                href={`tel:${phoneClean(profile.mobile)}`}
+                className="primary-button"
+              >
                 <PhoneCall size={16} /> Call now
               </a>
             )}
@@ -371,9 +405,13 @@ function ProfileModal({
               disabled={sendingVerification}
             >
               {sendingVerification ? (
-                <><Loader2 size={16} className="vol-spin" /> Sending…</>
+                <>
+                  <Loader2 size={16} className="vol-spin" /> Sending…
+                </>
               ) : (
-                <><Mail size={16} /> Send verification email</>
+                <>
+                  <Mail size={16} /> Send verification email
+                </>
               )}
             </button>
           </div>
@@ -382,8 +420,8 @@ function ProfileModal({
             <div className="vol-note vol-note-consent">
               <ShieldCheck size={16} className="vol-note-ic" />
               <span>
-                <strong>Data with consent.</strong> Profile recorded with consent.
-                Donor consent:{" "}
+                <strong>Data with consent.</strong> Profile recorded with
+                consent. Donor consent:{" "}
                 {profile.donorConsent === true
                   ? "Yes"
                   : profile.donorConsent === false
@@ -395,15 +433,15 @@ function ProfileModal({
             <div className="vol-note vol-note-privacy">
               <LockKeyhole size={16} className="vol-note-ic" />
               <span>
-                <strong>Volunteer-only access.</strong> Do not share donor details outside
-                HRS blood coordination.
+                <strong>Volunteer-only access.</strong> Do not share donor
+                details outside HRS blood coordination.
               </span>
             </div>
           </div>
         </div>
       </div>
     </>,
-    document.body,
+    document.body
   );
 }
 
@@ -418,20 +456,27 @@ export type VolunteerDirectoryProps = {
   isLoggingOut: boolean;
 };
 
-export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerDirectoryProps) {
+export function VolunteerDirectory({
+  staff,
+  onLogout,
+  isLoggingOut,
+}: VolunteerDirectoryProps) {
   const [filterGroup, setFilterGroup] = useState("All Groups");
   const [filterLocation, setFilterLocation] = useState("All Locations");
   const [filterText, setFilterText] = useState("");
-  const [selectedProfile, setSelectedProfile] = useState<VolunteerRecord | null>(null);
+  const [selectedProfile, setSelectedProfile] =
+    useState<VolunteerRecord | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
-  const { data, isLoading, isFetching, refetch } = trpc.hrs.volunteerProfiles.useQuery(
-    undefined,
-    { retry: false, refetchInterval: 15_000, enabled: true },
-  );
+  const { data, isLoading, isFetching, refetch } =
+    trpc.hrs.volunteerProfiles.useQuery(undefined, {
+      retry: false,
+      refetchInterval: 15_000,
+      enabled: true,
+    });
 
   const sendVerification = trpc.hrs.sendVerificationEmail.useMutation({
-    onSuccess: (res) => {
+    onSuccess: res => {
       if (res?.success) {
         if ((res.data as { skipped?: boolean } | undefined)?.skipped) {
           toast.info("This donor has no email on file — nothing was sent.");
@@ -440,16 +485,19 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
         }
         refetch();
       } else {
-        toast.error((res as { error?: string })?.error || "Could not send the email. Try again.");
+        toast.error(
+          (res as { error?: string })?.error ||
+            "Could not send the email. Try again."
+        );
       }
     },
-    onError: (err) => toast.error(err.message || "Could not send the email."),
+    onError: err => toast.error(err.message || "Could not send the email."),
   });
 
   /* ---- Map records ---- */
   const records: VolunteerRecord[] = useMemo(() => {
     if (!data || !data.success || !data.data) return [];
-    return data.data.records.map((r) => ({
+    return data.data.records.map(r => ({
       id: r.id,
       name: r.name,
       age: r.age,
@@ -486,17 +534,23 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
   }, [records]);
 
   const stats = useMemo(() => {
-    const verified = records.filter((r) => r.status === "Verified").length;
-    const groups = new Set(records.map((r) => r.group).filter(Boolean)).size;
-    return { total: records.length, verified, pending: records.length - verified, groups };
+    const verified = records.filter(r => r.status === "Verified").length;
+    const groups = new Set(records.map(r => r.group).filter(Boolean)).size;
+    return {
+      total: records.length,
+      verified,
+      pending: records.length - verified,
+      groups,
+    };
   }, [records]);
 
   const filteredRecords = useMemo(() => {
     const q = filterText.trim().toLowerCase();
     return records
-      .filter((r) => {
+      .filter(r => {
         const mGroup = filterGroup === "All Groups" || r.group === filterGroup;
-        const mLocation = filterLocation === "All Locations" || r.location === filterLocation;
+        const mLocation =
+          filterLocation === "All Locations" || r.location === filterLocation;
         const mQuery =
           q === "" ||
           r.name.toLowerCase().includes(q) ||
@@ -515,7 +569,7 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
   const totalPages = Math.ceil(filteredRecords.length / PAGE_SIZE);
   const paginatedRecords = filteredRecords.slice(
     (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE,
+    currentPage * PAGE_SIZE
   );
 
   const hasActiveFilters =
@@ -542,7 +596,9 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
 
   /* Reset page when filters change */
   const filterKey = `${filterGroup}|${filterLocation}|${filterText}`;
-  useMemo(() => { setCurrentPage(1); }, [filterKey]);
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [filterKey]);
 
   return (
     <section className="volunteer-directory-wrapper">
@@ -553,7 +609,7 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
             {staff.displayName
               ? staff.displayName
                   .split(/\s+/)
-                  .map((part) => part[0])
+                  .map(part => part[0])
                   .slice(0, 2)
                   .join("")
                   .toUpperCase()
@@ -594,8 +650,8 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
               <em>Make the call.</em>
             </h1>
             <p>
-              The volunteer directory shows every HRS donor record — verified and
-              pending — with the contact details you need for coordination.
+              The volunteer directory shows every HRS donor record — verified
+              and pending — with the contact details you need for coordination.
               Refreshes automatically every 15 seconds.
             </p>
             <div className="vol-hero-cta">
@@ -650,7 +706,7 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
               type="text"
               placeholder="Search by name, area or phone…"
               value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
+              onChange={e => setFilterText(e.target.value)}
               aria-label="Search donors"
             />
             {filterText && (
@@ -668,10 +724,10 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
             <MapPin size={16} />
             <select
               value={filterLocation}
-              onChange={(e) => setFilterLocation(e.target.value)}
+              onChange={e => setFilterLocation(e.target.value)}
               aria-label="Filter by location"
             >
-              {locations.map((loc) => (
+              {locations.map(loc => (
                 <option key={loc} value={loc}>
                   {loc}
                 </option>
@@ -701,13 +757,15 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
             >
               All <small>{groupCounts["All Groups"]}</small>
             </button>
-            {BLOOD_GROUPS.map((g) => {
+            {BLOOD_GROUPS.map(g => {
               const count = groupCounts[g] ?? 0;
               return (
                 <button
                   key={g}
                   className={`vol-chip${filterGroup === g ? " vol-chip-active" : ""}`}
-                  onClick={() => setFilterGroup(filterGroup === g ? "All Groups" : g)}
+                  onClick={() =>
+                    setFilterGroup(filterGroup === g ? "All Groups" : g)
+                  }
                   disabled={count === 0}
                 >
                   {g} <small>{count}</small>
@@ -720,8 +778,8 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
         {/* Results bar */}
         <div className="vol-results-bar">
           <p>
-            Showing <strong>{filteredRecords.length}</strong> of {records.length}{" "}
-            donors
+            Showing <strong>{filteredRecords.length}</strong> of{" "}
+            {records.length} donors
             {filterGroup !== "All Groups" && <> · Blood group {filterGroup}</>}
             {filterLocation !== "All Locations" && <> · {filterLocation}</>}
           </p>
@@ -769,7 +827,7 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
                 <button
                   className="vol-page-btn"
                   disabled={currentPage <= 1}
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 >
                   ← Prev
                 </button>
@@ -779,7 +837,9 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
                 <button
                   className="vol-page-btn"
                   disabled={currentPage >= totalPages}
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  onClick={() =>
+                    setCurrentPage(p => Math.min(totalPages, p + 1))
+                  }
                 >
                   Next →
                 </button>
@@ -792,8 +852,8 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
         <div className="vol-footnote">
           <ShieldCheck size={16} />
           <span>
-            Records refresh automatically every 15 seconds. Volunteer access only
-            — never share donor details outside HRS coordination.
+            Records refresh automatically every 15 seconds. Volunteer access
+            only — never share donor details outside HRS coordination.
           </span>
         </div>
       </section>
@@ -816,9 +876,36 @@ export function VolunteerDirectory({ staff, onLogout, isLoggingOut }: VolunteerD
 /* ========================================================================== */
 
 export default function Volunteer() {
-  const { staff, isLoading: staffLoading, logout, isLoggingOut } = useStaffAuth();
+  const {
+    staff,
+    isLoading: staffLoading,
+    logout,
+    isLoggingOut,
+  } = useStaffAuth();
 
-  if (staffLoading) {
+  // While revalidating an existing session, show the loading state so
+  // already-authenticated users don't see a login-form flash that then
+  // "logs itself in". The flag is persisted in localStorage (the session
+  // cookie lasts a year, so the browser — not the tab — is the right scope):
+  // a browser that has EVER logged in gets the loading state on revisit,
+  // including brand-new tabs. Cleared on logout, so genuinely logged-out
+  // users still see the login form immediately.
+  const hadSessionBefore = (() => {
+    try {
+      return localStorage.getItem("hrs_had_session") === "1";
+    } catch {
+      return false;
+    }
+  })();
+  // Persist "this browser has logged in before" so future visits (any tab)
+  // revalidate with the loading state instead of flashing the login form.
+  if (staff?.active && !hadSessionBefore) {
+    try {
+      localStorage.setItem("hrs_had_session", "1");
+    } catch {}
+  }
+
+  if (staffLoading && hadSessionBefore) {
     return (
       <div className="vol-page vol-auth-loading">
         <Loader2 size={26} className="vol-spin" />

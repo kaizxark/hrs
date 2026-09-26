@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
 const STAFF_COOKIE_NAME = "hrs_staff_session_v2";
@@ -13,8 +14,13 @@ export interface StaffSession {
 
 export function useStaffAuth() {
   const [, navigate] = useLocation() as [string, (to: string) => void];
+  const queryClient = useQueryClient();
 
-  const { data: staff, isLoading, refetch } = trpc.staff.me.useQuery(undefined, {
+  const {
+    data: staff,
+    isLoading,
+    refetch,
+  } = trpc.staff.me.useQuery(undefined, {
     retry: false,
     staleTime: 30_000,
     gcTime: 60_000,
@@ -22,11 +28,16 @@ export function useStaffAuth() {
   });
 
   const loginMutation = trpc.staff.login.useMutation({
-    onSuccess: async (result) => {
+    onSuccess: async result => {
       if (result.success && result.staff) {
-        // Refetch staff.me so the query cache updates and the parent
-        // component re-renders (loggedIn flips true) without a full reload.
-        await refetch();
+        // Single centralized cache sweep: mark every cached query stale and
+        // refetch the mounted ones. Queries that errored with 401 before the
+        // login (e.g. records fetched on a page the user hit first) and any
+        // data left over from a previous session recover here — individual
+        // pages do not need their own "refetch on login" wiring.
+        // staff.me is part of this sweep, so `staff` resolves and the parent
+        // re-renders (loggedIn flips true) without a full reload.
+        await queryClient.invalidateQueries();
         if (result.staff.role === "volunteer") {
           navigate("/admin");
         }
@@ -34,7 +45,7 @@ export function useStaffAuth() {
         // conditionally renders <Login /> vs dashboard based on `staff`.
       }
     },
-    onError: (error) => {
+    onError: error => {
       console.error("Login failed:", error);
     },
   });
@@ -44,6 +55,14 @@ export function useStaffAuth() {
       try {
         sessionStorage.removeItem("manus-cookie");
       } catch {}
+      // Forget "this browser has logged in" so the next visit shows the
+      // login form immediately (no skeleton flash before it).
+      try {
+        localStorage.removeItem("hrs_had_session");
+      } catch {}
+      // Drop the ENTIRE query cache so nothing from this account's session
+      // survives — the next login (as any user) starts clean.
+      queryClient.clear();
       window.location.href = "/";
     },
   });
