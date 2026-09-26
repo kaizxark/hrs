@@ -1262,20 +1262,54 @@ export default function Admin() {
   });
 
   const deleteProfilesMutation = trpc.hrs.deleteProfiles.useMutation({
-    onSuccess: result => {
+    // Optimistic: drop the rows from local state IMMEDIATELY (in onMutate) so
+    // the UI reacts instantly. onSuccess keeps them removed and reconciles
+    // with the server; onError restores exactly what was there before.
+    onMutate: ({ hrsIds }) => {
+      const ids = new Set(hrsIds);
+      previousRecordsRef.current = records;
+      setRecords(current => current.filter(r => !ids.has(r.id ?? "")));
+      // A profile modal open on a deleted record must not linger.
+      if (selected && ids.has(selected.id ?? "")) {
+        setSelected(null);
+        setSelectedOrigin(null);
+      }
+      if (selectedDonation && ids.has(selectedDonation.id ?? "")) {
+        setDonationDetailOpen(false);
+        setSelectedDonation(null);
+      }
+    },
+    onSuccess: (result, hrsIds) => {
       if (result.success && result.data) {
-        toast.success(
-          `${result.data.count} record${result.data.count === 1 ? "" : "s"} deleted.`
-        );
+        previousRecordsRef.current = null;
+        if (result.data.count > 0) {
+          toast.success(
+            `${result.data.count} record${result.data.count === 1 ? "" : "s"} deleted.`
+          );
+        } else {
+          // Nothing was deleted server-side (rows already gone) — the
+          // optimistic removal already matches reality.
+          toast.info("Record(s) already removed.");
+        }
         setSelectedForDelete(new Set());
         setDeleteMode(false);
+        // Reconcile with the server (picks up deletions from other sessions).
         profilesQuery.refetch();
         setLastSyncedAt(new Date());
       } else {
+        // Server refused — restore what we optimistically removed.
+        if (previousRecordsRef.current) {
+          setRecords(previousRecordsRef.current);
+          previousRecordsRef.current = null;
+        }
         toast.error(result.error || "Failed to delete records");
       }
     },
-    onError: error => {
+    onError: (error, hrsIds) => {
+      if (previousRecordsRef.current) {
+        setRecords(previousRecordsRef.current);
+        previousRecordsRef.current = null;
+      }
       toast.error(`Delete failed: ${error.message}`);
     },
   });
@@ -1319,14 +1353,37 @@ export default function Admin() {
     });
 
   // The server pre-converts profiles to AdminRecord shape.
-  // Only sync on the initial load — after that, mutations apply optimistic
-  // updates to local state. The SSE poll will eventually refresh `records`
-  // when the Google Sheets CSV reflects the change.
+  // First load populates `records`; subsequent server refreshes (refetch
+  // interval, post-mutation reconcile) RECONCILE instead of being discarded:
+  // rows deleted elsewhere disappear, rows added elsewhere appear. Mutations
+  // remain optimistic — they update `records` synchronously and are never
+  // reverted by a refresh that still carries stale data (server data only
+  // replaces rows when it differs from what we already applied).
   useEffect(() => {
     if (profilesQuery.data?.success && profilesQuery.data.data?.records) {
+      const serverRecords = profilesQuery.data.data.records;
       if (!hasLoadedInitialRecords.current) {
-        setRecords(profilesQuery.data.data.records);
+        setRecords(serverRecords);
         hasLoadedInitialRecords.current = true;
+      } else {
+        // Reconcile: adopt the server list unless we have an in-flight
+        // optimistic mutation (previousRecordsRef set) that must not be
+        // clobbered mid-flight.
+        if (!previousRecordsRef.current) {
+          setRecords(prev => {
+            const serverById = new Map(
+              serverRecords.map(r => [r.id ?? r.name, r])
+            );
+            // Keep client-only rows (added this session, not yet in the
+            // server payload) and take server truth for everything else.
+            const clientOnly = prev.filter(
+              r => r.id && !serverById.has(r.id) && r.id.startsWith("HRS-")
+                ? false
+                : !serverById.has(r.id ?? r.name)
+            );
+            return [...clientOnly, ...serverRecords];
+          });
+        }
       }
       setLastSyncedAt(new Date());
     } else if (profilesQuery.isError) {
