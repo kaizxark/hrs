@@ -46,9 +46,9 @@ html {
 }
 /* Keep the whole interface comfortably legible without having to resize each component. */
 body {
-  zoom: 1.1;
-}
-body {
+  /* NOTE: `zoom: 1.1` was removed — zoom on body breaks position:fixed
+     children in Chromium (modals rendered mispositioned/off-screen).
+     Scale preferences belong in OS/browser zoom. */
   margin: 0;
   background: var(--background);
   color: var(--foreground);
@@ -1072,7 +1072,7 @@ textarea:focus,
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  z-index: 1000;
   background: rgba(32, 37, 32, 0.48);
   display: grid;
   place-items: center;
@@ -1218,7 +1218,7 @@ textarea:focus,
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: none;
   }
 }
 
@@ -1387,19 +1387,34 @@ textarea:focus,
   background: #f7f8f6;
 }
 /* Smooth entrance when the workspace appears after login (no hard cut). */
+/* IMPORTANT: no `transform` may linger on .admin-shell after the entrance
+   animation — a persistent transform turns the shell into the containing
+   block for position:fixed modals inside it, breaking their viewport
+   centering (backdrop stretched to 1800px instead of the viewport height).
+   The keyframes animate opacity only; any transform usage must be removed
+   in the `to` state or the fill mode must not retain it. */
 .admin-shell-enter {
-  animation: admin-shell-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: admin-shell-in 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 @keyframes admin-shell-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
+@keyframes profile-window-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .admin-shell-enter {
     animation: none;
@@ -4856,11 +4871,15 @@ textarea:focus,
   }
 }
 
-/* Donor profile reference layout: expose identity, consent, and readiness before detail. */
+/* Donor profile reference layout: expose identity, consent, and readiness before detail.
+   NOTE: the height uses min() against the SMALLER of 620px and the viewport
+   minus breathing room — with body zoom removed and the backdrop centered,
+   the card can never overflow below the fold (the "modal half cut off" bug). */
 .profile-modal {
   width: min(780px, calc(100% - 48px));
-  height: min(620px, calc(100vh - 120px));
-  max-height: calc(100vh - 120px);
+  height: min(620px, calc(100vh - 80px));
+  max-height: min(620px, calc(100vh - 80px));
+  margin: auto;
   padding: 0 0 30px;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -6481,11 +6500,14 @@ textarea:focus,
   overflow: hidden;
   box-sizing: border-box;
 }
+/* Emergency modal lives on the same unified layer ladder as every other
+   modal (backdrop 1000, card 1001). The card is a SIBLING of the backdrop
+   inside the portal, so it needs its own stacking position. */
 .emergency-modal-backdrop {
-  z-index: 1000 !important;
+  z-index: 1000;
 }
-.modal-card.emergency-modal {
-  z-index: 1001 !important;
+.modal-card.emergency-modal-fixed {
+  z-index: 1001;
 }
 .emergency-contact-list {
   display: flex;
@@ -6528,7 +6550,7 @@ body::-webkit-scrollbar {
 .floating-scrollbar {
   position: fixed;
   inset: 0 0 0 auto;
-  z-index: 70;
+  z-index: 30; /* below modal layer (1000+) — it must never overlay a popup */
   width: 12px;
   pointer-events: none;
 }
@@ -17467,4 +17489,148 @@ img {
 }
 .reg-step-label.current {
   color: var(--foreground);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   GLOBAL MOTION SYSTEM — one coherent language for the whole site
+   (appended last so it wins ties without !important; all animations are
+   entrance-only and respect prefers-reduced-motion)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --motion-fast: 0.18s;
+  --motion-med: 0.3s;
+  --motion-slow: 0.5s;
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.44, 1);
+}
+
+/* Keyframes used across the system */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fade-scale-in {
+  from { opacity: 0; transform: scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes modal-pop {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ── Page-level entrances (each routed view rises softly) ─────────── */
+.register-page,
+.about-page,
+.volunteer-directory-wrapper,
+.admin-content > section {
+  animation: rise-in var(--motion-slow) var(--ease-soft) both;
+}
+
+/* ── Cards stagger in (dashboard lists, donor cards, volunteer grid) ── */
+.donor-card,
+.vol-card,
+.recent-list .recent-row,
+.staff-member {
+  animation: rise-in var(--motion-med) var(--ease-soft) both;
+}
+.donor-card:nth-child(1), .vol-card:nth-child(1) { animation-delay: 0.02s; }
+.donor-card:nth-child(2), .vol-card:nth-child(2) { animation-delay: 0.06s; }
+.donor-card:nth-child(3), .vol-card:nth-child(3) { animation-delay: 0.1s; }
+.donor-card:nth-child(4), .vol-card:nth-child(4) { animation-delay: 0.14s; }
+.donor-card:nth-child(5), .vol-card:nth-child(5) { animation-delay: 0.18s; }
+.donor-card:nth-child(6), .vol-card:nth-child(6) { animation-delay: 0.22s; }
+.donor-card:nth-child(n+7), .vol-card:nth-child(n+7) { animation-delay: 0.24s; }
+
+/* ── Buttons & tiles: consistent lift + press everywhere ──────────── */
+.primary-button,
+.secondary-button,
+.reg-btn,
+.staff-add-btn,
+.staff-remove-btn,
+.reg-blood-tile,
+.donor-card,
+.vol-card {
+  transition:
+    transform var(--motion-fast) var(--ease-soft),
+    box-shadow var(--motion-fast) var(--ease-soft),
+    background-color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    opacity var(--motion-fast) ease;
+  will-change: auto;
+}
+.primary-button:hover,
+.reg-btn-primary:hover,
+.staff-add-btn:hover {
+  transform: translateY(-1px);
+}
+.primary-button:active,
+.reg-btn:active,
+.reg-blood-tile:active,
+.staff-add-btn:active,
+.staff-remove-btn:active {
+  transform: scale(0.97);
+}
+.donor-card:hover,
+.vol-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 34px rgba(22, 28, 22, 0.1);
+}
+
+/* ── Modals: unified entrance (backdrop fade + card pop) ─────────────
+   .modal-card/.admin-modal/.vol-modal already had entrance animations;
+   give the missing pieces the same motion and remove hard cuts. */
+.modal-backdrop,
+.vol-modal-backdrop,
+.modal-backdrop.emergency-modal-backdrop {
+  animation: backdrop-in 0.22s ease-out both;
+}
+.admin-modal.profile-modal {
+  animation: modal-pop 0.3s var(--ease-soft) both;
+}
+.vol-modal {
+  animation: modal-pop 0.3s var(--ease-soft) both;
+}
+.profile-modal {
+  transform-origin: var(--profile-origin-x, 50%) var(--profile-origin-y, 50%);
+  animation: profile-window-in 0.24s var(--ease-soft) both;
+}
+
+/* ── Home hero softens in on first paint ───────────────────────────── */
+.hero-section {
+  animation: fade-scale-in var(--motion-slow) var(--ease-soft) both;
+}
+
+/* ── Admin view switch: panel content re-enters softly ─────────────── */
+.admin-content {
+  animation: fade-scale-in var(--motion-med) var(--ease-soft) both;
+}
+
+/* ── Respect reduced motion everywhere, once, globally ─────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .register-page,
+  .about-page,
+  .volunteer-directory-wrapper,
+  .admin-content > section,
+  .donor-card,
+  .vol-card,
+  .recent-list .recent-row,
+  .staff-member,
+  .hero-section,
+  .admin-content,
+  .modal-backdrop,
+  .vol-modal-backdrop,
+  .admin-modal.profile-modal,
+  .vol-modal,
+  .profile-modal {
+    animation: none !important;
+  }
+  .donor-card:hover,
+  .vol-card:hover {
+    transform: none;
+  }
 }
