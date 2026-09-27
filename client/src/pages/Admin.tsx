@@ -4783,10 +4783,18 @@ function VolunteerDashboard({
   const [currentPage, setCurrentPage] = useState(1);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // City options are the full Karnataka district list (mirroring Home);
-  // area options union that district's talukas with areas actually present
-  // in the records, so legacy localities like "SIT" stay filterable.
-  const cityOptions = KA_DISTRICTS;
+  // Donor-driven options mirroring Home: only districts and areas that
+  // actually have records appear — an empty district is noise for a
+  // volunteer searching for donors. (Full district lists live in the
+  // data-entry forms and the coverage view.)
+  const cityOptions = useMemo(() => {
+    const seen = new Set<string>();
+    for (const record of donors) {
+      const d = kaNormalizeDistrict(record.location);
+      if (d && d !== "Unknown") seen.add(d);
+    }
+    return Array.from(seen).sort((a, b) => a.localeCompare(b));
+  }, [donors]);
 
   const areaOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -4799,9 +4807,21 @@ function VolunteerDashboard({
       const a = kaNormalizeArea(record.area);
       if (a && a !== "Unknown") seen.add(a);
     }
-    for (const a of kaAreasForDistrict(city)) seen.add(a);
     return Array.from(seen).sort((a, b) => a.localeCompare(b));
   }, [donors, city]);
+
+  // If the selected district no longer has records, fall back to All so the
+  // filter never keeps a dead selection.
+  useEffect(() => {
+    if (
+      cityOptions.length > 0 &&
+      city !== "All cities" &&
+      !cityOptions.includes(city)
+    ) {
+      setCity("All cities");
+      setArea("All areas");
+    }
+  }, [cityOptions, city]);
 
   // Changing any filter returns to page 1 (same as Home).
   useEffect(() => {
