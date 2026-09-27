@@ -27,8 +27,6 @@ import {
   HeartHandshake,
 } from "lucide-react";
 import {
-  KA_DISTRICTS,
-  kaAreasForDistrict,
   kaNormalizeDistrict,
   kaNormalizeArea,
 } from "@shared/kaDistricts";
@@ -518,10 +516,18 @@ export default function Home() {
     setArea("All areas");
   };
 
-  // City options are the full Karnataka district list; area options come
-  // from that district's talukas plus any areas actually present in the
-  // records (so legacy localities like "SIT" or "SS Puram" remain filterable).
-  const cityOptions = KA_DISTRICTS;
+  // Only districts and areas that actually have donors appear in the
+  // filters — an empty district is noise for a visitor searching for
+  // donors. (The full 31-district list lives in the Register/Admin data
+  // entry forms and the admin coverage view.)
+  const cityOptions = useMemo(() => {
+    const seen = new Set<string>();
+    for (const donor of donors) {
+      const d = kaNormalizeDistrict(donor.city);
+      if (d && d !== "Unknown") seen.add(d);
+    }
+    return Array.from(seen).sort((a, b) => a.localeCompare(b));
+  }, [donors]);
 
   const areaOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -531,9 +537,23 @@ export default function Home() {
       const a = kaNormalizeArea(donor.area);
       if (a && a !== "Unknown") seen.add(a);
     }
-    for (const a of kaAreasForDistrict(city)) seen.add(a);
     return Array.from(seen).sort((a, b) => a.localeCompare(b));
   }, [donors, city]);
+
+  // If the selected district no longer has donors (data refreshed and the
+  // last record moved/vanished), fall back to All cities so the filter
+  // never keeps a dead selection. Skipped while donors are still loading
+  // (empty options) so the Tumakuru default survives the initial fetch.
+  useEffect(() => {
+    if (
+      cityOptions.length > 0 &&
+      city !== "All cities" &&
+      !cityOptions.includes(city)
+    ) {
+      setCity("All cities");
+      setArea("All areas");
+    }
+  }, [cityOptions, city]);
 
   const filteredDonors = useMemo(
     () =>
@@ -588,7 +608,7 @@ export default function Home() {
             <div className="hero-copy">
               <div className="eyebrow">
                 <span className="pulse-dot" /> Verified community network ·
-                Tumkur
+                Karnataka
               </div>
               <h1>
                 Find the right
