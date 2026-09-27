@@ -6,6 +6,7 @@
 import { ENV } from "./env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
+  KA_DISTRICTS,
   kaNormalizeDistrict,
   kaNormalizeArea,
 } from "@shared/kaDistricts";
@@ -630,6 +631,18 @@ export interface LocationsResponse {
   totalAvailable: number;
   newThisSync: LocationStats[];
   outsideTumkur: number;
+  districts: DistrictCoverage[];
+  districtsCovered: number;
+}
+
+/** Per-district record/donor totals for the statewide Karnataka coverage view. */
+export interface DistrictCoverage {
+  district: string;
+  /** Distinct areas (talukas/localities) with at least one record. */
+  areas: number;
+  records: number;
+  donors: number;
+  available: number;
 }
 
 /**
@@ -654,6 +667,11 @@ export async function getLocations(): Promise<ApiResponse<LocationsResponse>> {
     let totalDonors = 0;
     let totalAvailable = 0;
     let outsideTumkur = 0;
+
+    const districtMap: Record<
+      string,
+      { records: number; donors: number; available: number; areas: Set<string> }
+    > = {};
 
     profiles.forEach(p => {
       const city = (p.City || "").trim();
@@ -697,7 +715,47 @@ export async function getLocations(): Promise<ApiResponse<LocationsResponse>> {
 
       const bg = p["Blood Group"] || "Unknown";
       stats.bloodGroupCounts[bg] = (stats.bloodGroupCounts[bg] || 0) + 1;
+
+      // Statewide rollup by district (normalized, so legacy spellings count too).
+      const district = kaNormalizeDistrict(city) || "Unknown";
+      if (!districtMap[district])
+        districtMap[district] = {
+          records: 0,
+          donors: 0,
+          available: 0,
+          areas: new Set(),
+        };
+      const d = districtMap[district];
+      d.records++;
+      if (isConsent) d.donors++;
+      if (isAvailable) d.available++;
+      d.areas.add(area);
     });
+
+    const districts: DistrictCoverage[] = KA_DISTRICTS.map(district => {
+      const d = districtMap[district];
+      return {
+        district,
+        areas: d ? d.areas.size : 0,
+        records: d?.records ?? 0,
+        donors: d?.donors ?? 0,
+        available: d?.available ?? 0,
+      };
+    });
+    // Keep any non-district values (e.g. "Unknown") so counts never vanish.
+    for (const [name, d] of Object.entries(districtMap)) {
+      if (!KA_DISTRICTS.includes(name)) {
+        districts.push({
+          district: name,
+          areas: d.areas.size,
+          records: d.records,
+          donors: d.donors,
+          available: d.available,
+        });
+      }
+    }
+    districts.sort((a, b) => a.district.localeCompare(b.district));
+    const districtsCovered = districts.filter(d => d.records > 0).length;
 
     const locations: LocationStats[] = Object.keys(areaMap).map(area => {
       const stats = areaMap[area];
@@ -732,6 +790,8 @@ export async function getLocations(): Promise<ApiResponse<LocationsResponse>> {
         totalAvailable,
         newThisSync: [],
         outsideTumkur,
+        districts,
+        districtsCovered,
       },
     };
   } catch (error) {

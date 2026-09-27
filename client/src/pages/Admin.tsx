@@ -19,7 +19,7 @@ import { trpc } from "@/lib/trpc";
 import { useStaffAuth } from "@/lib/staffAuth";
 import type { StaffSession } from "@/lib/staffAuth";
 import { Field, StaffLogin } from "@/components/StaffLogin";
-import type { LocationStats } from "@/lib/api";
+import type { LocationStats, DistrictCoverage } from "@/lib/api";
 import LocationsView from "./LocationsView";
 import AuditLog from "@/components/AuditLog";
 import {
@@ -1097,6 +1097,8 @@ export default function Admin() {
   const totalDonors = lok?.totalDonors ?? 0;
   const totalAvailable = lok?.totalAvailable ?? 0;
   const newThisSync = lok?.newThisSync ?? [];
+  const districtCoverage = lok?.districts ?? [];
+  const districtsCovered = lok?.districtsCovered ?? 0;
 
   // "Last synced" now reflects actual successful data loads (no auto-sync timer).
   useEffect(() => {
@@ -1883,7 +1885,7 @@ export default function Admin() {
             className={activeView === "locations" ? "active" : ""}
             onClick={() => goToView("locations")}
           >
-            <MapPin size={17} /> Tumkur Zones
+            <MapPin size={17} /> Locations
           </button>
           {!isVolunteer && (
             <>
@@ -2550,6 +2552,8 @@ export default function Admin() {
               totalAvailable={totalAvailable}
               newThisSync={newThisSync}
               outsideTumkur={outsideTumkur}
+              districts={districtCoverage}
+              districtsCovered={districtsCovered}
               isSyncing={isSyncing}
               onSync={() => triggerSync(true)}
               autoSyncEnabled={autoSyncEnabled}
@@ -2798,6 +2802,8 @@ function WorkspaceView({
   totalAvailable,
   newThisSync,
   outsideTumkur,
+  districts,
+  districtsCovered,
   isSyncing,
   onSync,
   autoSyncEnabled,
@@ -2824,6 +2830,8 @@ function WorkspaceView({
   totalAvailable: number;
   newThisSync: LocationStats[];
   outsideTumkur: number;
+  districts: DistrictCoverage[];
+  districtsCovered: number;
   isSyncing: boolean;
   onSync: () => void;
   autoSyncEnabled: boolean;
@@ -3058,8 +3066,8 @@ function WorkspaceView({
     return (
       <AdminSection
         eyebrow="NETWORK INTELLIGENCE"
-        title="Tumkur Zones"
-        description="Every area across Tumkur, auto-registered the moment it appears in the donor sheet."
+        title="Locations & Coverage"
+        description="Every area and district in the network, auto-registered the moment a record appears — now across all of Karnataka."
         action={
           !isVolunteer ? (
             <SyncNowButton isSyncing={isSyncing} onClick={onSync} />
@@ -3073,6 +3081,8 @@ function WorkspaceView({
           totalAvailable={totalAvailable}
           newThisSync={newThisSync}
           outsideTumkur={outsideTumkur}
+          districts={districts}
+          districtsCovered={districtsCovered}
           records={records}
           donors={donors}
           availableDonors={availableDonors}
@@ -4082,7 +4092,7 @@ function Statistics({ records }: { records: AdminRecord[] }) {
           <div className="statistics-card-heading">
             <div>
               <span>City / geographic distribution</span>
-              <h2>Tumkur and beyond.</h2>
+              <h2>Tumakuru and beyond.</h2>
             </div>
           </div>
           <div className="statistics-location-layout">

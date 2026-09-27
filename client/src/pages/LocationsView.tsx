@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import type { LocationStats } from "@/lib/api";
 import type { AdminRecord } from "./Admin";
+import type { DistrictCoverage } from "@/lib/api";
 
 type SortKey = "donors" | "available" | "verified" | "name" | "coverage";
 
@@ -36,6 +37,8 @@ type LocationsViewProps = {
   totalAvailable: number;
   newThisSync: LocationStats[];
   outsideTumkur: number;
+  districts: DistrictCoverage[];
+  districtsCovered: number;
   records: AdminRecord[];
   donors: AdminRecord[];
   availableDonors: AdminRecord[];
@@ -74,6 +77,8 @@ export default function LocationsView({
   totalAvailable,
   newThisSync,
   outsideTumkur,
+  districts,
+  districtsCovered,
   records: _records,
   donors: _donors,
   availableDonors: _availableDonors,
@@ -151,7 +156,7 @@ export default function LocationsView({
             <div>
               <span>Active Zones</span>
               <strong>{totalAreas}</strong>
-              <small>Coverage areas across Tumkur</small>
+              <small>Areas across Karnataka</small>
             </div>
           </div>
         </div>
@@ -182,11 +187,45 @@ export default function LocationsView({
           <div className="loc-kpi-body">
             <div className="loc-kpi-icon"><TrendingUp size={18} /></div>
             <div>
-              <span>Outside Tumkur</span>
+              <span>Outside Tumakuru</span>
               <strong>{outsideTumkur}</strong>
-              <small>Records from other cities</small>
+              <small>Records from other districts</small>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ─── KARNATAKA STATEWIDE COVERAGE ─── */}
+      <div className="statistics-card loc-district-card">
+        <div className="statistics-card-heading">
+          <div>
+            <span>Statewide coverage</span>
+            <h2>Karnataka districts</h2>
+          </div>
+          <div className="loc-district-score">
+            <strong>{districtsCovered}</strong>
+            <small>of 31 districts with records</small>
+          </div>
+        </div>
+        <div className="loc-district-grid">
+          {districts.map(d => (
+            <div
+              key={d.district}
+              className={`loc-district-chip${d.records > 0 ? " covered" : ""}`}
+              title={
+                d.records > 0
+                  ? `${d.records} records · ${d.donors} donors · ${d.available} available · ${d.areas} area${d.areas === 1 ? "" : "s"}`
+                  : "No records yet"
+              }
+            >
+              <strong>{d.district}</strong>
+              <span>
+                {d.records > 0
+                  ? `${d.donors} donor${d.donors === 1 ? "" : "s"} · ${d.areas} area${d.areas === 1 ? "" : "s"}`
+                  : "—"}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 

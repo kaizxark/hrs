@@ -87,6 +87,17 @@ export interface LocationsResponse {
   totalAvailable: number;
   newThisSync: LocationStats[];
   outsideTumkur: number;
+  districts: DistrictCoverage[];
+  districtsCovered: number;
+}
+
+/** Per-district statewide rollup (mirrors server/_core/supabaseApi.ts). */
+export interface DistrictCoverage {
+  district: string;
+  areas: number;
+  records: number;
+  donors: number;
+  available: number;
 }
 
 // Health check

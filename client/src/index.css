@@ -10144,6 +10144,65 @@ body::-webkit-scrollbar {
   }
 }
 
+/* ── Karnataka district coverage grid ── */
+.loc-district-card {
+  margin-bottom: 20px;
+}
+.loc-district-score {
+  text-align: right;
+}
+.loc-district-score strong {
+  display: block;
+  font-size: 22px;
+  color: #c5162d;
+  line-height: 1.1;
+}
+.loc-district-score small {
+  color: #697369;
+  font-size: 11px;
+}
+.loc-district-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+}
+.loc-district-chip {
+  border: 1px solid #e4e9e4;
+  border-radius: 9px;
+  padding: 8px 10px;
+  background: #fafbf9;
+  opacity: 0.62;
+  transition:
+    opacity 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+.loc-district-chip.covered {
+  background: #ffffff;
+  border-color: #d9e4d9;
+  opacity: 1;
+  box-shadow: 0 2px 6px rgba(28, 39, 31, 0.05);
+}
+.loc-district-chip:hover {
+  opacity: 1;
+  border-color: #c5162d33;
+}
+.loc-district-chip strong {
+  display: block;
+  font-size: 12.5px;
+  color: #2f382f;
+  line-height: 1.25;
+}
+.loc-district-chip span {
+  display: block;
+  font-size: 11px;
+  color: #697369;
+  margin-top: 2px;
+}
+.loc-district-chip.covered strong {
+  color: #1d2b1d;
+}
+
 /* ── KPI Hero Row ── */
 .loc-kpi-row {
   display: grid;
