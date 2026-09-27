@@ -5,6 +5,10 @@
  */
 import { ENV } from "./env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  kaNormalizeDistrict,
+  kaNormalizeArea,
+} from "@shared/kaDistricts";
 
 /**
  * The Supabase client is created LAZILY on first use.
@@ -196,6 +200,10 @@ function normalizeRow(row: Record<string, any> | null | undefined): Profile {
     const titleCase = col.charAt(0).toUpperCase() + col.slice(1);
     if (out[col] !== undefined) out[titleCase] = out[col];
   }
+  // Official district/area spellings: legacy rows ("Tumkur", "Bangalore",
+  // "Tumkur City") surface as "Tumakuru"/"Bengaluru Urban" everywhere.
+  out["City"] = kaNormalizeDistrict(out["City"]);
+  out["Area"] = kaNormalizeArea(out["Area"]);
   return out as Profile;
 }
 

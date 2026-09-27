@@ -2,6 +2,10 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
+  KA_DISTRICTS,
+  kaAreasForDistrict,
+} from "@shared/kaDistricts";
+import {
   Droplets,
   Check,
   ChevronDown,
@@ -58,19 +62,6 @@ export const MONTH_OPTIONS = MONTHS.map((name, i) => ({
 
 /** Strict ISO date (YYYY-MM-DD) — what the server and Postgres expect. */
 export const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-const AREAS = [
-  "Tumkur City",
-  "Ashok Nagar",
-  "SIT",
-  "Kyathsandra",
-  "Gulur",
-  "Gubbi Gate",
-  "SS Puram",
-  "Other",
-] as const;
-
-const CITIES = ["Tumkur", "Bangalore", "Hassan", "Other"] as const;
 
 const GENDERS = ["Male", "Female", "Other"] as const;
 
@@ -241,6 +232,33 @@ export default function Register() {
       }
     },
   });
+
+  /** City change swaps the area list — reset the stale area in the same
+   *  stroke so a Tumakuru locality can never be saved under Mysuru. */
+  function setCity(v: string) {
+    setForm(prev => ({
+      ...prev,
+      city: v,
+      area: "",
+    }));
+    setErrors(prev => {
+      const next = { ...prev };
+      delete next.city;
+      delete next.area;
+      return next;
+    }
+    );
+  }
+
+  /** Area selection via its own handler for symmetry with setCity. */
+  function setArea(v: string) {
+    set("area", v);
+  }
+
+  const areaOptions = useMemo(
+    () => kaAreasForDistrict(form.city),
+    [form.city]
+  );
 
   const set = <K extends keyof FormData>(key: K, value: FormData[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -578,17 +596,17 @@ export default function Register() {
               <Field label="City" required error={errors.city}>
                 <SelectBox
                   value={form.city}
-                  onChange={v => set("city", v)}
-                  options={CITIES}
-                  placeholder="Select"
+                  onChange={setCity}
+                  options={KA_DISTRICTS}
+                  placeholder="Select district"
                 />
               </Field>
               <Field label="Area / locality" required error={errors.area}>
                 <SelectBox
                   value={form.area}
-                  onChange={v => set("area", v)}
-                  options={AREAS}
-                  placeholder="Select"
+                  onChange={setArea}
+                  options={areaOptions}
+                  placeholder={form.city ? "Select taluk / area" : "Pick a city first"}
                 />
               </Field>
             </div>

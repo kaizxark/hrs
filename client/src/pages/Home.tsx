@@ -26,6 +26,12 @@ import {
   X,
   HeartHandshake,
 } from "lucide-react";
+import {
+  KA_DISTRICTS,
+  kaAreasForDistrict,
+  kaNormalizeDistrict,
+  kaNormalizeArea,
+} from "@shared/kaDistricts";
 
 type Donor = {
   id: string;
@@ -410,7 +416,7 @@ function FloatingScrollbar() {
 
 export default function Home() {
   const [bloodGroup, setBloodGroup] = useState("All Groups");
-  const [city, setCity] = useState("Tumkur");
+  const [city, setCity] = useState("Tumakuru");
   const [area, setArea] = useState("All areas");
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -505,39 +511,29 @@ export default function Home() {
 
   const isLoading = publicProfilesQuery.isLoading && donors.length === 0;
 
-  // City & area filter options are extracted from the live records only —
-  // a new city/area in the sheet appears here automatically.
-  const cityOptions = useMemo(() => {
-    const seen = new Set<string>();
-    for (const donor of donors) {
-      const c = donor.city?.trim();
-      if (c && c !== "Unknown") seen.add(c);
-    }
-    return Array.from(seen).sort((a, b) => a.localeCompare(b));
-  }, [donors]);
+  /** Selecting a district invalidates the chosen area in the same stroke —
+   *  an area of one district can never linger under another. */
+  const selectCity = (next: string) => {
+    setCity(next);
+    setArea("All areas");
+  };
+
+  // City options are the full Karnataka district list; area options come
+  // from that district's talukas plus any areas actually present in the
+  // records (so legacy localities like "SIT" or "SS Puram" remain filterable).
+  const cityOptions = KA_DISTRICTS;
 
   const areaOptions = useMemo(() => {
     const seen = new Set<string>();
     for (const donor of donors) {
-      if (city !== "All cities" && donor.city !== city) continue;
-      const a = donor.area?.trim();
+      if (city !== "All cities" && kaNormalizeDistrict(donor.city) !== city)
+        continue;
+      const a = kaNormalizeArea(donor.area);
       if (a && a !== "Unknown") seen.add(a);
     }
+    for (const a of kaAreasForDistrict(city)) seen.add(a);
     return Array.from(seen).sort((a, b) => a.localeCompare(b));
   }, [donors, city]);
-
-  // If the currently selected city no longer exists in the records
-  // (e.g. data refreshed and it disappeared), fall back to first available city.
-  useEffect(() => {
-    if (
-      cityOptions.length > 0 &&
-      city !== "All cities" &&
-      !cityOptions.includes(city)
-    ) {
-      setCity(cityOptions[0]);
-      setArea("All areas");
-    }
-  }, [cityOptions, city]);
 
   const filteredDonors = useMemo(
     () =>
@@ -547,9 +543,10 @@ export default function Home() {
           const matchesGroup =
             bloodGroup === "All Groups" || donor.bloodGroup === bloodGroup;
           const matchesCity =
-            city === "All cities" || donor.city === city;
+            city === "All cities" ||
+            kaNormalizeDistrict(donor.city) === city;
           const matchesArea =
-            area === "All areas" || donor.area === area;
+            area === "All areas" || kaNormalizeArea(donor.area) === area;
           return matchesGroup && matchesCity && matchesArea;
         })
         .sort((a, b) => b.donationsCount - a.donationsCount),
@@ -572,7 +569,7 @@ export default function Home() {
 
   const clearFilters = () => {
     setBloodGroup("All Groups");
-    setCity("Tumkur");
+    setCity("Tumakuru");
     setArea("All areas");
     setHasSearched(false);
   };
@@ -683,10 +680,7 @@ export default function Home() {
                       id="city"
                       label="City"
                       value={city}
-                      onChange={value => {
-                        setCity(value);
-                        setArea("All areas");
-                      }}
+                      onChange={selectCity}
                       options={["All cities", ...cityOptions]}
                     />
                     <SelectField

@@ -9,6 +9,12 @@ import {
 } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import {
+  KA_DISTRICTS,
+  kaAreasForDistrict,
+  kaNormalizeDistrict,
+  kaNormalizeArea,
+} from "@shared/kaDistricts";
 import { trpc } from "@/lib/trpc";
 import { useStaffAuth } from "@/lib/staffAuth";
 import type { StaffSession } from "@/lib/staffAuth";
@@ -120,7 +126,7 @@ const VIEW_LABELS: Record<AdminView, string> = {
   statistics: "Statistics",
   records: "Records",
   donations: "Donations",
-  locations: "Tumkur",
+  locations: "Tumakuru",
   staff: "Staff & Access",
   audit: "Audit Log",
   sync: "Settings",
@@ -368,7 +374,7 @@ function Select({
 }: {
   value: string;
   onChange: (value: string) => void;
-  options: string[];
+  options: readonly string[];
 }) {
   return (
     <div className="admin-select">
@@ -2596,8 +2602,8 @@ export default function Admin() {
               mobile: payload.mobile || "Not provided",
               email: payload.email || "",
               group: payload.bloodGroup,
-              location: payload.city || "Tumkur",
-              area: payload.area || "Tumkur City",
+              location: payload.city || "Tumakuru",
+              area: payload.area || "Tumakuru",
               status: "Verified",
               consent: true,
               consentStatus: "Yes",
@@ -3642,10 +3648,10 @@ function Statistics({ records }: { records: AdminRecord[] }) {
       ),
     }));
   const primaryLocation = locationData.find(
-    location => location.name.toLowerCase() === "tumkur"
-  ) ?? { name: "Tumkur", records: 0 };
+    location => location.name.toLowerCase() === "tumakuru"
+  ) ?? { name: "Tumakuru", records: 0 };
   const outsidePrimary = locationData
-    .filter(location => location.name !== "Tumkur")
+    .filter(location => location.name !== "Tumakuru")
     .reduce((sum, location) => sum + location.records, 0);
   const recordDate = (record: AdminRecord) => {
     if (!record.registeredAt) return null;
@@ -4767,45 +4773,25 @@ function VolunteerDashboard({
   const [currentPage, setCurrentPage] = useState(1);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // City & area filter options come from the live records only — a new
-  // city/area in the sheet appears here automatically, mirroring Home.
-  const cityOptions = useMemo(() => {
-    const seen = new Set<string>();
-    for (const record of donors) {
-      const c = record.location?.trim();
-      if (c && c !== "Unknown") seen.add(c);
-    }
-    return Array.from(seen).sort((a, b) => a.localeCompare(b));
-  }, [donors]);
+  // City options are the full Karnataka district list (mirroring Home);
+  // area options union that district's talukas with areas actually present
+  // in the records, so legacy localities like "SIT" stay filterable.
+  const cityOptions = KA_DISTRICTS;
 
   const areaOptions = useMemo(() => {
     const seen = new Set<string>();
     for (const record of donors) {
-      if (city !== "All cities" && record.location !== city) continue;
-      const a = record.area?.trim();
+      if (
+        city !== "All cities" &&
+        kaNormalizeDistrict(record.location) !== city
+      )
+        continue;
+      const a = kaNormalizeArea(record.area);
       if (a && a !== "Unknown") seen.add(a);
     }
+    for (const a of kaAreasForDistrict(city)) seen.add(a);
     return Array.from(seen).sort((a, b) => a.localeCompare(b));
   }, [donors, city]);
-
-  // If the selected city no longer exists in the records, fall back to All.
-  useEffect(() => {
-    if (
-      cityOptions.length > 0 &&
-      city !== "All cities" &&
-      !cityOptions.includes(city)
-    ) {
-      setCity("All cities");
-      setArea("All areas");
-    }
-  }, [cityOptions, city]);
-
-  // If the selected area no longer exists under the current city, reset it.
-  useEffect(() => {
-    if (area !== "All areas" && !areaOptions.includes(area)) {
-      setArea("All areas");
-    }
-  }, [areaOptions, area]);
 
   // Changing any filter returns to page 1 (same as Home).
   useEffect(() => {
@@ -4818,8 +4804,11 @@ function VolunteerDashboard({
         .filter(record => {
           const matchesGroup =
             bloodGroup === "All Groups" || record.group === bloodGroup;
-          const matchesCity = city === "All cities" || record.location === city;
-          const matchesArea = area === "All areas" || record.area === area;
+          const matchesCity =
+            city === "All cities" ||
+            kaNormalizeDistrict(record.location) === city;
+          const matchesArea =
+            area === "All areas" || kaNormalizeArea(record.area) === area;
           return matchesGroup && matchesCity && matchesArea;
         })
         .sort((a, b) => b.donationCount - a.donationCount),
@@ -5063,8 +5052,19 @@ function RecordModal({
   const [editGender, setEditGender] = useState(record.gender);
   const [editMobile, setEditMobile] = useState(record.mobile);
   const [editEmail, setEditEmail] = useState(record.email);
-  const [editArea, setEditArea] = useState(record.area);
-  const [editLocation, setEditLocation] = useState(record.location);
+  const [editArea, setEditArea] = useState(() =>
+    kaNormalizeArea(record.area)
+  );
+  const [editLocation, setEditLocation] = useState(() =>
+    kaNormalizeDistrict(record.location)
+  );
+  // Legacy areas (e.g. "Tumkur City") may sit outside the curated list —
+  // keep them selectable so the edit select never shows a blank value.
+  const editAreaOptions = useMemo(() => {
+    const list = [...kaAreasForDistrict(editLocation)];
+    if (editArea && !list.includes(editArea)) list.push(editArea);
+    return list;
+  }, [editLocation, editArea]);
   const [activityOpen, setActivityOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(true);
   const hasDonationHistory =
@@ -5149,8 +5149,8 @@ function RecordModal({
                       setEditGender(record.gender);
                       setEditMobile(record.mobile);
                       setEditEmail(record.email);
-                      setEditArea(record.area);
-                      setEditLocation(record.location);
+                      setEditArea(kaNormalizeArea(record.area));
+                      setEditLocation(kaNormalizeDistrict(record.location));
                     }}
                   >
                     <Edit3 size={14} /> Edit
@@ -5335,16 +5335,7 @@ function RecordModal({
                         onChange={e => setEditArea(e.target.value)}
                         style={{ appearance: "none", cursor: "pointer" }}
                       >
-                        {[
-                          "Tumkur City",
-                          "Ashok Nagar",
-                          "SIT",
-                          "Kyathsandra",
-                          "Gulur",
-                          "Gubbi Gate",
-                          "SS Puram",
-                          "Other",
-                        ].map(a => (
+                        {editAreaOptions.map(a => (
                           <option key={a} value={a}>
                             {a}
                           </option>
@@ -5356,10 +5347,13 @@ function RecordModal({
                       <select
                         className="plain-input"
                         value={editLocation}
-                        onChange={e => setEditLocation(e.target.value)}
+                        onChange={e => {
+                          setEditLocation(e.target.value);
+                          setEditArea(kaAreasForDistrict(e.target.value)[0] ?? "");
+                        }}
                         style={{ appearance: "none", cursor: "pointer" }}
                       >
-                        {["Tumkur", "Bangalore", "Hassan", "Other"].map(c => (
+                        {KA_DISTRICTS.map(c => (
                           <option key={c} value={c}>
                             {c}
                           </option>
@@ -5664,8 +5658,10 @@ function RecordModal({
                             setEditGender(record.gender);
                             setEditMobile(record.mobile);
                             setEditEmail(record.email);
-                            setEditArea(record.area);
-                            setEditLocation(record.location);
+                            setEditArea(kaNormalizeArea(record.area));
+                            setEditLocation(
+                              kaNormalizeDistrict(record.location)
+                            );
                           }}
                         >
                           Cancel
@@ -5971,8 +5967,8 @@ function AddPersonModal({
   const [name, setName] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [gender, setGender] = useState("Female");
-  const [city, setCity] = useState("Tumkur");
-  const [area, setArea] = useState("Tumkur City");
+  const [city, setCity] = useState("Tumakuru");
+  const [area, setArea] = useState("Tumakuru");
   const [mobile, setMobile] = useState("");
   const [email, setEmail] = useState("");
   const [bloodGroup, setBloodGroup] = useState("");
@@ -6088,24 +6084,18 @@ function AddPersonModal({
             <Field label="City">
               <Select
                 value={city}
-                onChange={setCity}
-                options={["Tumkur", "Bangalore", "Hassan", "Other"]}
+                onChange={v => {
+                  setCity(v);
+                  setArea(kaAreasForDistrict(v)[0] ?? "");
+                }}
+                options={KA_DISTRICTS}
               />
             </Field>
             <Field label="Area">
               <Select
                 value={area}
                 onChange={setArea}
-                options={[
-                  "Tumkur City",
-                  "Ashok Nagar",
-                  "SIT",
-                  "Kyathsandra",
-                  "Gulur",
-                  "Gubbi Gate",
-                  "SS Puram",
-                  "Other",
-                ]}
+                options={kaAreasForDistrict(city)}
               />
             </Field>
           </div>
