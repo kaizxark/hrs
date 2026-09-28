@@ -3585,8 +3585,10 @@ function AdminFormControl({
     ? `${window.location.origin}/form/${active.id}`
     : "";
 
-  // Close the menu on outside click, scroll, or resize. The menu renders in
-  // a body portal (fixed position) so no stacking context can bury it.
+  // Close the menu on outside click or resize. The menu renders in a body
+  // portal (fixed position) so no stacking context can bury it. It closes on
+  // scroll: when the sticky topbar overlays the button, a following menu
+  // would visually float detached, so dismissal is the sane behavior.
   useEffect(() => {
     if (!menuOpen) return;
     const onDoc = (e: MouseEvent) => {
@@ -3598,15 +3600,25 @@ function AdminFormControl({
       const r = btnRef.current?.getBoundingClientRect();
       if (r) setMenuPos({ top: r.bottom + 8, right: window.innerWidth - r.right });
     };
+    const onScroll = () => setMenuOpen(false);
     document.addEventListener("mousedown", onDoc);
-    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", reposition);
     return () => {
       document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", reposition);
     };
   }, [menuOpen]);
+
+  // Clamp the menu inside the viewport: on small screens a right-anchored
+  // menu can extend past the left edge. Keep a 12px gutter on both sides.
+  const menuStyle = (() => {
+    if (!menuPos) return undefined;
+    const width = Math.min(320, window.innerWidth - 24);
+    const right = Math.max(12, menuPos.right);
+    return { position: "fixed" as const, top: menuPos.top, right, zIndex: 1001, minWidth: width };
+  })();
 
   const copyLink = () => {
     navigator.clipboard?.writeText(formUrl).then(
@@ -3669,17 +3681,12 @@ function AdminFormControl({
           >
             <UserPlus size={17} /> Add Person
           </button>
-          {menuOpen && menuPos && createPortal(
+          {menuOpen && menuStyle && createPortal(
             <div
               className="admin-form-menu"
               role="menu"
               ref={menuRef}
-              style={{
-                position: "fixed",
-                top: menuPos.top,
-                right: menuPos.right,
-                zIndex: 1001,
-              }}
+              style={menuStyle}
             >
               <button role="menuitem" onClick={() => startForm("pending")}>
                 <Clock3 size={16} />
