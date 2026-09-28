@@ -2161,9 +2161,8 @@ export default function Admin() {
                         }
                       </strong>
                       <small>Ready for public search</small>
-                    </div>
-                    <div
-                      className="metric-card"
+                    </div>                    <div
+                      className="metric-card pending"
                       role="button"
                       tabIndex={0}
                       style={{ cursor: "pointer" }}

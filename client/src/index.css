@@ -1847,6 +1847,18 @@ textarea:focus,
   background: #fffdf7;
   border-color: #efe4c9;
 }
+/* Pending records KPI — same amber family as the Pending status badges */
+.metric-card.pending {
+  background: #fffcf3;
+  border-color: #eadfc2;
+}
+.metric-card.pending .metric-card-head,
+.metric-card.pending .metric-card-head svg {
+  color: #a5763a;
+}
+.metric-card.pending > strong {
+  color: #8a6229;
+}
 .metric-card-head {
   display: flex;
   justify-content: space-between;
