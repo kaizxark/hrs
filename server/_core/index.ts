@@ -8,6 +8,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { startPendingFormSync } from "./pendingFormSync";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -84,8 +85,12 @@ export async function createApp(): Promise<{ app: express.Express; server: Serve
 export const isServerless = process.env.VERCEL === "1";
 
 async function startLocalServer() {
-  // NOTE: no background poller — Supabase is queried live per request, so
-  // there is nothing to pre-warm. Boot is instant.
+  // NOTE: no profile poller — Supabase is queried live per request. The only
+  // background job is the pending Google Form auto-sync (every 5 min), which
+  // imports new form submissions as PENDING records for admin verification.
+  // On serverless, no timers run — the admin "Sync pending forms" button
+  // triggers the same import on demand.
+  startPendingFormSync();
   const { server } = await createApp();
 
   const preferredPort = parseInt(process.env.PORT || "3000");

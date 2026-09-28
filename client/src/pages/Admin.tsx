@@ -1248,6 +1248,24 @@ export default function Admin() {
     // the manual button, so transient CSV fetch failures must stay silent.
   });
 
+  // Import new Google Form submissions as pending records (admin, on demand;
+  // the server also auto-runs this every 5 minutes outside serverless).
+  const syncPendingFormsMutation = trpc.hrs.syncPendingForms.useMutation({
+    onSuccess: result => {
+      if (result.imported > 0) {
+        toast.success(
+          `Imported ${result.imported} pending submission${result.imported === 1 ? "" : "s"} from the Google Form.`
+        );
+        profilesQuery.refetch();
+      } else if (result.errors.length > 0) {
+        toast.error(`Pending-form sync failed: ${result.errors[0]}`);
+      } else {
+        toast.info("No new form submissions to import.");
+      }
+    },
+    onError: () => toast.error("Pending-form sync failed — try again."),
+  });
+
   // Use a ref to hold a stable sync trigger so the manual Sync button doesn't
   // recreate the tRPC mutation object on every render.
   // NOTE: the Sheets-era auto-sync timer was removed — Supabase data is live
@@ -2283,6 +2301,16 @@ export default function Admin() {
                 ))}
                 {!isVolunteer && (
                   <>
+                    <button
+                      className="record-tab sync-in-tabs"
+                      type="button"
+                      onClick={() => syncPendingFormsMutation.mutate()}
+                      disabled={syncPendingFormsMutation.isPending}
+                    >
+                      {syncPendingFormsMutation.isPending
+                        ? "Importing…"
+                        : "Import form submissions"}
+                    </button>
                     <SyncNowButton
                       className="sync-in-tabs"
                       isSyncing={isSyncing}

@@ -14,6 +14,10 @@ import {
 } from "./trpc";
 import * as supabaseApi from "./supabaseApi";
 import { logAudit, logProfileAudit, type AuditActor } from "./auditLogger";
+import {
+  getPendingFormStatus,
+  runPendingFormSync,
+} from "./pendingFormSync";
 
 /** Build the standard audit actor payload from the tRPC context user. */
 function auditActor(
@@ -355,6 +359,31 @@ export const hrsRouter = router({
       });
       return result;
     }),
+
+  // Pending Google Form sync status (diagnostic, admin only).
+  pendingFormStatus: adminProcedure.query(async () => {
+    return getPendingFormStatus();
+  }),
+
+  // Manually trigger a pending-form → Profiles sync cycle (admin only).
+  syncPendingForms: adminProcedure.mutation(async ({ ctx }) => {
+    const result = await runPendingFormSync();
+    if (result.imported > 0 || result.errors.length > 0) {
+      await logAudit({
+        action: "profile.add_person",
+        actionLabel: "Synced pending form submissions",
+        actor: auditActor(ctx.user),
+        targetType: "system",
+        details: {
+          imported: result.imported,
+          skipped: result.skipped,
+          errorCount: result.errors.length,
+        },
+        ipAddress: ctx.req.ip,
+      });
+    }
+    return result;
+  }),
 
   addPerson: adminProcedure
     .input(

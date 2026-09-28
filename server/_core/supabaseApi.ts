@@ -307,7 +307,7 @@ async function getProfilesSnapshot(): Promise<Profile[]> {
 }
 
 /** Drop the cached snapshot so the next read re-fetches. Called after writes. */
-function invalidateProfilesSnapshot(): void {
+export function invalidateProfilesSnapshot(): void {
   snapshotData = null;
   snapshotAt = 0;
 }
