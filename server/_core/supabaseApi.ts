@@ -175,9 +175,14 @@ function exactAge(birth: Date): number {
   return a < 0 ? 0 : a;
 }
 
-/** All profiles are verified at creation — the Pending concept is gone. */
+/** VERIFIED at creation only for admin-added profiles. */
 function isVerifiedRecord(p: Profile): boolean {
   return eqCI(p["Verification Status"], "VERIFIED");
+}
+
+/** Public registrations stay PENDING until an admin verifies them. */
+export function isPendingRecord(p: Profile): boolean {
+  return eqCI(p["Verification Status"], "PENDING");
 }
 
 /**
@@ -482,7 +487,8 @@ export async function getProfilesByAvailabilityStatus(
 
 /**
  * Get statistics from profiles table
- * Pending concept removed — every profile is created verified, so this
+ * Pending records are counted separately so the dashboard can surface the
+ * verification queue alongside the verified totals.
  */
 export async function getStatistics(): Promise<ApiResponse<Statistics>> {
   try {
@@ -492,6 +498,7 @@ export async function getStatistics(): Promise<ApiResponse<Statistics>> {
     // stored values are UPPERCASE).
     const totalProfiles = profiles.length;
     const verifiedProfiles = profiles.filter(isVerifiedRecord).length;
+    const pendingProfiles = profiles.filter(isPendingRecord).length;
     const donorConsentYes = profiles.filter(p =>
       eqCI(p["Donor Consent"], "YES")
     ).length;
@@ -542,6 +549,7 @@ export async function getStatistics(): Promise<ApiResponse<Statistics>> {
       data: {
         totalProfiles,
         verifiedProfiles,
+        pendingProfiles,
         donorConsentYes,
         donorConsentNo,
         bloodGroupCounts,
@@ -1089,6 +1097,8 @@ export function convertToAdminRecord(p: Profile): AdminRecord {
   const birthDate = new Date(dob);
   const age = Number.isNaN(birthDate.getTime()) ? 0 : exactAge(birthDate);
   const rawStatus = verificationStatus.toUpperCase();
+  const status: AdminRecord["status"] =
+    rawStatus === "PENDING" ? "Pending" : "Verified";
   const consentStatus = storageConsent.toUpperCase() === "YES" ? "Yes" : "No";
   const donorConsentBool = donationConsent.toUpperCase() === "YES";
 
@@ -1116,7 +1126,7 @@ export function convertToAdminRecord(p: Profile): AdminRecord {
 
   const publicVisible = Boolean(
     id &&
-      rawStatus === "VERIFIED" &&
+      status === "Verified" &&
       donorConsentBool === true &&
       bloodGroup &&
       bloodGroup !== "—" &&
@@ -1145,7 +1155,7 @@ export function convertToAdminRecord(p: Profile): AdminRecord {
     group: bloodGroup,
     location: city,
     area,
-    status: "Verified",
+    status,
     consent: consentStatus === "Yes",
     consentStatus,
     availability,
@@ -1351,8 +1361,9 @@ export async function getPublicProfiles(): Promise<ApiResponse<Profile[]>> {
 }
 
 /**
- * Add a new verified person (admin "Add Person" modal)
- * Creates a profile with Verification Status = VERIFIED and skips Pending
+ * Add a new person (admin "Add Person" modal) or register a donor (public
+ * form). Admin additions are created VERIFIED; public registrations arrive as
+ * PENDING and wait for an admin to verify them in the dashboard.
  */
 export async function addPerson(input: {
   fullName: string;
@@ -1365,6 +1376,8 @@ export async function addPerson(input: {
   city?: string;
   area?: string;
   dataStorageConsent?: "YES" | "NO";
+  /** Admin-created records skip the review queue. */
+  verified?: boolean;
 }): Promise<ApiResponse<{ success: boolean; hrs_id: string }>> {
   try {
     // Prepare profile data — note the lower-case gender/email/city/area
@@ -1384,23 +1397,27 @@ export async function addPerson(input: {
       "Registration Time": now,
       "Data Storage Consent": input.dataStorageConsent || "NO",
       "Donor Consent": input.donorConsent,
-      "Verification Status": "VERIFIED", // Skip pending - verified immediately
-      "Verification Time": now,
+      "Verification Status":
+        input.verified === false ? "PENDING" : "VERIFIED",
+      "Verification Time": input.verified === false ? null : now,
       "Blood Donation Count": "0",
       "Last Donation Time": null,
       "Next Eligible Time": null,
       "Availability Status":
-        input.donorConsent === "YES" ? "AVAILABLE" : "NOT PARTICIPATING",
-      // Visibility follows consent: a person who agreed to donate (and whose
-      // record is stored with consent) appears in the public directory
-      // immediately. The homepage filters on Visibility YES + Verification
-      // Verified + Donor Consent YES, so "NO" here hid every new donor even
-      // when they had consented.
+        input.verified === false
+          ? "PENDING"
+          : input.donorConsent === "YES"
+            ? "AVAILABLE"
+            : "NOT PARTICIPATING",
+      // Visibility follows consent AND verification: pending records are
+      // hidden from the public directory until an admin verifies them.
       "Public Directory Visibility":
-        input.donorConsent === "YES" &&
-        (input.dataStorageConsent ?? "NO") === "YES"
-          ? "YES"
-          : "NO",
+        input.verified === false
+          ? "NO"
+          : input.donorConsent === "YES" &&
+              (input.dataStorageConsent ?? "NO") === "YES"
+            ? "YES"
+            : "NO",
     };
 
     // Remove null values to let Supabase use defaults
@@ -1483,6 +1500,66 @@ export async function addPerson(input: {
       success: false,
       error: "Could not save the registration — please try again.",
     };
+  }
+}
+
+/**
+ * Verify a pending profile: flip Verification Status to VERIFIED and record
+ * the verification time. The verify dialog also collects the blood group and
+ * donor consent (pending registrations may arrive without a group), so those
+ * are persisted here along with the derived availability.
+ */
+export async function verifyProfile(
+  hrsId: string,
+  extras?: { bloodGroup?: string; donorConsent?: string }
+): Promise<ApiResponse<{ success: boolean }>> {
+  try {
+    const update: Record<string, unknown> = {
+      // Stored values are UPPERCASE — keep the table's convention so the
+      // case-insensitive reads and public directory match this record.
+      "Verification Status": "VERIFIED",
+      "Verification Time": new Date().toISOString(),
+      "Availability Status": "AVAILABLE",
+    };
+    if (extras?.bloodGroup) update["Blood Group"] = extras.bloodGroup;
+    if (extras?.donorConsent) {
+      update["Donor Consent"] = extras.donorConsent;
+      update["Availability Status"] =
+        String(extras.donorConsent).toUpperCase() === "YES"
+          ? "AVAILABLE"
+          : "NOT PARTICIPATING";
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .update(update)
+      .eq("HRS ID", hrsId)
+      .select();
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return { success: false, error: "Profile not found" };
+    }
+
+    const row = data[0] as Record<string, unknown>;
+    // A verified, consented donor with a group becomes publicly visible —
+    // mirroring the visibility rules applied at creation.
+    if (
+      String(row["Donor Consent"] ?? "").toUpperCase() === "YES" &&
+      String(row["Data Storage Consent"] ?? "").toUpperCase() === "YES" &&
+      String(extras?.bloodGroup ?? row["Blood Group"] ?? "").trim() !== ""
+    ) {
+      await supabase
+        .from("profiles")
+        .update({ "Public Directory Visibility": "YES" })
+        .eq("HRS ID", hrsId);
+    }
+
+    invalidateProfilesSnapshot();
+    return { success: true, data: { success: true } };
+  } catch (error) {
+    console.error("[Supabase] Failed to verify profile:", error);
+    return { success: false, error: "Failed to verify profile" };
   }
 }
 

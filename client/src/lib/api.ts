@@ -47,6 +47,7 @@ export interface ProfilesResponse {
 export interface Statistics {
   totalProfiles: number;
   verifiedProfiles: number;
+  pendingProfiles: number;
   donorConsentYes: number;
   donorConsentNo: number;
   bloodGroupCounts: Record<string, number>;

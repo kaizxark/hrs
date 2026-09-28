@@ -443,9 +443,13 @@ export default function Register() {
           </div>
           <h1>Welcome to the HRS donor network!</h1>
           <p className="reg-success-sub">
-            Your profile has been saved
-            {form.donorConsent ? " and you're listed as a willing donor" : ""}.
-            Keep this ID — it identifies you at every future camp or donation.
+            Your profile has been saved and is awaiting verification by our
+            team
+            {form.donorConsent
+              ? " — once verified, you're listed as a willing donor"
+              : ""}
+            . Keep this ID — it identifies you at every future camp or
+            donation.
           </p>
           <div className="reg-id-box">
             <span className="reg-id-label">Your HRS Donor ID</span>
@@ -481,7 +485,8 @@ export default function Register() {
         <h1>Join the donor network</h1>
         <p>
           One short form — your details, your blood group, and your consents.
-          Your profile is saved <strong>verified</strong> the moment you submit.
+          Your profile is saved instantly and verified by our team shortly
+          after.
         </p>
       </header>
 

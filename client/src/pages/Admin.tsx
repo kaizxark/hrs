@@ -118,7 +118,7 @@ type AdminView =
   | "settings"
   | "volunteer";
 
-type RecordTab = "all" | "donors" | "available" | "unavailable";
+type RecordTab = "all" | "pending" | "donors" | "available" | "unavailable";
 type ModalOrigin = { x: number; y: number };
 
 const VIEW_LABELS: Record<AdminView, string> = {
@@ -136,6 +136,7 @@ const VIEW_LABELS: Record<AdminView, string> = {
 
 const RECORD_TABS: { id: RecordTab; label: string }[] = [
   { id: "all", label: "All Records" },
+  { id: "pending", label: "Pending" },
 ];
 
 /** Views a volunteer is allowed to navigate to via the sidebar. */
@@ -158,7 +159,7 @@ export type AdminRecord = {
   group: string;
   location: string;
   area: string;
-  status: "Verified";
+  status: "Verified" | "Pending";
   consent: boolean;
   consentStatus: "Yes" | "No";
   availability: "Available" | "Unavailable";
@@ -1180,8 +1181,32 @@ export default function Admin() {
   // Stores records snapshot before an optimistic update — used for rollback on server failure.
   const previousRecordsRef = useRef<AdminRecord[] | null>(null);
 
-  // verifyProfile mutation removed — the Pending concept no longer exists;
-  // every profile is created fully verified via the registration form.
+  const verifyMutation = trpc.hrs.verifyProfile.useMutation({
+    onSuccess: result => {
+      if (result.success) {
+        // Optimistic update was already applied in the click handler.
+        previousRecordsRef.current = null;
+        pendingVerificationRef.current = null;
+      } else {
+        // Server returned an error result — roll back optimistic update.
+        if (previousRecordsRef.current) {
+          setRecords(previousRecordsRef.current);
+          previousRecordsRef.current = null;
+        }
+        pendingVerificationRef.current = null;
+        toast.error(result.error || "Failed to verify profile");
+      }
+    },
+    onError: () => {
+      // Roll back optimistic update on network/failure
+      if (previousRecordsRef.current) {
+        setRecords(previousRecordsRef.current);
+        previousRecordsRef.current = null;
+      }
+      pendingVerificationRef.current = null;
+      toast.error(`Verification failed`);
+    },
+  });
 
   const recordDonationMutation = trpc.hrs.recordDonation.useMutation({
     onSuccess: result => {
@@ -1488,6 +1513,7 @@ export default function Admin() {
         record.name.toLowerCase().includes(searchTerm) ||
         (record.id ?? "").toLowerCase().includes(searchTerm);
       if (!matchesSearch) return false;
+      if (recordTab === "pending" && record.status !== "Pending") return false;
       if (recordTab === "donors" && !record.donorConsent) return false;
       if (recordTab === "available" && record.availability !== "Available")
         return false;
@@ -1544,7 +1570,7 @@ export default function Admin() {
   // (the original definitions live inside the Statistics sub-component block).
   const bloodGroupsTop = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
   const isVerifiedTop = (record: AdminRecord) => record.status === "Verified";
-  const verifiedTop = records;
+  const verifiedTop = records.filter(isVerifiedTop);
   const voluntaryDonorsTop = verifiedTop.filter(
     record => record.donorConsent === true
   );
@@ -1594,8 +1620,10 @@ export default function Admin() {
       onError?.();
       return;
     }
+    const isPending = record.status === "Pending";
     const hrsId = record.id ?? "";
 
+    // Pending records always carry an HRS ID — it is assigned at insert time.
     if (!hrsId) {
       toast.error("This record has no HRS ID and cannot be saved.");
       onError?.();
@@ -1605,8 +1633,35 @@ export default function Admin() {
     // Save snapshot for potential rollback on server failure
     previousRecordsRef.current = records;
 
-    {
-      // Edit an existing (always-verified) record: optimistic update, then mutation.
+    if (isPending) {
+      // First-time verification: apply optimistic update immediately, then fire mutation.
+      const updated = applyVerifiedRecord(
+        record,
+        hrsId,
+        group,
+        donationConsent
+      );
+      setRecords(current =>
+        current.map(rec => (rec.id === record.id ? updated : rec))
+      );
+      setSelected(prev => (prev?.id === record.id ? updated : prev));
+      toast.success("Profile verified successfully!");
+
+      // Fire mutation in background — UI already updated.
+      verifyMutation.mutate({
+        hrsId,
+        bloodGroup: group,
+        donorConsent: donationConsent ? "YES" : "NO",
+      });
+      // Verification email (non-blocking — silently skipped when no email on file)
+      sendVerificationEmailMutation.mutate({
+        hrsId,
+        bloodGroup: group,
+        donorConsent: donationConsent ? "YES" : "NO",
+      });
+      onSuccess?.(hrsId);
+    } else {
+      // Edit an existing (already-verified) record: optimistic update, then mutation.
       const eligibleNow =
         !record.nextEligibleAt ||
         Date.parse(record.nextEligibleAt) <= Date.now();
@@ -5061,10 +5116,11 @@ function RecordModal({
     );
   }, [origin]);
 
-  // Pending concept removed — every record arrives verified; the modal opens in view mode.
-  const isPending = false as boolean;
+  // Pending records open the modal in edit/verify mode; verified records
+  // open in view mode. Volunteers never get edit mode.
+  const isPending = record.status === "Pending";
   const [mode, setMode] = useState<"view" | "edit">(
-    isVolunteer ? "view" : "view"
+    isVolunteer ? "view" : isPending ? "edit" : "view"
   );
   const [saveState, setSaveState] = useState<"idle" | "success" | "error">(
     "idle"

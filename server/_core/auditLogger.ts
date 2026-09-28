@@ -4,12 +4,13 @@
  * Central helper for recording privileged actions in the Supabase
  * `audit_logs` table.
  *
- * Scope (product decision): the audit log tracks ONLY the four donor-record
+ * Scope (product decision): the audit log tracks ONLY the donor-record
  * lifecycle events —
  *   1. profile.add_person  → a donor registers (public form or admin)
- *   2. profile.update      → a profile is edited
- *   3. profile.donation    → a donation is recorded
- *   4. profile.delete      → a profile is deleted
+ *   2. profile.verify      → a pending registration is verified by an admin
+ *   3. profile.update      → a profile is edited
+ *   4. profile.donation    → a donation is recorded
+ *   5. profile.delete      → a profile is deleted
  * Everything else (staff logins, listing, syncs, diagnostics, …) is
  * deliberately NOT recorded — `logAudit` silently skips any other action,
  * so stray call sites can never pollute the trail.
@@ -22,6 +23,7 @@ import { supabase } from "./supabaseApi";
 /** The only actions that may be written to the audit trail. */
 const AUDITED_ACTIONS = new Set([
   "profile.add_person",
+  "profile.verify",
   "profile.update",
   "profile.donation",
   "profile.delete",

@@ -269,8 +269,8 @@ export const hrsRouter = router({
     }),
 
   // Public donor self-registration — the shared camp/registration form.
-  // Creates the profile as VERIFIED immediately: with the Pending concept
-  // removed, every record is complete (blood group + consents) at creation.
+  // Creates the profile as PENDING: an admin reviews and verifies it in the
+  // dashboard before it reaches the public directory.
   registerDonor: publicProcedure
     .input(
       z.object({
@@ -302,6 +302,7 @@ export const hrsRouter = router({
         city: input.city,
         area: input.area,
         dataStorageConsent: input.dataStorageConsent,
+        verified: false,
       });
 
       if (result.success) {
@@ -316,6 +317,7 @@ export const hrsRouter = router({
             bloodGroup: input.bloodGroup,
             donorConsent: input.donorConsent,
             source: "public_form",
+            verificationStatus: "PENDING",
           },
         });
       }
@@ -327,6 +329,33 @@ export const hrsRouter = router({
 
   // Add a brand-new person and verify them immediately (admin "Add Person"
   // modal). The profile is created VERIFIED with the next HRS ID.
+  // Verify a pending profile (admin only): flips Verification Status to
+  // VERIFIED, optionally persisting the blood group and donor consent
+  // collected by the verify dialog.
+  verifyProfile: adminProcedure
+    .input(
+      z.object({
+        hrsId: z.string(),
+        bloodGroup: z.string(),
+        donorConsent: z.string(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const result = await supabaseApi.verifyProfile(input.hrsId, {
+        bloodGroup: input.bloodGroup,
+        donorConsent: input.donorConsent,
+      });
+      await logProfileAudit(input.hrsId, {
+        action: "profile.verify",
+        actionLabel: "Verified donor profile",
+        actor: auditActor(ctx.user),
+        success: result.success,
+        details: { bloodGroup: input.bloodGroup, donorConsent: input.donorConsent },
+        ipAddress: ctx.req.ip,
+      });
+      return result;
+    }),
+
   addPerson: adminProcedure
     .input(
       z.object({
