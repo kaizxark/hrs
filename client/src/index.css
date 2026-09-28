@@ -17910,3 +17910,184 @@ img {
     z-index: 5;
   }
 }
+
+/* ======================================================================
+   8. EMERGENCY DONOR PROFILE POPUP — DESKTOP REDESIGN (≥701px)
+   Home page → tapping a donor card opens .emergency-modal-fixed (donor
+   branch). Desktop previously fell back to the plain 470px modal card
+   with unstyled em-* sections; mirror the premium mobile layout as a
+   centered floating card. Same hero header, location row, trust and
+   privacy cards — tuned radii/spacing for mouse use. The emergency-
+   contacts list (.emergency-modal, About page) is not touched.
+   ====================================================================== */
+@media (min-width: 701px) {
+  /* Centered card: wider than the base 470px modal so the hero breathes,
+     no sheet chrome, subtle red-tinted shadow like the mobile design. */
+  .modal-backdrop.emergency-modal-backdrop + .modal-card.emergency-modal-fixed {
+    width: min(460px, calc(100vw - 64px));
+    border-radius: 24px;
+    padding: 0;
+    overflow: hidden;
+    animation: emergency-pop 0.22s var(--ease-out) forwards;
+  }
+
+  /* Hero header */
+  .emergency-modal-fixed .em-donor-top {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: nowrap;
+    padding: 24px 24px 18px;
+    background: radial-gradient(120% 110% at 50% -20%, #fff2ef 0%, #ffffff 60%);
+    border-bottom: 1px solid #f9ece9;
+  }
+  .emergency-modal-fixed .em-donor-top .avatar {
+    width: 66px;
+    height: 66px;
+    font-size: 23px;
+    font-weight: 700;
+    border-radius: 18px;
+    border: 2.5px solid #ffffff;
+    box-shadow:
+      0 8px 20px rgba(185, 28, 28, 0.16),
+      0 2px 6px rgba(185, 28, 28, 0.1);
+    flex: 0 0 auto;
+  }
+  .emergency-modal-fixed .em-donor-top .donor-identity {
+    min-width: 0;
+    flex: 1;
+  }
+  .emergency-modal-fixed .em-donor-top .donor-name-row {
+    gap: 7px;
+  }
+  .emergency-modal-fixed .em-donor-top .donor-name-row h3 {
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: #2b2321;
+  }
+  .emergency-modal-fixed .em-donor-top .donor-name-row .verified-icon {
+    width: 20px;
+    height: 20px;
+    color: #3f8f5a;
+    flex: 0 0 auto;
+  }
+  .emergency-modal-fixed .em-donor-top .donor-identity > p {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: #9c8a86;
+    margin-top: 5px;
+  }
+  .emergency-modal-fixed .em-donor-top .blood-chip {
+    background: linear-gradient(135deg, #fff1ef, #ffe3df);
+    color: #c2333b;
+    border: 1px solid #ffd2cd;
+    border-radius: 10px;
+    padding: 9px 12px;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: 0 2px 8px rgba(194, 51, 59, 0.14);
+    flex: 0 0 auto;
+  }
+
+  /* Location row */
+  .emergency-modal-fixed .em-loc-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 15px 24px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #7d6a66;
+  }
+  .emergency-modal-fixed .em-loc-row svg {
+    width: 26px;
+    height: 26px;
+    padding: 5px;
+    box-sizing: border-box;
+    background: #fdeeed;
+    border-radius: 50%;
+    color: #c2333b;
+    flex: 0 0 auto;
+  }
+
+  /* Consent trust card */
+  .emergency-modal-fixed .em-consent-box {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 2px 18px 0;
+    padding: 15px;
+    border-radius: 16px;
+    background: #f5faf3;
+    border: 1px solid #e0eedc;
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: #5d675a;
+  }
+  .emergency-modal-fixed .em-consent-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .emergency-modal-fixed .em-consent-row svg {
+    width: 26px;
+    height: 26px;
+    padding: 5px;
+    box-sizing: border-box;
+    background: #e2f0dd;
+    border-radius: 50%;
+    color: #2f7f4c;
+    flex: 0 0 auto;
+    margin-top: -1px;
+  }
+  .emergency-modal-fixed .em-consent-row strong {
+    font-weight: 700;
+    color: #3c4a39;
+  }
+
+  /* Privacy card */
+  .emergency-modal-fixed .em-privacy-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    margin: 8px 18px 22px;
+    padding: 15px;
+    border-radius: 16px;
+    background: #f8f9f7;
+    border: 1px solid #ecedea;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: #6f7770;
+  }
+  .emergency-modal-fixed .em-privacy-box svg {
+    width: 26px;
+    height: 26px;
+    padding: 5px;
+    box-sizing: border-box;
+    background: #e8efe7;
+    border-radius: 50%;
+    color: #4c7652;
+    flex: 0 0 auto;
+    margin-top: -1px;
+  }
+  .emergency-modal-fixed .em-privacy-box strong {
+    font-weight: 700;
+    color: #414a43;
+  }
+
+  /* Close button: circular red-tinted, matching the mobile sheet */
+  .emergency-modal-backdrop + .emergency-modal-fixed .modal-close {
+    top: 16px;
+    right: 18px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(220, 38, 38, 0.06);
+    color: #b91c1c;
+  }
+  .emergency-modal-backdrop + .emergency-modal-fixed .modal-close:hover {
+    background: rgba(220, 38, 38, 0.12);
+  }
+}
