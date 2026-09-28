@@ -5143,8 +5143,11 @@ function RecordModal({
   );
   const [savedId, setSavedId] = useState(record.id);
   const [group, setGroup] = useState(record.group === "—" ? "" : record.group);
+  // Pending verification always starts with NO consent pre-selected — the
+  // admin must actively choose Yes or No (imported rows may carry YES in the
+  // DB, but that is sheet data, not a decision the admin has made).
   const [donationConsent, setDonationConsent] = useState<boolean | null>(
-    record.donorConsent
+    isPending ? null : record.donorConsent
   );
   const [isSaving, setIsSaving] = useState(false);
   const [storageConfirmed, setStorageConfirmed] = useState(record.consent);

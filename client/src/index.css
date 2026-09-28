@@ -17937,7 +17937,9 @@ img {
     align-items: center;
     gap: 15px;
     flex-wrap: nowrap;
-    padding: 24px 24px 18px;
+    /* Right padding clears the absolutely-positioned close button so the
+       blood-group chip never sits underneath the X. */
+    padding: 24px 64px 18px 24px;
     background: radial-gradient(120% 110% at 50% -20%, #fff2ef 0%, #ffffff 60%);
     border-bottom: 1px solid #f9ece9;
   }
@@ -18089,5 +18091,13 @@ img {
   }
   .emergency-modal-backdrop + .emergency-modal-fixed .modal-close:hover {
     background: rgba(220, 38, 38, 0.12);
+  }
+}
+
+/* Mobile sheet: same X-overlap guard — keep the chip clear of the close
+   button (top-right) inside the hero header. */
+@media (max-width: 700px) {
+  .emergency-modal-fixed .em-donor-top {
+    padding: 20px 56px 16px 20px;
   }
 }
