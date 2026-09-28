@@ -2162,15 +2162,29 @@ export default function Admin() {
                       </strong>
                       <small>Ready for public search</small>
                     </div>
-                    <div className="metric-card">
+                    <div
+                      className="metric-card"
+                      role="button"
+                      tabIndex={0}
+                      style={{ cursor: "pointer" }}
+                      onClick={() => goToView("records", "pending")}
+                      onKeyDown={event => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          goToView("records", "pending");
+                        }
+                      }}
+                      aria-label="Open pending records"
+                    >
                       <div className="metric-card-head">
-                        <span>Willing donors</span>
-                        <HeartHandshake size={17} />
+                        <span>Pending records</span>
+                        <Clock3 size={17} />
                       </div>
                       <strong>
-                        {records.filter(r => r.donorConsent === true).length}
+                        {records.filter(record => record.status === "Pending")
+                          .length}
                       </strong>
-                      <small>Consented to be contacted</small>
+                      <small>Awaiting blood group & consent — click to review</small>
                     </div>
                     <div className="metric-card">
                       <div className="metric-card-head">
