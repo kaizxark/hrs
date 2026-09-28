@@ -1466,6 +1466,9 @@ export default function Admin() {
   const verifiedByRecent = records
     .filter(record => record.status === "Verified")
     .sort((a, b) => recordTime(b) - recordTime(a));
+  const pendingByRecent = records
+    .filter(record => record.status === "Pending")
+    .sort((a, b) => recordTime(b) - recordTime(a));
   // Donations tab: only show people who actually have recorded donations,
   // sorted by most recent donation first.
   const donors = records
@@ -2216,12 +2219,12 @@ export default function Admin() {
                     <section className="admin-card records-table-card dashboard-record-section">
                       <div className="admin-card-heading">
                         <div>
-                          <h2>Recent registrations</h2>
-                          <p>Newest members of the donor network</p>
+                          <h2>Pending records</h2>
+                          <p>Awaiting blood group & donor consent</p>
                         </div>
                         <button
                           className="text-button"
-                          onClick={() => goToView("records", "all")}
+                          onClick={() => goToView("records", "pending")}
                         >
                           View all <ArrowRight size={15} />
                         </button>
@@ -2232,7 +2235,7 @@ export default function Admin() {
                         <span>Location</span>
                         <span>Status</span>
                       </div>
-                      {verifiedByRecent.slice(0, 4).map(record => (
+                      {pendingByRecent.slice(0, 4).map(record => (
                         <RecordRow
                           key={record.id ?? record.name}
                           record={record}
@@ -2240,9 +2243,9 @@ export default function Admin() {
                           showSubmitted={false}
                         />
                       ))}
-                      {verifiedByRecent.length === 0 && (
+                      {pendingByRecent.length === 0 && (
                         <div className="small-empty">
-                          <Check size={17} /> No registrations yet
+                          <CheckCircle size={17} /> All records verified
                         </div>
                       )}
                     </section>
