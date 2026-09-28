@@ -18119,7 +18119,9 @@ img {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 60;
+  /* Above everything in the page flow (cards/toolbars use auto stacking);
+     1001 also keeps it clear of modals' backdrop escalation (1000+). */
+  z-index: 1001;
   min-width: 300px;
   background: #fff;
   border: 1px solid var(--border);

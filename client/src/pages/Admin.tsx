@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import {
   FormEvent,
   useMemo,
@@ -3556,7 +3557,10 @@ function AdminFormControl({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const statusQuery = trpc.form.status.useQuery(undefined, {
     refetchInterval: 15_000,
@@ -3581,14 +3585,27 @@ function AdminFormControl({
     ? `${window.location.origin}/form/${active.id}`
     : "";
 
-  // Close the menu on outside click
+  // Close the menu on outside click, scroll, or resize. The menu renders in
+  // a body portal (fixed position) so no stacking context can bury it.
   useEffect(() => {
     if (!menuOpen) return;
     const onDoc = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setMenuOpen(false);
+      const t = e.target as Node;
+      if (!wrapRef.current?.contains(t) && !menuRef.current?.contains(t))
+        setMenuOpen(false);
+    };
+    const reposition = () => {
+      const r = btnRef.current?.getBoundingClientRect();
+      if (r) setMenuPos({ top: r.bottom + 8, right: window.innerWidth - r.right });
     };
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
+    };
   }, [menuOpen]);
 
   const copyLink = () => {
@@ -3643,12 +3660,27 @@ function AdminFormControl({
         <>
           <button
             className="primary-button"
-            onClick={() => setMenuOpen(o => !o)}
+            ref={btnRef}
+            onClick={() => {
+              const r = btnRef.current?.getBoundingClientRect();
+              if (r) setMenuPos({ top: r.bottom + 8, right: window.innerWidth - r.right });
+              setMenuOpen(o => !o);
+            }}
           >
             <UserPlus size={17} /> Add Person
           </button>
-          {menuOpen && (
-            <div className="admin-form-menu" role="menu">
+          {menuOpen && menuPos && createPortal(
+            <div
+              className="admin-form-menu"
+              role="menu"
+              ref={menuRef}
+              style={{
+                position: "fixed",
+                top: menuPos.top,
+                right: menuPos.right,
+                zIndex: 1001,
+              }}
+            >
               <button role="menuitem" onClick={() => startForm("pending")}>
                 <Clock3 size={16} />
                 <span>
@@ -3670,7 +3702,8 @@ function AdminFormControl({
                   <small>Open the registration page yourself</small>
                 </span>
               </a>
-            </div>
+            </div>,
+            document.body
           )}
         </>
       )}
