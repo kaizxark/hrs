@@ -1516,11 +1516,25 @@ export default function Admin() {
         record.name.toLowerCase().includes(searchTerm) ||
         (record.id ?? "").toLowerCase().includes(searchTerm);
       if (!matchesSearch) return false;
-      if (recordTab === "pending" && record.status !== "Pending") return false;
-      if (recordTab === "donors" && !record.donorConsent) return false;
-      if (recordTab === "available" && record.availability !== "Available")
+      // Pending records have an UNDECIDED consent and no meaningful
+      // availability yet — they may only surface under All Records / Pending
+      // (or via non-semantic filters like search, location, gender), never
+      // under the donors/available/unavailable tabs or the consent and
+      // availability filters, even when the imported sheet data carries
+      // Donor Consent YES in the database.
+      const isPendingRecord = record.status === "Pending";
+      if (recordTab === "pending" && !isPendingRecord) return false;
+      if (recordTab === "donors" && (isPendingRecord || !record.donorConsent))
         return false;
-      if (recordTab === "unavailable" && record.availability !== "Unavailable")
+      if (
+        recordTab === "available" &&
+        (isPendingRecord || record.availability !== "Available")
+      )
+        return false;
+      if (
+        recordTab === "unavailable" &&
+        (isPendingRecord || record.availability !== "Unavailable")
+      )
         return false;
       if (filterGroup !== "All" && record.group !== filterGroup) return false;
       if (filterLocation !== "All" && record.location !== filterLocation)
@@ -1528,11 +1542,19 @@ export default function Admin() {
       if (filterArea !== "All" && record.area !== filterArea) return false;
       if (filterGender !== "All" && record.gender !== filterGender)
         return false;
-      if (filterDonorConsent === "Yes" && !record.donorConsent) return false;
-      if (filterDonorConsent === "No" && record.donorConsent) return false;
+      if (
+        filterDonorConsent === "Yes" &&
+        (isPendingRecord || !record.donorConsent)
+      )
+        return false;
+      if (
+        filterDonorConsent === "No" &&
+        (isPendingRecord || record.donorConsent)
+      )
+        return false;
       if (
         filterAvailability !== "All" &&
-        record.availability !== filterAvailability
+        (isPendingRecord || record.availability !== filterAvailability)
       )
         return false;
       return true;
