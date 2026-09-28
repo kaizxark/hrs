@@ -112,6 +112,7 @@ type AdminView =
   | "overview"
   | "statistics"
   | "records"
+  | "add"
   | "donations"
   | "locations"
   | "staff"
@@ -127,6 +128,7 @@ const VIEW_LABELS: Record<AdminView, string> = {
   overview: "Dashboard",
   statistics: "Statistics",
   records: "Records",
+  add: "Add Records",
   donations: "Donations",
   locations: "Tumakuru",
   staff: "Staff & Access",
@@ -1957,6 +1959,14 @@ export default function Admin() {
           >
             <Users size={17} /> Records
           </button>
+          {!isVolunteer && (
+            <button
+              className={activeView === "add" ? "active" : ""}
+              onClick={() => goToView("add")}
+            >
+              <UserPlus size={17} /> Add Records
+            </button>
+          )}
           <button
             className={activeView === "donations" ? "active" : ""}
             onClick={() => goToView("donations")}
@@ -2288,6 +2298,15 @@ export default function Admin() {
                 </>
               )}
             </>
+          ) : activeView === "add" ? (
+            <AddRecordsSection
+              records={records}
+              onOpenRecord={id => {
+                const rec = records.find(r => r.id === id);
+                if (rec) openRecord(rec, undefined);
+              }}
+              onOpenPending={() => goToView("records", "pending")}
+            />
           ) : activeView === "records" ? (
             <>
               <div className="admin-page-heading compact-heading">
@@ -2300,12 +2319,6 @@ export default function Admin() {
                       : "Search, edit, and manage every HRS donor record."}
                   </p>
                 </div>
-                {!isVolunteer && (
-                  <AdminFormControl onOpenRecord={id => {
-                    const rec = records.find(r => r.id === id);
-                    if (rec) openRecord(rec, undefined);
-                  }} />
-                )}
               </div>
               <div className="record-tabs">
                 {RECORD_TABS.map(tab => (
@@ -3540,6 +3553,352 @@ function WorkspaceView({
     );
   }
 }
+
+/**
+ * Add Records — dedicated section for growing the donor directory.
+ *
+ * Everything about creating records lives here:
+ *  - Form activation: start a Pending or Registration form, copy its public
+ *    link, terminate it (one live form at a time, server-enforced)
+ *  - Live status: type badge, submissions counter, recent submissions list
+ *  - Manual entry: open /register (full form → verified) for walk-ins
+ *  - Queue shortcut: jump into the pending review tab in Records
+ */
+function AddRecordsSection({
+  records,
+  onOpenRecord,
+  onOpenPending,
+}: {
+  records: AdminRecord[];
+  onOpenRecord: (hrsId: string) => void;
+  onOpenPending: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const statusQuery = trpc.form.status.useQuery(undefined, {
+    refetchInterval: 15_000,
+  });
+  const startMutation = trpc.form.start.useMutation({
+    onSuccess: result => {
+      statusQuery.refetch();
+      toast.success(
+        `${result.form.type === "pending" ? "Pending" : "Registration"} form is live — share the link.`
+      );
+    },
+    onError: () => toast.error("Could not start the form — try again."),
+  });
+  const terminateMutation = trpc.form.terminate.useMutation({
+    onSuccess: () => {
+      statusQuery.refetch();
+      toast.info("Form terminated. The old link no longer accepts responses.");
+    },
+    onError: () => toast.error("Could not terminate the form — try again."),
+  });
+
+  const active = statusQuery.data?.form ?? null;
+  const formUrl = active ? `${window.location.origin}/form/${active.id}` : "";
+
+  // Recent submissions to the active form: newest records whose registration
+  // time is after the form was created.
+  const recentSubmissions = useMemo(() => {
+    if (!active) return [];
+    const createdMs = Date.parse(active.createdAt);
+    return records
+      .filter(record => {
+        if (!record.registeredAt) return false;
+        const t = Date.parse(record.registeredAt);
+        return !Number.isNaN(t) && t >= createdMs - 60_000;
+      })
+      .sort((a, b) => Date.parse(b.registeredAt ?? "") - Date.parse(a.registeredAt ?? ""))
+      .slice(0, 5);
+  }, [active, records]);
+
+  const pendingCount = records.filter(record => record.status === "Pending").length;
+
+  // Close the menu on outside click or resize; close on scroll (the sticky
+  // topbar would otherwise visually detach the fixed menu from its button).
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!wrapRef.current?.contains(t) && !menuRef.current?.contains(t))
+        setMenuOpen(false);
+    };
+    const reposition = () => {
+      const r = btnRef.current?.getBoundingClientRect();
+      if (r) setMenuPos({ top: r.bottom + 8, right: window.innerWidth - r.right });
+    };
+    const onScroll = () => setMenuOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", reposition);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", reposition);
+    };
+  }, [menuOpen]);
+
+  // Clamp the menu inside the viewport with a 12px gutter on both sides.
+  const menuStyle = (() => {
+    if (!menuPos) return undefined;
+    const width = Math.min(320, window.innerWidth - 24);
+    return {
+      position: "fixed" as const,
+      top: menuPos.top,
+      right: Math.max(12, menuPos.right),
+      zIndex: 1001,
+      minWidth: width,
+    };
+  })();
+
+  const copyLink = () => {
+    navigator.clipboard?.writeText(formUrl).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => toast.error("Could not copy — long-press the link instead.")
+    );
+  };
+
+  const startForm = (type: "pending" | "registration") => {
+    setMenuOpen(false);
+    startMutation.mutate({ type });
+  };
+
+  const typeLabel = (t: "pending" | "registration") =>
+    t === "pending" ? "Pending form" : "Registration form";
+
+  return (
+    <div className="add-records-section">
+      <div className="admin-page-heading compact-heading">
+        <div>
+          <span className="eyebrow dark-eyebrow">DIRECTORY</span>
+          <h1>Add Records</h1>
+          <p>
+            Activate shareable forms, collect donors at camps, or add records
+            manually — everything that grows the directory lives here.
+          </p>
+        </div>
+        <div className="admin-form-control" ref={wrapRef}>
+          {statusQuery.isLoading ? (
+            <button className="primary-button" disabled>
+              <Loader2 size={16} className="syncing-icon" /> New Form
+            </button>
+          ) : active ? (
+            <button
+              className="primary-button form-live-button"
+              onClick={copyLink}
+              title={formUrl}
+            >
+              {copied ? <Check size={17} /> : <Copy size={17} />}
+              {typeLabel(active.type)} live
+              <span className="form-live-copy-hint">
+                {copied ? "Copied!" : "Copy link"}
+              </span>
+            </button>
+          ) : (
+            <>
+              <button
+                className="primary-button"
+                ref={btnRef}
+                onClick={() => {
+                  const r = btnRef.current?.getBoundingClientRect();
+                  if (r)
+                    setMenuPos({
+                      top: r.bottom + 8,
+                      right: window.innerWidth - r.right,
+                    });
+                  setMenuOpen(o => !o);
+                }}
+              >
+                <Plus size={17} /> New Form
+              </button>
+              {menuOpen &&
+                menuStyle &&
+                createPortal(
+                  <div
+                    className="admin-form-menu"
+                    role="menu"
+                    ref={menuRef}
+                    style={menuStyle}
+                  >
+                    <button role="menuitem" onClick={() => startForm("pending")}>
+                      <Clock3 size={16} />
+                      <span>
+                        <strong>Pending form</strong>
+                        <small>
+                          Personal details + storage consent → review queue
+                        </small>
+                      </span>
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => startForm("registration")}
+                    >
+                      <BadgeCheck size={16} />
+                      <span>
+                        <strong>Registration form</strong>
+                        <small>Full details → verified instantly</small>
+                      </span>
+                    </button>
+                  </div>,
+                  document.body
+                )}
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="add-records-grid">
+        {/* ── Form status card ── */}
+        <section className="admin-card add-form-card">
+          <div className="admin-card-heading">
+            <div>
+              <h2>Form status</h2>
+              <p>One live form at a time — starting a new one closes the old</p>
+            </div>
+          </div>
+          {active ? (
+            <>
+              <div className="add-form-live-row">
+                <span className={`add-form-type-badge ${active.type}`}>
+                  {active.type === "pending" ? (
+                    <Clock3 size={14} />
+                  ) : (
+                    <BadgeCheck size={14} />
+                  )}
+                  {typeLabel(active.type)}
+                </span>
+                <span className="add-form-live-dot" aria-hidden />
+                <span className="add-form-live-label">
+                  Accepting responses
+                </span>
+              </div>
+              <div className="add-form-link-box">
+                <span className="add-form-link">{formUrl}</span>
+                <button className="text-button" onClick={copyLink}>
+                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <div className="add-form-meta">
+                <span>
+                  <strong>{active.submissions}</strong> submissions
+                </span>
+                <span>
+                  since {new Date(active.createdAt).toLocaleString("en-IN", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </span>
+              </div>
+              <button
+                className="form-terminate-button add-form-terminate"
+                onClick={() => terminateMutation.mutate()}
+                disabled={terminateMutation.isPending}
+              >
+                {terminateMutation.isPending ? (
+                  <Loader2 size={15} className="syncing-icon" />
+                ) : (
+                  <X size={15} />
+                )}
+                Terminate form
+              </button>
+              <p className="add-form-note">
+                Terminating closes the link immediately — anyone opening it
+                sees a closed-form page instead.
+              </p>
+            </>
+          ) : (
+            <div className="add-form-empty">
+              <UserPlus size={22} />
+              <strong>No form is live right now</strong>
+              <p>
+                Start a form with the <strong>New Form</strong> button, then
+                share the link — attendees fill it on their phones and records
+                appear here automatically.
+              </p>
+              <div className="add-form-choices">
+                <div>
+                  <Clock3 size={15} />
+                  <span>
+                    <strong>Pending form</strong> — camp sign-ups you review
+                    before they go public
+                  </span>
+                </div>
+                <div>
+                  <BadgeCheck size={15} />
+                  <span>
+                    <strong>Registration form</strong> — full details, verified
+                    instantly
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ── Recent submissions card ── */}
+        <section className="admin-card add-submissions-card">
+          <div className="admin-card-heading">
+            <div>
+              <h2>Recent form submissions</h2>
+              <p>Newest records added through any form link</p>
+            </div>
+          </div>
+          {recentSubmissions.length > 0 ? (
+            recentSubmissions.map(record => (
+              <RecordRow
+                key={record.id ?? record.name}
+                record={record}
+                onEdit={origin => onOpenRecord(record.id ?? "")}
+                showSubmitted={false}
+              />
+            ))
+          ) : (
+            <div className="small-empty">
+              <Clock3 size={17} /> No submissions yet — share the form link to
+              start collecting
+            </div>
+          )}
+          {pendingCount > 0 && (
+            <button className="text-button add-pending-jump" onClick={onOpenPending}>
+              Review {pendingCount} pending record{pendingCount === 1 ? "" : "s"}
+              {" "}
+              <ArrowRight size={14} />
+            </button>
+          )}
+        </section>
+      </div>
+
+      {/* ── Manual entry card ── */}
+      <section className="admin-card add-manual-card">
+        <div className="admin-card-heading">
+          <div>
+            <h2>Add a record manually</h2>
+            <p>For walk-in donors at the desk — full form, verified instantly</p>
+          </div>
+        </div>
+        <a
+          className="primary-button"
+          href="/register"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <UserPlus size={17} /> Open registration page
+        </a>
+      </section>
+    </div>
+  );
+}
+
 
 /** Shared "Sync" button used across admin sections. */
 /**
