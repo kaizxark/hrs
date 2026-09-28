@@ -17502,6 +17502,14 @@ img {
   color: var(--primary);
 }
 
+/* Desktop nav hides Register (offered via the mobile menu instead); the
+   breakpoint matches where .desktop-nav switches to the dropdown layout. */
+@media (min-width: 701px) {
+  .desktop-nav > a.nav-register {
+    display: none;
+  }
+}
+
 /* Review panel: labeled grid + edit affordance */
 .reg-review {
   position: relative;
