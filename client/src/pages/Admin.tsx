@@ -49,6 +49,7 @@ import {
   ChevronDown,
   ClipboardList,
   Clock,
+  Copy,
   Clock3,
   Activity,
   Database,
@@ -2299,14 +2300,10 @@ export default function Admin() {
                   </p>
                 </div>
                 {!isVolunteer && (
-                  <a
-                    className="primary-button"
-                    href="/register"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <UserPlus size={17} /> Add Person
-                  </a>
+                  <AdminFormControl onOpenRecord={id => {
+                    const rec = records.find(r => r.id === id);
+                    if (rec) openRecord(rec, undefined);
+                  }} />
                 )}
               </div>
               <div className="record-tabs">
@@ -3544,6 +3541,144 @@ function WorkspaceView({
 }
 
 /** Shared "Sync" button used across admin sections. */
+/**
+ * "Add Person" button, upgraded into a form-activation control.
+ *
+ * Inactive state: dropdown menu — start a Pending form, a Registration form,
+ * or open /register to add manually. Active state: pill showing the form
+ * type with Copy link and Terminate actions. Starting a new form
+ * automatically terminates the previous one (server-enforced).
+ */
+function AdminFormControl({
+  onOpenRecord,
+}: {
+  onOpenRecord?: (hrsId: string) => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const statusQuery = trpc.form.status.useQuery(undefined, {
+    refetchInterval: 15_000,
+  });
+  const startMutation = trpc.form.start.useMutation({
+    onSuccess: () => {
+      statusQuery.refetch();
+      toast.success("Form is live — share the link with attendees.");
+    },
+    onError: () => toast.error("Could not start the form — try again."),
+  });
+  const terminateMutation = trpc.form.terminate.useMutation({
+    onSuccess: () => {
+      statusQuery.refetch();
+      toast.info("Form terminated. The old link no longer accepts responses.");
+    },
+    onError: () => toast.error("Could not terminate the form — try again."),
+  });
+
+  const active = statusQuery.data?.form ?? null;
+  const formUrl = active
+    ? `${window.location.origin}/form/${active.id}`
+    : "";
+
+  // Close the menu on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [menuOpen]);
+
+  const copyLink = () => {
+    navigator.clipboard?.writeText(formUrl).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => toast.error("Could not copy — long-press the link instead.")
+    );
+  };
+
+  const startForm = (type: "pending" | "registration") => {
+    setMenuOpen(false);
+    startMutation.mutate({ type });
+  };
+
+  return (
+    <div className="admin-form-control" ref={wrapRef}>
+      {statusQuery.isLoading ? (
+        <button className="primary-button" disabled>
+          <Loader2 size={16} className="syncing-icon" /> Add Person
+        </button>
+      ) : active ? (
+        <>
+          <button
+            className="primary-button form-live-button"
+            onClick={copyLink}
+            title={formUrl}
+          >
+            {copied ? <Check size={17} /> : <Copy size={17} />}
+            {active.type === "pending" ? "Pending form live" : "Registration form live"}
+            <span className="form-live-copy-hint">
+              {copied ? "Copied!" : "Copy link"}
+            </span>
+          </button>
+          <button
+            className="form-terminate-button"
+            onClick={() => terminateMutation.mutate()}
+            disabled={terminateMutation.isPending}
+            title="Close this form — the link stops accepting responses"
+          >
+            {terminateMutation.isPending ? (
+              <Loader2 size={15} className="syncing-icon" />
+            ) : (
+              <X size={15} />
+            )}
+            Terminate
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            className="primary-button"
+            onClick={() => setMenuOpen(o => !o)}
+          >
+            <UserPlus size={17} /> Add Person
+          </button>
+          {menuOpen && (
+            <div className="admin-form-menu" role="menu">
+              <button role="menuitem" onClick={() => startForm("pending")}>
+                <Clock3 size={16} />
+                <span>
+                  <strong>Pending form</strong>
+                  <small>Personal details + storage consent → review queue</small>
+                </span>
+              </button>
+              <button role="menuitem" onClick={() => startForm("registration")}>
+                <BadgeCheck size={16} />
+                <span>
+                  <strong>Registration form</strong>
+                  <small>Full details → verified instantly</small>
+                </span>
+              </button>
+              <a role="menuitem" href="/register" target="_blank" rel="noopener noreferrer">
+                <UserPlus size={16} />
+                <span>
+                  <strong>Add manually</strong>
+                  <small>Open the registration page yourself</small>
+                </span>
+              </a>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+
 function SyncNowButton({
   isSyncing,
   onClick,

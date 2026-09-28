@@ -13,6 +13,7 @@ import Home from "./pages/Home";
 const Admin = lazy(() => import("./pages/Admin"));
 const About = lazy(() => import("./pages/About"));
 const Register = lazy(() => import("./pages/Register"));
+const FormPage = lazy(() => import("./pages/FormPage"));
 
 function RouteFallback() {
   return (
@@ -31,7 +32,8 @@ function Router() {
       <Switch>
         <Route path="/" component={Home} />
         <Route path="/about" component={About} />
-        <Route path="/register" component={Register} />
+        <Route path="/register" component={() => <Register />} />
+        <Route path="/form/:token*" component={() => <FormPage />} />
         <Route path="/admin" component={Admin} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />

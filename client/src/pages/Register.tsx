@@ -211,12 +211,51 @@ const INITIAL: FormData = {
   storageConsent: false,
 };
 
-export default function Register() {
+export default function Register({
+  formType = "registration",
+  formToken,
+}: {
+  /** "registration" = full form → VERIFIED; "pending" = personal details +
+   *  storage consent only → PENDING (no blood group / donor consent asked). */
+  formType?: "registration" | "pending";
+  /** Set when rendering a specific activated form; submits against it. */
+  formToken?: string;
+} = {}) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(INITIAL);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submittedHrsId, setSubmittedHrsId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  const isPendingForm = formType === "pending";
+
+  // Pending-form submissions go through the form-token endpoint (server
+  // validates the link is active); registration submissions go through the
+  // plain register endpoint when no token is involved.
+  const formPendingMutation = trpc.form.submitPending.useMutation({
+    onSuccess: result => {
+      if (result.success) {
+        setErrors({});
+        setSubmittedHrsId(result.hrsId);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        setErrors({ form: result.error || "Submission failed. Please try again." });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    },
+  });
+  const formRegistrationMutation = trpc.form.submitRegistration.useMutation({
+    onSuccess: result => {
+      if (result.success) {
+        setErrors({});
+        setSubmittedHrsId(result.hrsId);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        setErrors({ form: result.error || "Submission failed. Please try again." });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    },
+  });
 
   const registerMutation = trpc.hrs.registerDonor.useMutation({
     onSuccess: result => {
@@ -359,8 +398,9 @@ export default function Register() {
 
   function validateStep2(): boolean {
     const e: Record<string, string> = {};
-    if (!form.bloodGroup) e.bloodGroup = "Select the blood group.";
-    if (form.donorConsent === null)
+    if (!isPendingForm && !form.bloodGroup)
+      e.bloodGroup = "Select the blood group.";
+    if (!isPendingForm && form.donorConsent === null)
       e.donorConsent = "Choose Yes or No — both are okay.";
     if (!form.storageConsent)
       e.storageConsent = "Storage consent is required to save the record.";
@@ -384,6 +424,39 @@ export default function Register() {
 
   async function submit() {
     if (!validateStep2()) return;
+    // Pending form via the activated-form endpoint (token-gated server-side).
+    if (isPendingForm && formToken) {
+      await formPendingMutation.mutateAsync({
+        token: formToken,
+        fullName: form.fullName.trim(),
+        dateOfBirth: ISO_DATE_RE.test(dobIso) ? dobIso : undefined,
+        gender: form.gender,
+        phoneNumber: form.phone.replace(/[^\d+]/g, ""),
+        email: form.email.trim() || undefined,
+        city: form.city,
+        area: form.area,
+        dataStorageConsent: "YES",
+      });
+      return;
+    }
+    // Registration form via the activated-form endpoint when opened from a
+    // form link; otherwise the plain public registration endpoint.
+    if (formToken) {
+      await formRegistrationMutation.mutateAsync({
+        token: formToken,
+        fullName: form.fullName.trim(),
+        dateOfBirth: ISO_DATE_RE.test(dobIso) ? dobIso : undefined,
+        gender: form.gender,
+        phoneNumber: form.phone.replace(/[^\d+]/g, ""),
+        email: form.email.trim() || undefined,
+        city: form.city,
+        area: form.area,
+        bloodGroup: form.bloodGroup,
+        donorConsent: form.donorConsent ? "YES" : "NO",
+        dataStorageConsent: "YES",
+      });
+      return;
+    }
     // Loud failure: ANY error — network, validation, database — surfaces
     // here. No silent deaths, no opaque server strings.
     try {
@@ -646,6 +719,7 @@ export default function Register() {
 
         {step === 2 && (
           <section className="reg-step-panel">
+            {!isPendingForm && (
             <div className="reg-blood-block">
               <span className="reg-field-label">
                 <Droplets size={14} /> Blood group <em>*</em>
@@ -666,7 +740,9 @@ export default function Register() {
                 <span className="reg-field-error">{errors.bloodGroup}</span>
               )}
             </div>
+            )}
 
+            {!isPendingForm && (
             <div className="reg-consent-block">
               <span className="reg-field-label">
                 <HeartHandshake size={14} /> Willing to donate blood? <em>*</em>
@@ -696,6 +772,7 @@ export default function Register() {
                 <span className="reg-field-error">{errors.donorConsent}</span>
               )}
             </div>
+            )}
 
             <div className="reg-storage-block">
               <button
@@ -750,8 +827,12 @@ export default function Register() {
                 )}
                 <span className="reg-review-k">Location</span>
                 <span>{form.area ? `${form.area}, ${form.city}` : "—"}</span>
-                <span className="reg-review-k">Blood group</span>
-                <span>{form.bloodGroup || "—"}</span>
+                {!isPendingForm && (
+                  <>
+                    <span className="reg-review-k">Blood group</span>
+                    <span>{form.bloodGroup || "—"}</span>
+                  </>
+                )}
               </div>
             </div>
 

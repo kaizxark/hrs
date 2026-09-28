@@ -3,6 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { auditRouter } from "./_core/auditRouter";
 import { systemRouter } from "./_core/systemRouter";
 import { hrsRouter } from "./_core/hrsRouter";
+import { formRouter } from "./_core/formRouter";
 import { staffRouter } from "./_core/staffRouter";
 import { publicProcedure, router } from "./_core/trpc";
 
@@ -10,6 +11,7 @@ export const appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   hrs: hrsRouter,
+  form: formRouter,
   audit: auditRouter,
   staff: staffRouter,
   auth: router({

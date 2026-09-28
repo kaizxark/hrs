@@ -18101,3 +18101,111 @@ img {
     padding: 20px 56px 16px 20px;
   }
 }
+
+/* ======================================================================
+   9. ADMIN FORM-ACTIVATION CONTROL (Records header)
+   The Add Person button becomes a form switch: choose Pending or
+   Registration form, copy the public link, terminate when done.
+   ====================================================================== */
+.admin-form-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.admin-form-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  min-width: 300px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(25, 32, 26, 0.18);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  animation: fade-scale-in 0.18s var(--ease-out);
+}
+.admin-form-menu > button,
+.admin-form-menu > a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  border-radius: 11px;
+  padding: 11px 12px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--foreground);
+  text-decoration: none;
+}
+.admin-form-menu > button:hover,
+.admin-form-menu > a:hover {
+  background: #f4f6f3;
+}
+.admin-form-menu svg {
+  flex: 0 0 auto;
+  color: var(--primary);
+}
+.admin-form-menu strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+}
+.admin-form-menu small {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+.form-live-button {
+  background: #2e7d46;
+  max-width: 420px;
+}
+.form-live-button:hover {
+  background: #276b3d;
+}
+.form-live-copy-hint {
+  margin-left: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.form-terminate-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #f3d4d4;
+  background: #fff5f5;
+  color: #b91c1c;
+  font-weight: 700;
+  font-size: 13.5px;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+.form-terminate-button:hover {
+  background: #fee9e9;
+}
+@media (max-width: 700px) {
+  .admin-form-control {
+    width: 100%;
+  }
+  .admin-form-control .primary-button {
+    flex: 1;
+  }
+  .admin-form-menu {
+    left: 0;
+    right: auto;
+    min-width: min(320px, calc(100vw - 48px));
+  }
+}
