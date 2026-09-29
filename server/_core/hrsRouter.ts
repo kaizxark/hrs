@@ -295,6 +295,11 @@ export const hrsRouter = router({
       })
     )
     .mutation(async ({ input }) => {
+      // Auto-publish rule: a submission that consents to donate and provides a
+      // blood group is verified instantly and appears on the public home page
+      // (the form requires storage consent regardless). Only consent-NO
+      // submissions fall into the pending review queue.
+      const autoVerify = input.donorConsent === "YES";
       const result = await supabaseApi.addPerson({
         fullName: input.fullName.trim(),
         bloodGroup: input.bloodGroup,
@@ -306,7 +311,7 @@ export const hrsRouter = router({
         city: input.city,
         area: input.area,
         dataStorageConsent: input.dataStorageConsent,
-        verified: false,
+        verified: autoVerify,
       });
 
       if (result.success) {
@@ -321,7 +326,8 @@ export const hrsRouter = router({
             bloodGroup: input.bloodGroup,
             donorConsent: input.donorConsent,
             source: "public_form",
-            verificationStatus: "PENDING",
+            verificationStatus: autoVerify ? "VERIFIED" : "PENDING",
+            autoVerified: autoVerify,
           },
         });
       }

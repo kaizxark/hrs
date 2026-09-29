@@ -242,7 +242,7 @@ export default function Register({
     formDescription?.trim() ||
     (isPendingForm
       ? "One short form — your details and consents. HRS staff verify your record shortly after."
-      : "One short form — your details, your blood group, and your consents. Your profile is saved instantly and verified by our team shortly after.");
+      : "One short form — your details, your blood group, and your consents. Consenting donors go live on the public directory instantly.");
 
   // Pending-form submissions go through the form-token endpoint (server
   // validates the link is active); registration submissions go through the
@@ -531,13 +531,10 @@ export default function Register({
           </div>
           <h1>Welcome to the HRS donor network!</h1>
           <p className="reg-success-sub">
-            Your profile has been saved and is awaiting verification by our
-            team
             {form.donorConsent
-              ? " — once verified, you're listed as a willing donor"
-              : ""}
-            . Keep this ID — it identifies you at every future camp or
-            donation.
+              ? "Your profile is saved and live on the public donor directory."
+              : "Your profile has been saved and is awaiting review by our team."}{" "}
+            Keep this ID — it identifies you at every future camp or donation.
           </p>
           <div className="reg-id-box">
             <span className="reg-id-label">Your HRS Donor ID</span>

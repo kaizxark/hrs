@@ -1361,9 +1361,11 @@ export async function getPublicProfiles(): Promise<ApiResponse<Profile[]>> {
 }
 
 /**
- * Add a new person (admin "Add Person" modal) or register a donor (public
- * form). Admin additions are created VERIFIED; public registrations arrive as
- * PENDING and wait for an admin to verify them in the dashboard.
+ * Add a new person (admin "Add Person" modal, form links, or the public
+ * /register page). `verified: false` creates a PENDING row that waits in the
+ * admin review queue (pending-form links and consent-NO submissions);
+ * everything else is created VERIFIED and — with donor consent — publicly
+ * visible immediately.
  */
 export async function addPerson(input: {
   fullName: string;

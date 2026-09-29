@@ -267,7 +267,7 @@ export const formRouter = router({
       return { success: false as const, error: result.error ?? "Submission failed" };
     }),
 
-  /** Public: submit the REGISTRATION form (full data → VERIFIED). */
+  /** Public: submit the REGISTRATION form (full data). */
   submitRegistration: publicProcedure
     .input(REGISTRATION_SUBMISSION)
     .mutation(async ({ input }) => {
@@ -278,6 +278,9 @@ export const formRouter = router({
           error: "This form is no longer active. Please ask HRS staff for the current form link.",
         };
       }
+      // Auto-publish rule (same as /register): donor-consent YES → verified
+      // instantly and publicly visible; consent NO → pending review queue.
+      const autoVerify = input.donorConsent === "YES";
       const result = await supabaseApi.addPerson({
         fullName: input.fullName.trim(),
         bloodGroup: input.bloodGroup,
@@ -289,7 +292,7 @@ export const formRouter = router({
         city: input.city,
         area: input.area,
         dataStorageConsent: input.dataStorageConsent,
-        verified: true,
+        verified: autoVerify,
       });
       if (result.success) {
         await formsApi.incrementFormSubmissions(form.id);
@@ -297,13 +300,15 @@ export const formRouter = router({
           action: "profile.add_person",
           actionLabel: "Registered via form link",
           actor: null,
-          details: {
-            fullName: input.fullName.trim(),
-            bloodGroup: input.bloodGroup,
-            donorConsent: input.donorConsent,
-            source: "registration_form",
-            formId: form.id,
-          },
+        details: {
+          fullName: input.fullName.trim(),
+          bloodGroup: input.bloodGroup,
+          donorConsent: input.donorConsent,
+          source: "registration_form",
+          formId: form.id,
+          verificationStatus: autoVerify ? "VERIFIED" : "PENDING",
+          autoVerified: autoVerify,
+        },
         });
         return { success: true as const, hrsId: result.data?.hrs_id ?? "" };
       }
