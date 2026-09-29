@@ -214,12 +214,18 @@ const INITIAL: FormData = {
 export default function Register({
   formType = "registration",
   formToken,
+  formTitle,
+  formDescription,
 }: {
   /** "registration" = full form → VERIFIED; "pending" = personal details +
    *  storage consent only → PENDING (no blood group / donor consent asked). */
   formType?: "registration" | "pending";
   /** Set when rendering a specific activated form; submits against it. */
   formToken?: string;
+  /** Custom heading for this form link (admin-set, per camp/generation). */
+  formTitle?: string | null;
+  /** Custom sub-heading shown under the title. */
+  formDescription?: string | null;
 } = {}) {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(INITIAL);
@@ -228,6 +234,15 @@ export default function Register({
   const [copied, setCopied] = useState(false);
 
   const isPendingForm = formType === "pending";
+  /** Standalone form-link mode: no portal chrome, custom heading, its own
+   *  success screen — the page's ONLY job is capturing one person. */
+  const isFormLink = Boolean(formToken);
+  const heading = formTitle?.trim() || "Join the donor network";
+  const subheading =
+    formDescription?.trim() ||
+    (isPendingForm
+      ? "One short form — your details and consents. HRS staff verify your record shortly after."
+      : "One short form — your details, your blood group, and your consents. Your profile is saved instantly and verified by our team shortly after.");
 
   // Pending-form submissions go through the form-token endpoint (server
   // validates the link is active); registration submissions go through the
@@ -533,16 +548,28 @@ export default function Register({
             </button>
           </div>
           <div className="reg-success-actions">
-            <Link href="/" className="reg-btn reg-btn-primary">
-              <Home size={16} /> Back to home
-            </Link>
-            <button
-              type="button"
-              className="reg-btn reg-btn-ghost"
-              onClick={resetAll}
-            >
-              Register another person
-            </button>
+            {isFormLink ? (
+              <button
+                type="button"
+                className="reg-btn reg-btn-primary"
+                onClick={resetAll}
+              >
+                Register another person
+              </button>
+            ) : (
+              <>
+                <Link href="/" className="reg-btn reg-btn-primary">
+                  <Home size={16} /> Back to home
+                </Link>
+                <button
+                  type="button"
+                  className="reg-btn reg-btn-ghost"
+                  onClick={resetAll}
+                >
+                  Register another person
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -554,13 +581,11 @@ export default function Register({
   return (
     <div className="register-page">
       <header className="reg-head">
-        <span className="reg-kicker">HRS Blood Donor Portal</span>
-        <h1>Join the donor network</h1>
-        <p>
-          One short form — your details, your blood group, and your consents.
-          Your profile is saved instantly and verified by our team shortly
-          after.
-        </p>
+        <span className="reg-kicker">
+          {isFormLink ? "Blood donor registration" : "HRS Blood Donor Portal"}
+        </span>
+        <h1>{heading}</h1>
+        <p>{subheading}</p>
       </header>
 
       <div className="reg-card">
@@ -865,10 +890,16 @@ export default function Register({
         )}
       </div>
 
-      <footer className="reg-foot">
-        <Link href="/">← Back to HRS portal</Link>
-        <span>Questions? Ask any HRS volunteer at the camp.</span>
-      </footer>
+      {isFormLink ? (
+        <footer className="reg-foot">
+          <span>Questions? Ask any HRS volunteer at the camp.</span>
+        </footer>
+      ) : (
+        <footer className="reg-foot">
+          <Link href="/">← Back to HRS portal</Link>
+          <span>Questions? Ask any HRS volunteer at the camp.</span>
+        </footer>
+      )}
     </div>
   );
 }

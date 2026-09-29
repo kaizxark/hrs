@@ -1,10 +1,14 @@
 /**
- * Form-activation feature router.
+ * Multi-form feature router.
  *
- * Admin endpoints (adminProcedure): start a form of a chosen type, terminate
- * the active one, read the current status. Public endpoints: resolve a form
- * token (for /form/<token>) and submit against an ACTIVE form of the exact
- * type — terminated/unknown tokens are rejected server-side.
+ * Admin endpoints (adminProcedure): list every form, create a custom form
+ * (per camp/generation) with its own title/description, update it, and set
+ * it live or closed. Many forms can be live at once — each has its own
+ * link and its own submissions counter.
+ *
+ * Public endpoints: resolve a form token (for /form/<token>, returning the
+ * custom config) and submit against an ACTIVE form of the exact type —
+ * closed/unknown tokens are rejected server-side.
  */
 import { z } from "zod";
 import { publicProcedure, adminProcedure, router } from "./trpc";
@@ -29,80 +33,196 @@ const REGISTRATION_SUBMISSION = PENDING_SUBMISSION.extend({
   donorConsent: z.enum(["YES", "NO"]),
 });
 
+const FORM_CONFIG = z.object({
+  title: z.string().max(120).optional().nullable(),
+  description: z.string().max(400).optional().nullable(),
+});
+
+/** Trim the wire format from formsApi into the tRPC response shape. */
+function toWire(form: formsApi.FormRow) {
+  return {
+    id: form.id,
+    type: form.type,
+    active: form.active,
+    title: form.title,
+    description: form.description,
+    createdBy: form.createdBy,
+    createdAt: form.createdAt,
+    terminatedAt: form.terminatedAt,
+    submissions: form.submissions,
+  };
+}
+
 export const formRouter = router({
-  /** Admin: currently active form (or null). */
+  /** Admin: every form (live + closed), newest first. */
+  list: adminProcedure.query(async () => {
+    try {
+      const forms = await formsApi.listForms();
+      return { success: true as const, forms: forms.map(toWire) };
+    } catch (error) {
+      console.error("[formRouter] list failed:", error);
+      return { success: false as const, forms: [] as ReturnType<typeof toWire>[] };
+    }
+  }),
+
+  /** Admin: create a new custom form (many can be live at once). */
+  create: adminProcedure
+    .input(
+      z.object({
+        type: z.enum(["pending", "registration"]),
+        title: z.string().max(120).optional(),
+        description: z.string().max(400).optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const form = await formsApi.createForm(
+        {
+          type: input.type,
+          title: input.title ?? null,
+          description: input.description ?? null,
+        },
+        ctx.user?.name ?? null
+      );
+      await logAudit({
+        action: "form.activate",
+        actionLabel: `Created ${input.type} form`,
+        actor: ctx.user
+          ? {
+              id: ctx.user.id,
+              openId: ctx.user.openId,
+              name: ctx.user.name,
+              role: ctx.user.role,
+            }
+          : null,
+        targetType: "system",
+        targetId: form.id,
+        details: { type: input.type, formId: form.id, title: form.title },
+        ipAddress: ctx.req.ip,
+      });
+      return { success: true as const, form: toWire(form) };
+    }),
+
+  /** Admin: update a form's custom title/description. */
+  update: adminProcedure
+    .input(FORM_CONFIG.extend({ id: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const form = await formsApi.updateForm(input.id, {
+        title: input.title,
+        description: input.description,
+      });
+      if (!form) {
+        return { success: false as const, error: "Form not found." };
+      }
+      await logAudit({
+        action: "form.activate",
+        actionLabel: "Updated form details",
+        actor: ctx.user
+          ? {
+              id: ctx.user.id,
+              openId: ctx.user.openId,
+              name: ctx.user.name,
+              role: ctx.user.role,
+            }
+          : null,
+        targetType: "system",
+        targetId: form.id,
+        details: { formId: form.id, title: form.title },
+        ipAddress: ctx.req.ip,
+      });
+      return { success: true as const, form: toWire(form) };
+    }),
+
+  /** Admin: set a single form live or closed. */
+  setActive: adminProcedure
+    .input(z.object({ id: z.string().uuid(), active: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const form = await formsApi.setFormActive(input.id, input.active);
+      if (!form) {
+        return { success: false as const, error: "Form not found." };
+      }
+      await logAudit({
+        action: "form.activate",
+        actionLabel: input.active ? "Form set live" : "Form closed",
+        actor: ctx.user
+          ? {
+              id: ctx.user.id,
+              openId: ctx.user.openId,
+              name: ctx.user.name,
+              role: ctx.user.role,
+            }
+          : null,
+        targetType: "system",
+        targetId: form.id,
+        details: { type: form.type, formId: form.id, active: input.active },
+        ipAddress: ctx.req.ip,
+      });
+      return { success: true as const, form: toWire(form) };
+    }),
+
+  /** Admin: permanently delete a form row (submissions history included). */
+  delete: adminProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const deleted = await formsApi.deleteForm(input.id);
+      if (deleted) {
+        await logAudit({
+          action: "form.activate",
+          actionLabel: "Deleted form",
+          actor: ctx.user
+            ? {
+                id: ctx.user.id,
+                openId: ctx.user.openId,
+                name: ctx.user.name,
+                role: ctx.user.role,
+              }
+            : null,
+          targetType: "system",
+          targetId: input.id,
+          details: { formId: input.id },
+          ipAddress: ctx.req.ip,
+        });
+      }
+      return { success: true as const, deleted };
+    }),
+
+  /** Admin: legacy status — newest live form (used by older clients). */
   status: adminProcedure.query(async () => {
     try {
-      return { success: true as const, form: await formsApi.getActiveForm() };
+      const form = await formsApi.getActiveForm();
+      return { success: true as const, form: form ? toWire(form) : null };
     } catch (error) {
       console.error("[formRouter] status failed:", error);
       return { success: false as const, form: null };
     }
   }),
 
-  /** Admin: start a form of the given type (terminates any active form). */
-  start: adminProcedure
-    .input(z.object({ type: z.enum(["pending", "registration"]) }))
-    .mutation(async ({ input, ctx }) => {
-      const form = await formsApi.activateForm(
-        input.type,
-        ctx.user?.name ?? null
-      );
-      await logAudit({
-        action: "form.activate",
-        actionLabel: `Activated ${input.type} form`,
-        actor: ctx.user
-          ? {
-              id: ctx.user.id,
-              openId: ctx.user.openId,
-              name: ctx.user.name,
-              role: ctx.user.role,
-            }
-          : null,
-        targetType: "system",
-        targetId: form.id,
-        details: { type: input.type, formId: form.id },
-        ipAddress: ctx.req.ip,
-      });
-      return { success: true as const, form };
-    }),
-
-  /** Admin: terminate the active form. */
-  terminate: adminProcedure.mutation(async ({ ctx }) => {
-    const form = await formsApi.terminateActiveForm();
-    if (form) {
-      await logAudit({
-        action: "form.terminate",
-        actionLabel: "Terminated active form",
-        actor: ctx.user
-          ? {
-              id: ctx.user.id,
-              openId: ctx.user.openId,
-              name: ctx.user.name,
-              role: ctx.user.role,
-            }
-          : null,
-        targetType: "system",
-        targetId: form.id,
-        details: { type: form.type, formId: form.id },
-        ipAddress: ctx.req.ip,
-      });
-    }
-    return { success: true as const, form };
-  }),
-
-  /** Public: resolve a token for /form/<token> rendering. */
+  /** Public: resolve a token for /form/<token> — includes custom config. */
   resolve: publicProcedure
     .input(z.object({ token: z.string().uuid() }))
     .query(async ({ input }) => {
       try {
-        const active = await formsApi.getActiveForm();
-        if (active && active.id === input.token) {
-          return { active: true as const, type: active.type };
+        const form = await formsApi.resolveAnyActiveForm(input.token);
+        if (form) {
+          return {
+            active: true as const,
+            type: form.type,
+            title: form.title,
+            description: form.description,
+          };
         }
-        return { active: false as const, type: null };
+        return {
+          active: false as const,
+          type: null,
+          title: null,
+          description: null,
+        };
       } catch {
-        return { active: false as const, type: null };
+        return {
+          active: false as const,
+          type: null,
+          title: null,
+          description: null,
+        };
       }
     }),
 

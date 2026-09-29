@@ -22,11 +22,16 @@ function LogoMark() {
 export default function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [location] = useLocation();
+  const isForm = location.startsWith("/form/");
   const isAbout = location === "/about";
   const isHome = location === "/";
   const isRegister = location === "/register";
 
   if (location === "/admin") return null;
+
+  // Form links (/form/<token>) are STANDALONE capture pages: no logo, no
+  // navigation, no login — nothing but the form itself.
+  if (isForm) return null;
 
   const closeMenu = () => setMenuOpen(false);
 

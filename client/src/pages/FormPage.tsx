@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react";
 import { useRoute } from "wouter";
-import { Link } from "wouter";
-import { ShieldX, Home, RefreshCw } from "lucide-react";
+import { RefreshCw, ShieldX } from "lucide-react";
 import Register from "./Register";
 
 /**
- * Public entry for activated forms: /form/<token>.
+ * Public entry for form links: /form/<token>.
  *
- * Resolves the token against the server (active? which type?) and renders
- * the Register page in that mode. When the admin terminates the form — or
- * the token is unknown — shows a closed-form screen. A terminated form can
- * be re-activated later (a new token), so offer a re-check action.
+ * These pages are STANDALONE capture pages — no site header, no logo, no
+ * navigation, no footer links to the portal. The ONLY thing on the page is
+ * the form itself, headed by the admin's custom title/description for that
+ * camp or generation.
+ *
+ * Resolves the token against the server (live? which type? custom config?)
+ * and renders the Register page in that mode. A closed or unknown token
+ * shows a minimal closed screen (no portal navigation).
  */
 export default function FormPage() {
   // wouter's rest syntax: the splat param is exposed under the literal key
@@ -22,6 +25,8 @@ export default function FormPage() {
     "loading"
   );
   const [type, setType] = useState<"pending" | "registration" | null>(null);
+  const [title, setTitle] = useState<string | null>(null);
+  const [description, setDescription] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,6 +41,8 @@ export default function FormPage() {
           const payload = body[0]?.result?.data?.json ?? body[0]?.result?.data;
           if (payload?.active) {
             setType(payload.type);
+            setTitle(payload.title ?? null);
+            setDescription(payload.description ?? null);
             setState("active");
           } else {
             setState("closed");
@@ -52,20 +59,24 @@ export default function FormPage() {
 
   if (!match || !token) {
     return (
-      <div className="register-page">
+      <div className="form-standalone">
         <div className="reg-card reg-success">
           <div className="reg-success-icon" style={{ color: "#b91c1c" }}>
             <ShieldX size={30} />
           </div>
           <h1>Form link is incomplete</h1>
           <p className="reg-success-sub">
-            This link is missing its form identifier. Please ask HRS staff for
-            the correct link.
+            This link is missing its form identifier. Please ask the HRS
+            volunteer who shared it with you.
           </p>
           <div className="reg-success-actions">
-            <Link href="/" className="reg-btn reg-btn-primary">
-              <Home size={16} /> Back to home
-            </Link>
+            <button
+              type="button"
+              className="reg-btn reg-btn-ghost"
+              onClick={() => setCheck(c => c + 1)}
+            >
+              <RefreshCw size={16} /> Try again
+            </button>
           </div>
         </div>
       </div>
@@ -74,7 +85,7 @@ export default function FormPage() {
 
   if (state === "loading") {
     return (
-      <div className="register-page">
+      <div className="form-standalone">
         <div className="reg-card reg-success">
           <div className="reg-success-icon">
             <RefreshCw size={26} className="syncing-icon" />
@@ -87,7 +98,7 @@ export default function FormPage() {
 
   if (state !== "active" || !type) {
     return (
-      <div className="register-page">
+      <div className="form-standalone">
         <div className="reg-card reg-success">
           <div className="reg-success-icon" style={{ color: "#b91c1c" }}>
             <ShieldX size={30} />
@@ -95,8 +106,8 @@ export default function FormPage() {
           <h1>This form is closed</h1>
           <p className="reg-success-sub">
             The form you're trying to open is no longer accepting responses.
-            If a camp or drive is currently running, please ask HRS staff for
-            the new link.
+            If a camp or drive is currently running, please ask the HRS
+            volunteer who shared this link for the new one.
           </p>
           <div className="reg-success-actions">
             <button
@@ -106,20 +117,21 @@ export default function FormPage() {
             >
               <RefreshCw size={16} /> Check again
             </button>
-            <Link href="/" className="reg-btn reg-btn-primary">
-              <Home size={16} /> Back to home
-            </Link>
           </div>
         </div>
-        </div>
+      </div>
     );
   }
 
   return (
-    <Register
-      key={token}
-      formType={type}
-      formToken={token}
-    />
+    <div className="form-standalone">
+      <Register
+        key={token}
+        formType={type}
+        formToken={token}
+        formTitle={title}
+        formDescription={description}
+      />
+    </div>
   );
 }

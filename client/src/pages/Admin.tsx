@@ -57,6 +57,7 @@ import {
   Download,
   Droplets,
   Edit3,
+  ExternalLink,
   FileSpreadsheet,
   Heart,
   HeartHandshake,
@@ -3554,13 +3555,35 @@ function WorkspaceView({
   }
 }
 
+/** Wire shape of a form row as returned by trpc.form.list / create / etc. */
+interface AdminForm {
+  id: string;
+  type: "pending" | "registration";
+  active: boolean;
+  title: string | null;
+  description: string | null;
+  createdBy: string | null;
+  createdAt: string;
+  terminatedAt: string | null;
+  submissions: number;
+}
+
+const FORM_TYPE_LABEL: Record<"pending" | "registration", string> = {
+  pending: "Pending form",
+  registration: "Registration form",
+};
+
 /**
- * Add Records — dedicated section for growing the donor directory.
+ * Add Records — the multi-form manager.
  *
- * Everything about creating records lives here:
- *  - Form activation: start a Pending or Registration form, copy its public
- *    link, terminate it (one live form at a time, server-enforced)
- *  - Live status: type badge, submissions counter, recent submissions list
+ * Every camp / generation gets its OWN form: the admin names it, picks the
+ * type, and shares its unique link. Many forms can be live at once (one per
+ * camp is the whole point), each with its own submissions counter.
+ *
+ *  - Create form: name + type → a new unguessable link
+ *  - Per-form cards: live/closed badge, copy link, edit title, terminate/
+ *    re-open, delete
+ *  - Recent submissions: newest records created through ANY form link
  *  - Manual entry: open /register (full form → verified) for walk-ins
  *  - Queue shortcut: jump into the pending review tab in Records
  */
@@ -3573,107 +3596,118 @@ function AddRecordsSection({
   onOpenRecord: (hrsId: string) => void;
   onOpenPending: () => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  const statusQuery = trpc.form.status.useQuery(undefined, {
-    refetchInterval: 15_000,
+  const listQuery = trpc.form.list.useQuery(undefined, {
+    refetchInterval: 20_000,
   });
-  const startMutation = trpc.form.start.useMutation({
+  const createMutation = trpc.form.create.useMutation({
     onSuccess: result => {
-      statusQuery.refetch();
+      listQuery.refetch();
+      setCreating(false);
+      setDraft({ title: "", type: draft.type });
       toast.success(
-        `${result.form.type === "pending" ? "Pending" : "Registration"} form is live — share the link.`
+        `“${result.form.title || FORM_TYPE_LABEL[result.form.type]}” is live — share the link.`
       );
     },
-    onError: () => toast.error("Could not start the form — try again."),
+    onError: () => toast.error("Could not create the form — try again."),
   });
-  const terminateMutation = trpc.form.terminate.useMutation({
+  const updateMutation = trpc.form.update.useMutation({
     onSuccess: () => {
-      statusQuery.refetch();
-      toast.info("Form terminated. The old link no longer accepts responses.");
+      listQuery.refetch();
+      setEditingId(null);
+      toast.success("Form details updated.");
     },
-    onError: () => toast.error("Could not terminate the form — try again."),
+    onError: () => toast.error("Could not update the form — try again."),
+  });
+  const setActiveMutation = trpc.form.setActive.useMutation({
+    onSuccess: result => {
+      listQuery.refetch();
+      if (result.form?.active) {
+        toast.success(
+          `“${result.form.title || FORM_TYPE_LABEL[result.form.type]}” is live again.`
+        );
+      } else {
+        toast.success("Form closed — its link no longer accepts responses.");
+      }
+    },
+    onError: () => toast.error("Could not change the form — try again."),
+  });
+  const deleteMutation = trpc.form.delete.useMutation({
+    onSuccess: () => {
+      listQuery.refetch();
+      setConfirmDeleteId(null);
+      toast.info("Form deleted.");
+    },
+    onError: () => toast.error("Could not delete the form — try again."),
   });
 
-  const active = statusQuery.data?.form ?? null;
-  const formUrl = active ? `${window.location.origin}/form/${active.id}` : "";
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState<{
+    title: string;
+    type: "pending" | "registration";
+  }>({ title: "", type: "pending" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Recent submissions to the active form: newest records whose registration
-  // time is after the form was created.
+  const forms = listQuery.data?.forms ?? [];
+  const liveForms = forms.filter(f => f.active);
+
+  const pendingCount = records.filter(record => record.status === "Pending").length;
+
+  // Recent submissions via ANY form link: newest records whose registration
+  // time is after the OLDEST still-known form's creation, minus slack.
   const recentSubmissions = useMemo(() => {
-    if (!active) return [];
-    const createdMs = Date.parse(active.createdAt);
+    if (forms.length === 0) return [];
+    const oldestCreated = Math.min(
+      ...forms.map(f => Date.parse(f.createdAt)).filter(t => !Number.isNaN(t))
+    );
     return records
       .filter(record => {
         if (!record.registeredAt) return false;
         const t = Date.parse(record.registeredAt);
-        return !Number.isNaN(t) && t >= createdMs - 60_000;
+        return !Number.isNaN(t) && t >= oldestCreated - 60_000;
       })
-      .sort((a, b) => Date.parse(b.registeredAt ?? "") - Date.parse(a.registeredAt ?? ""))
+      .sort(
+        (a, b) =>
+          Date.parse(b.registeredAt ?? "") - Date.parse(a.registeredAt ?? "")
+      )
       .slice(0, 5);
-  }, [active, records]);
+  }, [forms, records]);
 
-  const pendingCount = records.filter(record => record.status === "Pending").length;
+  const formUrl = (id: string) => `${window.location.origin}/form/${id}`;
 
-  // Close the menu on outside click or resize; close on scroll (the sticky
-  // topbar would otherwise visually detach the fixed menu from its button).
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (!wrapRef.current?.contains(t) && !menuRef.current?.contains(t))
-        setMenuOpen(false);
-    };
-    const reposition = () => {
-      const r = btnRef.current?.getBoundingClientRect();
-      if (r) setMenuPos({ top: r.bottom + 8, right: window.innerWidth - r.right });
-    };
-    const onScroll = () => setMenuOpen(false);
-    document.addEventListener("mousedown", onDoc);
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", reposition);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", reposition);
-    };
-  }, [menuOpen]);
-
-  // Clamp the menu inside the viewport with a 12px gutter on both sides.
-  const menuStyle = (() => {
-    if (!menuPos) return undefined;
-    const width = Math.min(320, window.innerWidth - 24);
-    return {
-      position: "fixed" as const,
-      top: menuPos.top,
-      right: Math.max(12, menuPos.right),
-      zIndex: 1001,
-      minWidth: width,
-    };
-  })();
-
-  const copyLink = () => {
-    navigator.clipboard?.writeText(formUrl).then(
+  const copyLink = (form: AdminForm) => {
+    navigator.clipboard?.writeText(formUrl(form.id)).then(
       () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        setCopiedId(form.id);
+        setTimeout(() => setCopiedId(null), 2000);
       },
       () => toast.error("Could not copy — long-press the link instead.")
     );
   };
 
-  const startForm = (type: "pending" | "registration") => {
-    setMenuOpen(false);
-    startMutation.mutate({ type });
+  const startCreate = (type: "pending" | "registration") => {
+    setCreating(true);
+    setDraft({ title: "", type });
   };
 
-  const typeLabel = (t: "pending" | "registration") =>
-    t === "pending" ? "Pending form" : "Registration form";
+  const submitCreate = () => {
+    createMutation.mutate({
+      type: draft.type,
+      title: draft.title.trim() || undefined,
+    });
+  };
+
+  const startEdit = (form: AdminForm) => {
+    setEditingId(form.id);
+    setEditTitle(form.title ?? "");
+  };
+
+  const submitEdit = () => {
+    if (!editingId) return;
+    updateMutation.mutate({ id: editingId, title: editTitle.trim() || null });
+  };
 
   return (
     <div className="add-records-section">
@@ -3682,146 +3716,124 @@ function AddRecordsSection({
           <span className="eyebrow dark-eyebrow">DIRECTORY</span>
           <h1>Add Records</h1>
           <p>
-            Activate shareable forms, collect donors at camps, or add records
-            manually — everything that grows the directory lives here.
+            Create a custom form for every camp or generation, share its link,
+            and watch records arrive — or add walk-ins manually.
           </p>
         </div>
-        <div className="admin-form-control" ref={wrapRef}>
-          {statusQuery.isLoading ? (
-            <button className="primary-button" disabled>
-              <Loader2 size={16} className="syncing-icon" /> New Form
-            </button>
-          ) : active ? (
-            <button
-              className="primary-button form-live-button"
-              onClick={copyLink}
-              title={formUrl}
-            >
-              {copied ? <Check size={17} /> : <Copy size={17} />}
-              {typeLabel(active.type)} live
-              <span className="form-live-copy-hint">
-                {copied ? "Copied!" : "Copy link"}
-              </span>
-            </button>
-          ) : (
-            <>
-              <button
-                className="primary-button"
-                ref={btnRef}
-                onClick={() => {
-                  const r = btnRef.current?.getBoundingClientRect();
-                  if (r)
-                    setMenuPos({
-                      top: r.bottom + 8,
-                      right: window.innerWidth - r.right,
-                    });
-                  setMenuOpen(o => !o);
-                }}
-              >
-                <Plus size={17} /> New Form
-              </button>
-              {menuOpen &&
-                menuStyle &&
-                createPortal(
-                  <div
-                    className="admin-form-menu"
-                    role="menu"
-                    ref={menuRef}
-                    style={menuStyle}
-                  >
-                    <button role="menuitem" onClick={() => startForm("pending")}>
-                      <Clock3 size={16} />
-                      <span>
-                        <strong>Pending form</strong>
-                        <small>
-                          Personal details + storage consent → review queue
-                        </small>
-                      </span>
-                    </button>
-                    <button
-                      role="menuitem"
-                      onClick={() => startForm("registration")}
-                    >
-                      <BadgeCheck size={16} />
-                      <span>
-                        <strong>Registration form</strong>
-                        <small>Full details → verified instantly</small>
-                      </span>
-                    </button>
-                  </div>,
-                  document.body
-                )}
-            </>
-          )}
+        <div className="add-form-actions">
+          <button
+            className="primary-button"
+            onClick={() => startCreate("pending")}
+            disabled={createMutation.isPending}
+          >
+            <Plus size={17} /> New form
+          </button>
         </div>
       </div>
 
+      {/* ── Create-form card (opens inline) ── */}
+      {creating && (
+        <section className="admin-card add-form-card add-create-card">
+          <div className="admin-card-heading">
+            <div>
+              <h2>New form</h2>
+              <p>Name it for the camp or generation it collects for</p>
+            </div>
+            <button
+              className="icon-ghost"
+              onClick={() => setCreating(false)}
+              aria-label="Cancel new form"
+            >
+              <X size={17} />
+            </button>
+          </div>
+          <div className="add-create-row">
+            <label className="add-create-field grow">
+              <span>Form name</span>
+              <input
+                className="plain-input"
+                value={draft.title}
+                onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
+                placeholder="e.g. HRS Camp — Tumakuru, Sept 2026"
+                maxLength={120}
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === "Enter") submitCreate();
+                }}
+              />
+            </label>
+            <div
+              className="add-create-types"
+              role="radiogroup"
+              aria-label="Form type"
+            >
+              <button
+                type="button"
+                role="radio"
+                aria-checked={draft.type === "pending"}
+                className={`add-create-type${draft.type === "pending" ? " selected" : ""}`}
+                onClick={() => setDraft(d => ({ ...d, type: "pending" }))}
+              >
+                <Clock3 size={15} />
+                <span>
+                  <strong>Pending</strong>
+                  <small>Personal details → review queue</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={draft.type === "registration"}
+                className={`add-create-type${draft.type === "registration" ? " selected" : ""}`}
+                onClick={() => setDraft(d => ({ ...d, type: "registration" }))}
+              >
+                <BadgeCheck size={15} />
+                <span>
+                  <strong>Registration</strong>
+                  <small>Full details → verified instantly</small>
+                </span>
+              </button>
+            </div>
+            <button
+              className="primary-button add-create-submit"
+              onClick={submitCreate}
+              disabled={createMutation.isPending}
+            >
+              {createMutation.isPending ? (
+                <Loader2 size={16} className="syncing-icon" />
+              ) : (
+                <Plus size={16} />
+              )}
+              Create form
+            </button>
+          </div>
+        </section>
+      )}
+
       <div className="add-records-grid">
-        {/* ── Form status card ── */}
+        {/* ── Forms list card ── */}
         <section className="admin-card add-form-card">
           <div className="admin-card-heading">
             <div>
-              <h2>Form status</h2>
-              <p>One live form at a time — starting a new one closes the old</p>
+              <h2>Your forms</h2>
+              <p>
+                {liveForms.length > 0
+                  ? `${liveForms.length} live · share each camp its own link`
+                  : "No live forms — create one to start collecting"}
+              </p>
             </div>
           </div>
-          {active ? (
-            <>
-              <div className="add-form-live-row">
-                <span className={`add-form-type-badge ${active.type}`}>
-                  {active.type === "pending" ? (
-                    <Clock3 size={14} />
-                  ) : (
-                    <BadgeCheck size={14} />
-                  )}
-                  {typeLabel(active.type)}
-                </span>
-                <span className="add-form-live-dot" aria-hidden />
-                <span className="add-form-live-label">
-                  Accepting responses
-                </span>
-              </div>
-              <div className="add-form-link-box">
-                <span className="add-form-link">{formUrl}</span>
-                <button className="text-button" onClick={copyLink}>
-                  {copied ? <Check size={14} /> : <Copy size={14} />}
-                  {copied ? "Copied" : "Copy"}
-                </button>
-              </div>
-              <div className="add-form-meta">
-                <span>
-                  <strong>{active.submissions}</strong> submissions
-                </span>
-                <span>
-                  since {new Date(active.createdAt).toLocaleString("en-IN", {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                </span>
-              </div>
-              <button
-                className="form-terminate-button add-form-terminate"
-                onClick={() => terminateMutation.mutate()}
-                disabled={terminateMutation.isPending}
-              >
-                {terminateMutation.isPending ? (
-                  <Loader2 size={15} className="syncing-icon" />
-                ) : (
-                  <X size={15} />
-                )}
-                Terminate form
-              </button>
-              <p className="add-form-note">
-                Terminating closes the link immediately — anyone opening it
-                sees a closed-form page instead.
-              </p>
-            </>
-          ) : (
+
+          {listQuery.isLoading ? (
+            <div className="small-empty">
+              <Loader2 size={16} className="syncing-icon" /> Loading forms…
+            </div>
+          ) : forms.length === 0 ? (
             <div className="add-form-empty">
               <UserPlus size={22} />
-              <strong>No form is live right now</strong>
+              <strong>No forms yet</strong>
               <p>
-                Start a form with the <strong>New Form</strong> button, then
+                Tap <strong>New form</strong>, name it for your camp, and
                 share the link — attendees fill it on their phones and records
                 appear here automatically.
               </p>
@@ -3829,18 +3841,195 @@ function AddRecordsSection({
                 <div>
                   <Clock3 size={15} />
                   <span>
-                    <strong>Pending form</strong> — camp sign-ups you review
-                    before they go public
+                    <strong>Pending</strong> — camp sign-ups you review before
+                    they go public
                   </span>
                 </div>
                 <div>
                   <BadgeCheck size={15} />
                   <span>
-                    <strong>Registration form</strong> — full details, verified
+                    <strong>Registration</strong> — full details, verified
                     instantly
                   </span>
                 </div>
               </div>
+            </div>
+          ) : (
+            <div className="add-form-list">
+              {forms.map(form => (
+                <div
+                  key={form.id}
+                  className={`add-form-item${form.active ? " live" : ""}`}
+                >
+                  <div className="add-form-item-head">
+                    <span
+                      className={`add-form-type-badge ${form.type}`}
+                      title={FORM_TYPE_LABEL[form.type]}
+                    >
+                      {form.type === "pending" ? (
+                        <Clock3 size={13} />
+                      ) : (
+                        <BadgeCheck size={13} />
+                      )}
+                      {form.type === "pending" ? "Pending" : "Registration"}
+                    </span>
+                    {form.active ? (
+                      <span className="add-form-live-flag">
+                        <span className="add-form-live-dot" aria-hidden />
+                        Live
+                      </span>
+                    ) : (
+                      <span className="add-form-closed-flag">Closed</span>
+                    )}
+                    <span className="add-form-item-count">
+                      {form.submissions} submission
+                      {form.submissions === 1 ? "" : "s"}
+                    </span>
+                  </div>
+
+                  {editingId === form.id ? (
+                    <div className="add-form-edit-row">
+                      <input
+                        className="plain-input"
+                        value={editTitle}
+                        onChange={e => setEditTitle(e.target.value)}
+                        maxLength={120}
+                        placeholder="Form name"
+                        autoFocus
+                        onKeyDown={e => {
+                          if (e.key === "Enter") submitEdit();
+                          if (e.key === "Escape") setEditingId(null);
+                        }}
+                      />
+                      <button
+                        className="text-button"
+                        onClick={submitEdit}
+                        disabled={updateMutation.isPending}
+                      >
+                        <Save size={14} /> Save
+                      </button>
+                      <button
+                        className="text-button"
+                        onClick={() => setEditingId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="add-form-item-name" title={form.title ?? ""}>
+                      {form.title || (
+                        <em className="add-form-unnamed">
+                          {FORM_TYPE_LABEL[form.type]} (unnamed)
+                        </em>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="add-form-link-box">
+                    <span className="add-form-link">{formUrl(form.id)}</span>
+                    <button
+                      className="text-button"
+                      onClick={() => copyLink(form)}
+                      title="Copy the public form link"
+                    >
+                      {copiedId === form.id ? (
+                        <Check size={14} />
+                      ) : (
+                        <Copy size={14} />
+                      )}
+                      {copiedId === form.id ? "Copied" : "Copy"}
+                    </button>
+                    <a
+                      className="text-button"
+                      href={formUrl(form.id)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open the form in a new tab"
+                    >
+                      <ExternalLink size={14} /> Open
+                    </a>
+                  </div>
+
+                  <div className="add-form-item-foot">
+                    <span className="add-form-item-date">
+                      {form.active
+                        ? `since ${new Date(form.createdAt).toLocaleString(
+                            "en-IN",
+                            { dateStyle: "medium", timeStyle: "short" }
+                          )}`
+                        : `closed ${
+                            form.terminatedAt
+                              ? new Date(form.terminatedAt).toLocaleString(
+                                  "en-IN",
+                                  { dateStyle: "medium", timeStyle: "short" }
+                                )
+                              : "—"
+                          }`}
+                    </span>
+                    <div className="add-form-item-actions">
+                      <button
+                        className="text-button"
+                        onClick={() => startEdit(form)}
+                      >
+                        <Edit3 size={13} /> Rename
+                      </button>
+                      {form.active ? (
+                        <button
+                          className="text-button danger"
+                          onClick={() =>
+                            setActiveMutation.mutate({
+                              id: form.id,
+                              active: false,
+                            })
+                          }
+                          disabled={setActiveMutation.isPending}
+                        >
+                          <X size={13} /> Close
+                        </button>
+                      ) : (
+                        <button
+                          className="text-button"
+                          onClick={() =>
+                            setActiveMutation.mutate({
+                              id: form.id,
+                              active: true,
+                            })
+                          }
+                          disabled={setActiveMutation.isPending}
+                        >
+                          <Zap size={13} /> Re-open
+                        </button>
+                      )}
+                      {confirmDeleteId === form.id ? (
+                        <>
+                          <button
+                            className="text-button danger"
+                            onClick={() =>
+                              deleteMutation.mutate({ id: form.id })
+                            }
+                            disabled={deleteMutation.isPending}
+                          >
+                            <Trash2 size={13} /> Confirm delete
+                          </button>
+                          <button
+                            className="text-button"
+                            onClick={() => setConfirmDeleteId(null)}
+                          >
+                            Keep
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="text-button danger"
+                          onClick={() => setConfirmDeleteId(form.id)}
+                        >
+                          <Trash2 size={13} /> Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </section>
@@ -3864,7 +4053,7 @@ function AddRecordsSection({
             ))
           ) : (
             <div className="small-empty">
-              <Clock3 size={17} /> No submissions yet — share the form link to
+              <Clock3 size={17} /> No submissions yet — share a form link to
               start collecting
             </div>
           )}
@@ -3898,185 +4087,6 @@ function AddRecordsSection({
     </div>
   );
 }
-
-
-/** Shared "Sync" button used across admin sections. */
-/**
- * "Add Person" button, upgraded into a form-activation control.
- *
- * Inactive state: dropdown menu — start a Pending form, a Registration form,
- * or open /register to add manually. Active state: pill showing the form
- * type with Copy link and Terminate actions. Starting a new form
- * automatically terminates the previous one (server-enforced).
- */
-function AdminFormControl({
-  onOpenRecord,
-}: {
-  onOpenRecord?: (hrsId: string) => void;
-}) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  const statusQuery = trpc.form.status.useQuery(undefined, {
-    refetchInterval: 15_000,
-  });
-  const startMutation = trpc.form.start.useMutation({
-    onSuccess: () => {
-      statusQuery.refetch();
-      toast.success("Form is live — share the link with attendees.");
-    },
-    onError: () => toast.error("Could not start the form — try again."),
-  });
-  const terminateMutation = trpc.form.terminate.useMutation({
-    onSuccess: () => {
-      statusQuery.refetch();
-      toast.info("Form terminated. The old link no longer accepts responses.");
-    },
-    onError: () => toast.error("Could not terminate the form — try again."),
-  });
-
-  const active = statusQuery.data?.form ?? null;
-  const formUrl = active
-    ? `${window.location.origin}/form/${active.id}`
-    : "";
-
-  // Close the menu on outside click or resize. The menu renders in a body
-  // portal (fixed position) so no stacking context can bury it. It closes on
-  // scroll: when the sticky topbar overlays the button, a following menu
-  // would visually float detached, so dismissal is the sane behavior.
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDoc = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (!wrapRef.current?.contains(t) && !menuRef.current?.contains(t))
-        setMenuOpen(false);
-    };
-    const reposition = () => {
-      const r = btnRef.current?.getBoundingClientRect();
-      if (r) setMenuPos({ top: r.bottom + 8, right: window.innerWidth - r.right });
-    };
-    const onScroll = () => setMenuOpen(false);
-    document.addEventListener("mousedown", onDoc);
-    window.addEventListener("scroll", onScroll, true);
-    window.addEventListener("resize", reposition);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", reposition);
-    };
-  }, [menuOpen]);
-
-  // Clamp the menu inside the viewport: on small screens a right-anchored
-  // menu can extend past the left edge. Keep a 12px gutter on both sides.
-  const menuStyle = (() => {
-    if (!menuPos) return undefined;
-    const width = Math.min(320, window.innerWidth - 24);
-    const right = Math.max(12, menuPos.right);
-    return { position: "fixed" as const, top: menuPos.top, right, zIndex: 1001, minWidth: width };
-  })();
-
-  const copyLink = () => {
-    navigator.clipboard?.writeText(formUrl).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      },
-      () => toast.error("Could not copy — long-press the link instead.")
-    );
-  };
-
-  const startForm = (type: "pending" | "registration") => {
-    setMenuOpen(false);
-    startMutation.mutate({ type });
-  };
-
-  return (
-    <div className="admin-form-control" ref={wrapRef}>
-      {statusQuery.isLoading ? (
-        <button className="primary-button" disabled>
-          <Loader2 size={16} className="syncing-icon" /> Add Person
-        </button>
-      ) : active ? (
-        <>
-          <button
-            className="primary-button form-live-button"
-            onClick={copyLink}
-            title={formUrl}
-          >
-            {copied ? <Check size={17} /> : <Copy size={17} />}
-            {active.type === "pending" ? "Pending form live" : "Registration form live"}
-            <span className="form-live-copy-hint">
-              {copied ? "Copied!" : "Copy link"}
-            </span>
-          </button>
-          <button
-            className="form-terminate-button"
-            onClick={() => terminateMutation.mutate()}
-            disabled={terminateMutation.isPending}
-            title="Close this form — the link stops accepting responses"
-          >
-            {terminateMutation.isPending ? (
-              <Loader2 size={15} className="syncing-icon" />
-            ) : (
-              <X size={15} />
-            )}
-            Terminate
-          </button>
-        </>
-      ) : (
-        <>
-          <button
-            className="primary-button"
-            ref={btnRef}
-            onClick={() => {
-              const r = btnRef.current?.getBoundingClientRect();
-              if (r) setMenuPos({ top: r.bottom + 8, right: window.innerWidth - r.right });
-              setMenuOpen(o => !o);
-            }}
-          >
-            <UserPlus size={17} /> Add Person
-          </button>
-          {menuOpen && menuStyle && createPortal(
-            <div
-              className="admin-form-menu"
-              role="menu"
-              ref={menuRef}
-              style={menuStyle}
-            >
-              <button role="menuitem" onClick={() => startForm("pending")}>
-                <Clock3 size={16} />
-                <span>
-                  <strong>Pending form</strong>
-                  <small>Personal details + storage consent → review queue</small>
-                </span>
-              </button>
-              <button role="menuitem" onClick={() => startForm("registration")}>
-                <BadgeCheck size={16} />
-                <span>
-                  <strong>Registration form</strong>
-                  <small>Full details → verified instantly</small>
-                </span>
-              </button>
-              <a role="menuitem" href="/register" target="_blank" rel="noopener noreferrer">
-                <UserPlus size={16} />
-                <span>
-                  <strong>Add manually</strong>
-                  <small>Open the registration page yourself</small>
-                </span>
-              </a>
-            </div>,
-            document.body
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 
 function SyncNowButton({
   isSyncing,

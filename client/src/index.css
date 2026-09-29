@@ -18228,12 +18228,6 @@ img {
 .add-manual-card {
   padding: 21px;
 }
-.add-form-live-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin: 14px 0 12px;
-}
 .add-form-type-badge {
   display: inline-flex;
   align-items: center;
@@ -18250,6 +18244,170 @@ img {
 .add-form-type-badge.registration {
   color: #256b3c;
   background: #e2f0dd;
+}
+.add-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.add-create-card {
+  margin-bottom: 16px;
+}
+.add-create-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.add-create-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  min-width: 220px;
+}
+.add-create-field.grow {
+  flex: 1 1 260px;
+}
+.add-create-types {
+  display: flex;
+  gap: 8px;
+}
+.add-create-type {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1.5px solid var(--border);
+  background: #fff;
+  border-radius: 12px;
+  padding: 9px 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.add-create-type svg {
+  margin-top: 2px;
+  color: var(--ink-faint);
+}
+.add-create-type span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.add-create-type strong {
+  font-size: 13px;
+  color: var(--foreground);
+}
+.add-create-type small {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+.add-create-type.selected {
+  border-color: var(--primary);
+  background: #fdf3f4;
+}
+.add-create-type.selected svg {
+  color: var(--primary);
+}
+.add-create-submit {
+  flex: 0 0 auto;
+}
+.add-form-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+.add-form-item {
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  padding: 12px 14px;
+  background: #fff;
+}
+.add-form-item.live {
+  border-color: #bfe1cb;
+  background: linear-gradient(180deg, #f6fcf7, #ffffff 55%);
+}
+.add-form-item-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.add-form-item-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.add-form-live-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #2e7d46;
+}
+.add-form-closed-flag {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-faint);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.add-form-item-name {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: var(--foreground);
+  margin: 8px 0 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.add-form-unnamed {
+  color: var(--ink-faint);
+  font-weight: 600;
+}
+.add-form-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 9px;
+}
+.add-form-edit-row .plain-input {
+  flex: 1;
+  min-width: 0;
+}
+.add-form-item-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 9px;
+}
+.add-form-item-date {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+.add-form-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.add-form-item-actions .text-button {
+  font-size: 12px;
+  padding: 4px 7px;
+}
+.text-button.danger {
+  color: #b3372f;
+}
+.text-button.danger:hover {
+  background: #fbeeed;
 }
 .add-form-live-dot {
   width: 9px;
@@ -18300,28 +18458,6 @@ img {
   align-items: center;
   gap: 5px;
 }
-.add-form-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 12.5px;
-  color: var(--ink-soft);
-  margin: 10px 0 14px;
-}
-.add-form-meta strong {
-  font-size: 15px;
-  color: var(--foreground);
-}
-.add-form-terminate {
-  width: 100%;
-  justify-content: center;
-}
-.add-form-note {
-  font-size: 12px;
-  color: var(--ink-faint);
-  margin: 9px 0 0;
-  line-height: 1.5;
-}
 .add-form-empty {
   display: flex;
   flex-direction: column;
@@ -18370,5 +18506,59 @@ img {
 @media (max-width: 960px) {
   .add-records-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ======================================================================
+   11. STANDALONE FORM PAGES (/form/<token>)
+   Capture pages with ZERO portal chrome: no header, no logo, no nav, no
+   footer links — nothing but the custom form for that camp/generation.
+   ====================================================================== */
+.form-standalone {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 16px 44px;
+  background:
+    radial-gradient(
+      900px 420px at 15% -5%,
+      rgba(201, 47, 59, 0.05),
+      transparent 60%
+    ),
+    radial-gradient(
+      800px 400px at 90% 0%,
+      rgba(93, 138, 101, 0.06),
+      transparent 55%
+    ),
+    #f6f6f3;
+}
+/* The Register page inside a form link: stretch cleanly, drop portal
+   background (the standalone wrapper owns it) and remove outer padding. */
+.form-standalone .register-page {
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  background: none;
+  width: 100%;
+  max-width: 660px;
+}
+.form-standalone .reg-head .reg-kicker {
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 11.5px;
+  color: #a33a3a;
+}
+.form-standalone .reg-foot {
+  border-top: none;
+  margin-top: 6px;
+}
+.form-standalone .reg-foot a {
+  display: none;
+}
+@media (max-width: 700px) {
+  .form-standalone {
+    padding: 18px 12px 32px;
   }
 }
