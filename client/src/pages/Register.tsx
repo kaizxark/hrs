@@ -597,7 +597,7 @@ export default function Register({
           <span className="reg-step-line" />
           <StepBadge n={2} active={step === 2} done={false} />
           <span className={`reg-step-label${step === 2 ? " current" : ""}`}>
-            Blood group & consent
+            {isPendingForm ? "Consent" : "Blood group & consent"}
           </span>
         </div>
 
