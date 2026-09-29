@@ -3747,8 +3747,8 @@ function AddRecordsSection({
               <X size={17} />
             </button>
           </div>
-          <div className="add-create-row">
-            <label className="add-create-field grow">
+          <div className="add-create-body">
+            <label className="add-create-field">
               <span>Form name</span>
               <input
                 className="plain-input"
@@ -3762,11 +3762,7 @@ function AddRecordsSection({
                 }}
               />
             </label>
-            <div
-              className="add-create-types"
-              role="radiogroup"
-              aria-label="Form type"
-            >
+            <div className="add-create-types" role="radiogroup" aria-label="Form type">
               <button
                 type="button"
                 role="radio"
@@ -3774,10 +3770,18 @@ function AddRecordsSection({
                 className={`add-create-type${draft.type === "pending" ? " selected" : ""}`}
                 onClick={() => setDraft(d => ({ ...d, type: "pending" }))}
               >
-                <Clock3 size={15} />
-                <span>
+                <span className="add-create-type-icon">
+                  <Clock3 size={17} />
+                </span>
+                <span className="add-create-type-text">
                   <strong>Pending</strong>
-                  <small>Personal details → review queue</small>
+                  <small>
+                    Collects personal details only — submissions wait in the
+                    review queue until you verify them.
+                  </small>
+                </span>
+                <span className="add-create-type-check">
+                  <Check size={13} />
                 </span>
               </button>
               <button
@@ -3787,25 +3791,43 @@ function AddRecordsSection({
                 className={`add-create-type${draft.type === "registration" ? " selected" : ""}`}
                 onClick={() => setDraft(d => ({ ...d, type: "registration" }))}
               >
-                <BadgeCheck size={15} />
-                <span>
+                <span className="add-create-type-icon">
+                  <BadgeCheck size={17} />
+                </span>
+                <span className="add-create-type-text">
                   <strong>Registration</strong>
-                  <small>Full details → verified instantly</small>
+                  <small>
+                    Full details + blood group — consenting donors go straight
+                    to the public directory.
+                  </small>
+                </span>
+                <span className="add-create-type-check">
+                  <Check size={13} />
                 </span>
               </button>
             </div>
-            <button
-              className="primary-button add-create-submit"
-              onClick={submitCreate}
-              disabled={createMutation.isPending}
-            >
-              {createMutation.isPending ? (
-                <Loader2 size={16} className="syncing-icon" />
-              ) : (
-                <Plus size={16} />
-              )}
-              Create form
-            </button>
+            <div className="add-create-foot">
+              <p className="add-create-hint">
+                The link is unguessable — only people who have it can submit.
+              </p>
+              <div className="add-create-foot-actions">
+                <button className="text-button" onClick={() => setCreating(false)}>
+                  Cancel
+                </button>
+                <button
+                  className="primary-button add-create-submit"
+                  onClick={submitCreate}
+                  disabled={createMutation.isPending}
+                >
+                  {createMutation.isPending ? (
+                    <Loader2 size={16} className="syncing-icon" />
+                  ) : (
+                    <Plus size={16} />
+                  )}
+                  {createMutation.isPending ? "Creating…" : "Create form"}
+                </button>
+              </div>
+            </div>
           </div>
         </section>
       )}
@@ -3856,23 +3878,37 @@ function AddRecordsSection({
             </div>
           ) : (
             <div className="add-form-list">
-              {forms.map(form => (
+              {forms.map(form => {
+                const togglingBusy =
+                  setActiveMutation.isPending &&
+                  setActiveMutation.variables?.id === form.id;
+                const deletingBusy =
+                  deleteMutation.isPending &&
+                  deleteMutation.variables?.id === form.id;
+                return (
                 <div
                   key={form.id}
                   className={`add-form-item${form.active ? " live" : ""}`}
                 >
-                  <div className="add-form-item-head">
-                    <span
-                      className={`add-form-type-badge ${form.type}`}
-                      title={FORM_TYPE_LABEL[form.type]}
-                    >
-                      {form.type === "pending" ? (
-                        <Clock3 size={13} />
-                      ) : (
-                        <BadgeCheck size={13} />
-                      )}
-                      {form.type === "pending" ? "Pending" : "Registration"}
-                    </span>
+                  <div className="add-form-item-top">
+                    <div className="add-form-item-title">
+                      <span
+                        className={`add-form-type-badge ${form.type}`}
+                        title={FORM_TYPE_LABEL[form.type]}
+                      >
+                        {form.type === "pending" ? (
+                          <Clock3 size={12} />
+                        ) : (
+                          <BadgeCheck size={12} />
+                        )}
+                        {form.type === "pending" ? "Pending" : "Registration"}
+                      </span>
+                      <span className="add-form-item-name" title={form.title ?? ""}>
+                        {form.title || (
+                          <em className="add-form-unnamed">Unnamed form</em>
+                        )}
+                      </span>
+                    </div>
                     {form.active ? (
                       <span className="add-form-live-flag">
                         <span className="add-form-live-dot" aria-hidden />
@@ -3881,49 +3917,30 @@ function AddRecordsSection({
                     ) : (
                       <span className="add-form-closed-flag">Closed</span>
                     )}
-                    <span className="add-form-item-count">
+                  </div>
+
+                  <div className="add-form-item-meta">
+                    <span>
                       {form.submissions} submission
                       {form.submissions === 1 ? "" : "s"}
                     </span>
+                    <span className="add-form-meta-dot" aria-hidden>·</span>
+                    <span>
+                      {form.active
+                        ? `live since ${new Date(form.createdAt).toLocaleString(
+                            "en-IN",
+                            { dateStyle: "medium", timeStyle: "short" }
+                          )}`
+                        : `closed ${
+                            form.terminatedAt
+                              ? new Date(form.terminatedAt).toLocaleString(
+                                  "en-IN",
+                                  { dateStyle: "medium", timeStyle: "short" }
+                                )
+                              : "—"
+                          }`}
+                    </span>
                   </div>
-
-                  {editingId === form.id ? (
-                    <div className="add-form-edit-row">
-                      <input
-                        className="plain-input"
-                        value={editTitle}
-                        onChange={e => setEditTitle(e.target.value)}
-                        maxLength={120}
-                        placeholder="Form name"
-                        autoFocus
-                        onKeyDown={e => {
-                          if (e.key === "Enter") submitEdit();
-                          if (e.key === "Escape") setEditingId(null);
-                        }}
-                      />
-                      <button
-                        className="text-button"
-                        onClick={submitEdit}
-                        disabled={updateMutation.isPending}
-                      >
-                        <Save size={14} /> Save
-                      </button>
-                      <button
-                        className="text-button"
-                        onClick={() => setEditingId(null)}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="add-form-item-name" title={form.title ?? ""}>
-                      {form.title || (
-                        <em className="add-form-unnamed">
-                          {FORM_TYPE_LABEL[form.type]} (unnamed)
-                        </em>
-                      )}
-                    </div>
-                  )}
 
                   <div className="add-form-link-box">
                     <span className="add-form-link">{formUrl(form.id)}</span>
@@ -3950,22 +3967,40 @@ function AddRecordsSection({
                     </a>
                   </div>
 
-                  <div className="add-form-item-foot">
-                    <span className="add-form-item-date">
-                      {form.active
-                        ? `since ${new Date(form.createdAt).toLocaleString(
-                            "en-IN",
-                            { dateStyle: "medium", timeStyle: "short" }
-                          )}`
-                        : `closed ${
-                            form.terminatedAt
-                              ? new Date(form.terminatedAt).toLocaleString(
-                                  "en-IN",
-                                  { dateStyle: "medium", timeStyle: "short" }
-                                )
-                              : "—"
-                          }`}
-                    </span>
+                  {editingId === form.id ? (
+                    <div className="add-form-edit-row">
+                      <input
+                        className="plain-input"
+                        value={editTitle}
+                        onChange={e => setEditTitle(e.target.value)}
+                        maxLength={120}
+                        placeholder="Form name"
+                        autoFocus
+                        onKeyDown={e => {
+                          if (e.key === "Enter") submitEdit();
+                          if (e.key === "Escape") setEditingId(null);
+                        }}
+                      />
+                      <button
+                        className="text-button"
+                        onClick={submitEdit}
+                        disabled={updateMutation.isPending}
+                      >
+                        {updateMutation.isPending ? (
+                          <Loader2 size={14} className="syncing-icon" />
+                        ) : (
+                          <Save size={14} />
+                        )}
+                        Save
+                      </button>
+                      <button
+                        className="text-button"
+                        onClick={() => setEditingId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
                     <div className="add-form-item-actions">
                       <button
                         className="text-button"
@@ -3982,9 +4017,14 @@ function AddRecordsSection({
                               active: false,
                             })
                           }
-                          disabled={setActiveMutation.isPending}
+                          disabled={togglingBusy}
                         >
-                          <X size={13} /> Close
+                          {togglingBusy ? (
+                            <Loader2 size={13} className="syncing-icon" />
+                          ) : (
+                            <X size={13} />
+                          )}
+                          {togglingBusy ? "Closing…" : "Close"}
                         </button>
                       ) : (
                         <button
@@ -3995,19 +4035,26 @@ function AddRecordsSection({
                               active: true,
                             })
                           }
-                          disabled={setActiveMutation.isPending}
+                          disabled={togglingBusy}
                         >
-                          <Zap size={13} /> Re-open
+                          {togglingBusy ? (
+                            <Loader2 size={13} className="syncing-icon" />
+                          ) : (
+                            <Zap size={13} />
+                          )}
+                          {togglingBusy ? "Opening…" : "Re-open"}
                         </button>
                       )}
-                      {confirmDeleteId === form.id ? (
+                      {deletingBusy ? (
+                        <button className="text-button danger" disabled>
+                          <Loader2 size={13} className="syncing-icon" />
+                          Deleting…
+                        </button>
+                      ) : confirmDeleteId === form.id ? (
                         <>
                           <button
                             className="text-button danger"
-                            onClick={() =>
-                              deleteMutation.mutate({ id: form.id })
-                            }
-                            disabled={deleteMutation.isPending}
+                            onClick={() => deleteMutation.mutate({ id: form.id })}
                           >
                             <Trash2 size={13} /> Confirm delete
                           </button>
@@ -4027,9 +4074,10 @@ function AddRecordsSection({
                         </button>
                       )}
                     </div>
-                  </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

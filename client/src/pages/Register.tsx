@@ -376,6 +376,14 @@ export default function Register({
 
   const age = useMemo(() => (dobIso ? exactAge(dobIso) : null), [dobIso]);
 
+  /** Busy while ANY submit path is in flight (plain register, pending-form
+   *  link, or registration-form link) — the button must never look idle
+   *  while the server is working. */
+  const submitting =
+    registerMutation.isPending ||
+    formPendingMutation.isPending ||
+    formRegistrationMutation.isPending;
+
   /** "14 May 1999" — what the user actually picked, for the review panel. */
   const dobPretty = useMemo(() => {
     if (!dobIso) return "";
@@ -870,9 +878,9 @@ export default function Register({
                 type="button"
                 className="reg-btn reg-btn-primary"
                 onClick={submit}
-                disabled={registerMutation.isPending}
+                disabled={submitting}
               >
-                {registerMutation.isPending ? (
+                {submitting ? (
                   <>
                     <span className="reg-spinner" /> Submitting…
                   </>

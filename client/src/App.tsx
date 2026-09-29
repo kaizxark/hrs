@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import { lazy, Suspense } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
+import TopProgressBar from "./components/TopProgressBar";
 import SiteHeader from "./components/SiteHeader";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
@@ -53,6 +54,7 @@ function App() {
             mobileOffset={{ top: 84, right: 12 }}
           />
           <SiteHeader />
+          <TopProgressBar />
           <Router />
         </TooltipProvider>
       </ThemeProvider>
