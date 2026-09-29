@@ -1537,52 +1537,7 @@ textarea:focus,
 .settings-label {
   margin-top: 28px;
 }
-.sidebar-bottom {
-  margin-top: auto;
-  padding-bottom: 8px;
-}
-.staff-profile {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  color: inherit;
-  border-top: 1px solid #3d493e;
-  padding: 14px 10px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.staff-profile .staff-info {
-  flex: 1;
-  min-width: 0;
-}
-.staff-profile .staff-info strong {
-  display: block;
-  font-size: 14px;
-  font-weight: 600;
-  color: #d5ddd4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.staff-profile .staff-info span {
-  display: block;
-  font-size: 12px;
-  color: #6b786c;
-}
-.staff-profile .staff-profile-chevron {
-  color: #6b786c;
-  transition: transform 0.2s ease;
-}
-.staff-profile.open .staff-profile-chevron {
-  transform: rotate(180deg);
-}
-
 /* Profile dropdown menus */
-.staff-profile-wrap,
 .staff-top-wrap {
   position: relative;
 }
@@ -1608,14 +1563,6 @@ textarea:focus,
   visibility: visible;
   transform: translateY(0);
 }
-.sidebar-profile-menu {
-  left: 10px;
-  right: 10px;
-  bottom: calc(100% - 2px);
-  margin-bottom: 6px;
-  background: #26302a;
-  border-color: #3d493e;
-}
 .top-profile-menu {
   right: 0;
   top: calc(100% + 10px);
@@ -1627,9 +1574,6 @@ textarea:focus,
   padding: 10px 10px 12px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   margin-bottom: 6px;
-}
-.sidebar-profile-menu .profile-menu-head {
-  border-color: rgba(255, 255, 255, 0.08);
 }
 .profile-menu-head .staff-info {
   flex: 1;
@@ -1643,9 +1587,6 @@ textarea:focus,
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.sidebar-profile-menu .profile-menu-head .staff-info strong {
-  color: #d5ddd4;
 }
 .profile-menu-head .staff-info span {
   display: block;
@@ -1671,13 +1612,6 @@ textarea:focus,
 .profile-menu-item.danger:hover {
   background: rgba(201, 47, 59, 0.1);
   color: #c92f3b;
-}
-.sidebar-profile-menu .profile-menu-item {
-  color: #c6d0c4;
-}
-.sidebar-profile-menu .profile-menu-item.danger:hover {
-  background: rgba(201, 47, 59, 0.16);
-  color: #f0717b;
 }
 .staff-top-wrap {
   display: flex;
@@ -1790,14 +1724,6 @@ textarea:focus,
 .staff-avatar.small {
   width: 28px;
   height: 28px;
-}
-.staff-profile-wrap .staff-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: #d8e5d6;
-  color: #536a57;
-  font-size: 14px;
 }
 .profile-menu .staff-avatar.small,
 .profile-menu .staff-avatar {
@@ -3363,10 +3289,6 @@ textarea:focus,
   }
   .admin-sidebar.open {
     transform: translateX(0);
-  }
-  /* Mobile: hide the bottom "Administrator" profile chip in the sidebar drawer. */
-  .sidebar-bottom {
-    display: none;
   }
   .mobile-close-sidebar {
     display: grid;

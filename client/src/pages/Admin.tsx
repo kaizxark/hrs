@@ -879,14 +879,11 @@ export default function Admin() {
 
   useEffect(() => {
     const closeMenus = (event: PointerEvent) => {
-      if (profileMenuRef.current?.contains(event.target as Node)) return;
       if (topProfileMenuRef.current?.contains(event.target as Node)) return;
-      setProfileMenuOpen(false);
       setTopProfileMenuOpen(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setProfileMenuOpen(false);
         setTopProfileMenuOpen(false);
       }
     };
@@ -904,9 +901,7 @@ export default function Admin() {
   );
   const [addOpen, setAddOpen] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
-  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [topProfileMenuOpen, setTopProfileMenuOpen] = useState(false);
-  const profileMenuRef = useRef<HTMLDivElement>(null);
   const topProfileMenuRef = useRef<HTMLDivElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [indiaTime, setIndiaTime] = useState("");
@@ -964,7 +959,6 @@ export default function Admin() {
   }, [loggedIn, staffLoading]);
 
   const handleLogout = async () => {
-    setProfileMenuOpen(false);
     setTopProfileMenuOpen(false);
     try {
       await logout();
@@ -2004,52 +1998,6 @@ export default function Admin() {
             </>
           )}
         </nav>
-        <div className="sidebar-bottom">
-          <div className="staff-profile-wrap" ref={profileMenuRef}>
-            <button
-              className={`staff-profile${profileMenuOpen ? " open" : ""}`}
-              onClick={() => setProfileMenuOpen(open => !open)}
-              aria-label="Account menu"
-              aria-expanded={profileMenuOpen}
-            >
-              <div className="staff-avatar">
-                <UserRound size={16} />
-              </div>
-              <span className="staff-info">
-                <strong>
-                  {adminSettings.displayName || staff?.displayName || "Admin"}
-                </strong>
-                <span>
-                  {staff?.role === "admin" ? "Administrator" : "Volunteer"}
-                </span>
-              </span>
-              <ChevronDown size={16} className="staff-profile-chevron" />
-            </button>
-            <div
-              className={`profile-menu sidebar-profile-menu${profileMenuOpen ? " open" : ""}`}
-            >
-              <div className="profile-menu-head">
-                <div className="staff-avatar">
-                  <UserRound size={16} />
-                </div>
-                <span className="staff-info">
-                  <strong>
-                    {adminSettings.displayName || staff?.displayName || "Admin"}
-                  </strong>
-                  <span>
-                    {staff?.role === "admin" ? "Administrator" : "Volunteer"}
-                  </span>
-                </span>
-              </div>
-              <button
-                className="profile-menu-item danger"
-                onClick={handleLogout}
-              >
-                <LogOut size={16} /> Logout
-              </button>
-            </div>
-          </div>
-        </div>
       </aside>
       <div className="admin-main">
         <header className="admin-topbar">
