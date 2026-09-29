@@ -59,4 +59,8 @@ export const ENV = {
   pendingGoogleSheetsCsvUrl:
     process.env.GOOGLE_SHEETS_PENDING_CSV_URL ??
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vTbcxSz8zvNpukdEboD3ayPGYa1Ozj1OMgzIVNOteUK5ILsIBvoKuGcTTF4GoOfPsg-LShmcBHg6beA/pub?output=csv",
+  // NOTE: GOOGLE_FORMS_CUTOFF ("YYYY-MM-DD") is read directly in
+  // pendingFormSync.ts — submissions older than it are never imported, so
+  // deleted legacy junk rows (e.g. the Sept-10 Ehtesham test submissions)
+  // cannot be re-imported by the next sync tick.
 };

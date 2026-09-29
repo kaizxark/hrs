@@ -37,6 +37,29 @@ import { supabase, invalidateProfilesSnapshot } from "./supabaseApi";
 const DEFAULT_SYNC_INTERVAL_MS = 5 * 60 * 1_000; // 5 minutes
 let SYNC_INTERVAL_MS = DEFAULT_SYNC_INTERVAL_MS;
 
+/**
+ * Cutoff before which Google Form submissions are NEVER imported.
+ *
+ * The legacy test submissions (Sept 2026, phones 7760902954/7760902945)
+ * live in the published CSV forever, and dedup is phone-based against the
+ * profiles table — so whenever an admin deletes those junk rows, the next
+ * sync tick happily re-imports them. Ignoring everything submitted before
+ * the cutoff (anything real predates the new in-app form links anyway)
+ * kills that loop permanently.
+ *
+ * Override with GOOGLE_FORMS_CUTOFF="YYYY-MM-DD" (or full ISO) in .env.
+ * Only rows whose "Submission time" is strictly after the cutoff import.
+ */
+function parseCutoff(raw: string | undefined): Date | null {
+  if (!raw) return null;
+  const t = new Date(raw.trim().length === 10 ? `${raw.trim()}T00:00:00+05:30` : raw.trim());
+  return Number.isNaN(t.getTime()) ? null : t;
+}
+
+const CUTOFF_DATE = parseCutoff(
+  process.env.GOOGLE_FORMS_CUTOFF ?? "2026-09-25"
+);
+
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
 let syncRunning = false;
 let syncEnabled = false;
@@ -46,6 +69,10 @@ export interface PendingSyncResult {
   skipped: number;
   errors: string[];
   lastRun: string | null;
+  /** ISO cutoff used to ignore legacy submissions (for admin diagnostics). */
+  cutoffDate: string | null;
+  /** Rows ignored solely because they were submitted before the cutoff. */
+  cutoffSkipped: number;
 }
 
 let lastRunResult: PendingSyncResult = {
@@ -53,6 +80,8 @@ let lastRunResult: PendingSyncResult = {
   skipped: 0,
   errors: [],
   lastRun: null,
+  cutoffDate: CUTOFF_DATE ? CUTOFF_DATE.toISOString() : null,
+  cutoffSkipped: 0,
 };
 
 /** Status of the last (or current) sync run — for the admin Settings view. */
@@ -270,6 +299,8 @@ export async function runPendingFormSync(): Promise<PendingSyncResult> {
     skipped: 0,
     errors: [],
     lastRun: new Date().toISOString(),
+    cutoffDate: CUTOFF_DATE ? CUTOFF_DATE.toISOString() : null,
+    cutoffSkipped: 0,
   };
 
   try {
@@ -282,7 +313,22 @@ export async function runPendingFormSync(): Promise<PendingSyncResult> {
     // Dedup within the run by phone (keep the earliest submission), exactly
     // like the original's phone-based dedup.
     const byPhone = new Map<string, Record<string, string>>();
+    let cutoffSkipped = 0;
     for (const row of fetchResult.data) {
+      // Ignore legacy submissions: anything before the cutoff never imports,
+      // so deleting a junk row cannot resurrect it on the next tick.
+      if (CUTOFF_DATE) {
+        const submitted = (row["Submission time"] ?? "").trim();
+        const t = submitted
+          ? new Date(submitted.replace(" ", "T") + "+05:30")
+          : null;
+        // Rows without a parsable submission time are treated as legacy
+        // (the cutoff is the conservative default for them).
+        if (!t || Number.isNaN(t.getTime()) || t <= CUTOFF_DATE) {
+          cutoffSkipped += 1;
+          continue;
+        }
+      }
       const phone = stripCountryCode(row["Phone number"] ?? "");
       const name = (row["Full Name"] ?? "").trim();
       if (!phone || !name) {
@@ -294,6 +340,7 @@ export async function runPendingFormSync(): Promise<PendingSyncResult> {
         byPhone.set(phone, row);
       }
     }
+    result.cutoffSkipped = cutoffSkipped;
 
     // Phones already in Supabase
     const { data: existing, error: existingError } = await supabase
