@@ -18213,61 +18213,219 @@ img {
 
 /* ======================================================================
    10. ADD RECORDS SECTION (admin sidebar → Add Records)
-   Dedicated environment for form activation + record creation.
+   Redesigned multi-channel environment: Desk + Camp Links Grid
    ====================================================================== */
-.add-records-section {
+.add-records-page {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  max-width: 1080px;
+  max-width: 1240px;
 }
 
 .add-heading-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
-.add-create-card {
-  padding: 24px 28px;
-  border-left: 3px solid var(--primary);
-  border-radius: 14px;
-  background: #ffffff;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.04);
+/* ── Hero / Channel Summary Bar ── */
+.add-channel-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.35fr;
+  gap: 14px;
 }
 
-.add-create-card .admin-card-heading {
+.add-channel-kpi {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.add-channel-kpi-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.add-channel-kpi-icon.active {
+  background: #eaf6ed;
+  color: #23743c;
+}
+
+.add-channel-kpi-icon.submissions {
+  background: #edf3fc;
+  color: #225cb3;
+}
+
+.add-channel-kpi-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  margin-bottom: 2px;
+}
+
+.add-channel-kpi-val {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--foreground);
+  line-height: 1.1;
+}
+
+.add-channel-kpi-val span {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-faint);
+}
+
+.add-channel-desk-card {
+  background: linear-gradient(135deg, #2b332c 0%, #1c221d 100%);
+  color: #fff;
+  border-radius: 14px;
+  padding: 16px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 4px 14px rgba(28, 34, 29, 0.15);
+}
+
+.add-channel-desk-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.add-channel-desk-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #ffffff;
+}
+
+.add-channel-desk-sub {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.add-channel-desk-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 15px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.add-channel-desk-action:hover {
+  background: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+}
+
+/* ── Inline Form Creation Card ── */
+.add-create-modal-card {
+  border-left: 4px solid var(--primary);
+  border-radius: 14px;
+  padding: 24px 26px;
+  background: #ffffff;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.05);
+  animation: admin-card-slide-down 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes admin-card-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.add-create-modal-card .admin-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   margin-bottom: 20px;
+}
+
+.add-create-modal-card .admin-card-heading h2 {
+  font-size: 18px;
+  margin: 0;
+}
+
+.add-create-modal-card .admin-card-heading p {
+  font-size: 13.5px;
+  color: var(--ink-faint);
+  margin: 4px 0 0;
 }
 
 .add-create-body {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
 }
 
 .add-create-field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   font-size: 13px;
   font-weight: 700;
   color: var(--ink-soft);
 }
 
 .add-create-field .plain-input {
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 600;
   padding: 12px 14px;
   border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fafaf9;
+}
+
+.add-create-field .plain-input:focus {
+  background: #ffffff;
+  border-color: var(--primary);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(201, 47, 59, 0.12);
+}
+
+.add-create-types-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.add-create-types-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
 }
 
 .add-create-types {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
-  margin: 4px 0;
 }
 
 .add-create-type {
@@ -18276,28 +18434,36 @@ img {
   align-items: flex-start;
   gap: 12px;
   border: 1.5px solid var(--border);
-  background: #fff;
-  border-radius: 13px;
-  padding: 15px 16px;
+  background: #fafaf9;
+  border-radius: 12px;
+  padding: 16px;
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .add-create-type:hover {
-  border-color: #c0c6be;
+  border-color: #bcc3bb;
+  background: #ffffff;
 }
 
 .add-create-type-icon {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   border-radius: 10px;
-  background: #f4f5f2;
-  color: var(--ink-soft);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.add-create-type-icon.green {
+  background: #e7f5e9;
+  color: #1e7039;
+}
+
+.add-create-type-icon.amber {
+  background: #fbf1e2;
+  color: #926425;
 }
 
 .add-create-type-text {
@@ -18314,7 +18480,7 @@ img {
 
 .add-create-type-text small {
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.45;
   color: var(--ink-faint);
 }
 
@@ -18325,22 +18491,17 @@ img {
   display: none;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--primary);
-  color: #fff;
+  color: #ffffff;
 }
 
 .add-create-type.selected {
   border-color: var(--primary);
-  background: #fdf7f7;
-  box-shadow: 0 2px 8px rgba(178, 52, 56, 0.1);
-}
-
-.add-create-type.selected .add-create-type-icon {
-  background: var(--primary);
-  color: #fff;
+  background: #fffcfb;
+  box-shadow: 0 2px 10px rgba(201, 47, 59, 0.08);
 }
 
 .add-create-type.selected .add-create-type-check {
@@ -18370,308 +18531,360 @@ img {
   gap: 10px;
 }
 
-.add-forms-card {
-  padding: 26px 28px;
-  border-radius: 14px;
-  background: #ffffff;
-}
-
-.add-forms-card .admin-card-heading {
-  margin-bottom: 22px;
-}
-
-.add-quick-new-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13.5px;
-  padding: 7px 14px;
-}
-
-.add-form-list {
+/* ── Active Camp Form Links Grid Section ── */
+.add-forms-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-top: 4px;
+  gap: 18px;
 }
 
-.add-form-item {
+.add-forms-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.add-forms-header h2 {
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0;
+  color: var(--foreground);
+}
+
+.add-forms-header p {
+  font-size: 13.5px;
+  color: var(--ink-faint);
+  margin: 4px 0 0;
+}
+
+.add-forms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 18px;
+}
+
+.add-forms-loading {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 18px;
+}
+
+/* ── Individual Camp Link Card ── */
+.add-camp-card {
+  background: #ffffff;
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 20px 22px;
-  background: #ffffff;
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
+  transition: all 0.18s ease;
 }
 
-.add-form-item:hover {
-  border-color: #c9d2c8;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+.add-camp-card:hover {
+  border-color: #cad3ca;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
 }
 
-.add-form-item.is-live {
-  border-color: #bce1ca;
-  background: linear-gradient(180deg, #f7fcf8, #ffffff 65%);
+.add-camp-card.is-active {
+  border-top: 3px solid #28a745;
 }
 
-.add-form-item.is-closed {
+.add-camp-card.is-closed {
+  border-top: 3px solid #9aa599;
+  background: #fbfbfb;
   opacity: 0.88;
-  background: #fafaf9;
 }
 
-.add-form-item-header {
+.add-camp-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.add-form-title-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.add-form-type-pill {
+.add-camp-type-pill {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
-  padding: 3px 10px;
+  padding: 3px 9px;
   border-radius: 999px;
   letter-spacing: 0.02em;
-  flex-shrink: 0;
 }
 
-.add-form-type-pill.pending {
+.add-camp-type-pill.pending {
   color: #8c6024;
   background: #fbf2e3;
   border: 1px solid #ebd9b9;
 }
 
-.add-form-type-pill.registration {
+.add-camp-type-pill.registration {
   color: #236c39;
   background: #e5f4e7;
   border: 1px solid #c2e5ca;
 }
 
-.add-form-item-name {
-  margin: 0;
-  font-size: 16px;
+.add-camp-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
   font-weight: 700;
-  color: var(--foreground);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: 3px 9px;
+  border-radius: 999px;
 }
 
-.add-form-unnamed {
+.add-camp-status-badge.active {
+  color: #1e7039;
+  background: #e2f4e6;
+}
+
+.add-camp-status-badge.closed {
+  color: #717d71;
+  background: #eff2ee;
+}
+
+.add-camp-card-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--foreground);
+  margin: 0;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.add-camp-unnamed {
   color: var(--ink-faint);
   font-style: italic;
   font-weight: 500;
 }
 
-.add-status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 4px 11px;
-  border-radius: 999px;
-  flex-shrink: 0;
-}
-
-.add-status-pill.live {
-  color: #1e7039;
-  background: #e2f4e6;
-}
-
-.add-status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #28a745;
-  box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.25);
-}
-
-.add-status-pill.closed {
-  color: #717d71;
-  background: #eff2ee;
-}
-
-.add-form-item-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: #636f64;
-}
-
-.add-form-meta-separator {
-  color: #c0c8be;
-}
-
-.add-form-link-row {
+.add-camp-card-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 11px 15px;
-  background: #f4f6f3;
-  border: 1px solid #e1e6df;
-  border-radius: 11px;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-faint);
 }
 
-.add-form-link-text {
+.add-camp-subs-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #2b352d;
+  font-weight: 600;
+}
+
+.add-camp-subs-pill strong {
+  font-weight: 800;
+  color: var(--foreground);
+}
+
+.add-camp-link-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: #f4f6f3;
+  border: 1px solid #e1e6df;
+  border-radius: 10px;
+  padding: 7px 10px;
+}
+
+.add-camp-link-url {
   flex: 1;
   min-width: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
-  color: #3b453c;
+  font-size: 12px;
+  color: #435044;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  user-select: all;
 }
 
-.add-form-link-actions {
+.add-camp-link-btns {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
-.add-link-btn {
-  font-size: 12.5px;
-  padding: 6px 13px;
-  height: 33px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border-radius: 8px;
+.add-camp-icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid #d8dfd6;
+  background: #ffffff;
+  color: #3e483f;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.12s ease;
 }
 
-.add-form-item-toolbar {
+.add-camp-icon-btn:hover {
+  background: #f0f4ef;
+  border-color: #c2cdc0;
+  color: #1a221b;
+}
+
+.copied-check {
+  color: #28a745;
+}
+
+.add-camp-card-footer {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding-top: 10px;
   border-top: 1px dashed #e4e8e2;
-  margin-top: 2px;
-  flex-wrap: wrap;
+  margin-top: auto;
 }
 
-.add-form-item-toolbar .text-button {
-  font-size: 12.5px;
-  padding: 6px 10px;
+.add-camp-footer-action {
+  border: 0;
+  background: transparent;
+  padding: 5px 8px;
   border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4c574d;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  color: #4b554c;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.12s ease;
 }
 
-.add-form-item-toolbar .text-button:hover {
-  background: #f0f3ee;
-  color: #1f2720;
+.add-camp-footer-action:hover {
+  background: #f0f4ef;
+  color: #19211a;
 }
 
-.add-form-item-toolbar .text-button.danger {
-  color: #b33935;
+.add-camp-footer-action.danger {
+  color: #9c3531;
   margin-left: auto;
 }
 
-.add-form-item-toolbar .text-button.danger:hover {
-  background: #fdf0ef;
+.add-camp-footer-action.danger:hover {
+  background: #fef0ef;
+  color: #7d2623;
 }
 
-.add-form-edit-bar {
+.add-camp-edit-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding-top: 10px;
+  gap: 6px;
+  padding-top: 8px;
   border-top: 1px dashed #e4e8e2;
-  margin-top: 2px;
 }
 
-.add-form-edit-bar .plain-input {
+.add-camp-edit-input {
   flex: 1;
   min-width: 0;
-  font-size: 14px;
-  padding: 8px 12px;
+  padding: 6px 10px;
+  font-size: 13.5px;
 }
 
-.add-confirm-delete-group {
+.small-btn {
+  padding: 5px 8px;
+  height: 30px;
+}
+
+.add-camp-confirm-delete {
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  padding: 5px 10px;
+  gap: 4px;
   background: #fdf2f1;
+  padding: 3px 6px;
+  border-radius: 7px;
   border: 1px solid #f6d1ce;
-  border-radius: 8px;
 }
 
-.add-confirm-label {
-  font-size: 12px;
+.add-camp-confirm-yes {
+  border: 0;
+  background: #a82e2a;
+  color: #fff;
+  font-size: 11.5px;
   font-weight: 700;
-  color: #a82e2a;
+  padding: 3px 7px;
+  border-radius: 5px;
+  cursor: pointer;
 }
 
-.add-empty-state {
+.add-camp-confirm-no {
+  border: 0;
+  background: transparent;
+  color: #636f64;
+  font-size: 11.5px;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+/* ── Empty State Card ── */
+.add-empty-card {
+  padding: 52px 32px;
+  text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  text-align: center;
-  padding: 52px 24px;
-  color: var(--ink-soft);
-  max-width: 480px;
-  margin: 0 auto;
+  background: #ffffff;
+  border: 1px dashed #ced8cc;
+  border-radius: 16px;
 }
 
 .add-empty-icon {
-  width: 54px;
-  height: 54px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
-  background: #f3f5f2;
+  background: #f4f6f3;
   color: var(--primary);
   display: grid;
   place-items: center;
   margin-bottom: 18px;
 }
 
-.add-empty-state h3 {
-  font-size: 18px;
-  font-weight: 700;
+.add-empty-card h3 {
+  font-size: 20px;
+  font-weight: 800;
   margin: 0 0 8px;
   color: var(--foreground);
 }
 
-.add-empty-state p {
-  font-size: 14px;
-  line-height: 1.55;
+.add-empty-card p {
+  font-size: 14.5px;
   color: var(--ink-faint);
-  margin: 0 0 22px;
+  max-width: 460px;
+  margin: 0 0 24px;
+  line-height: 1.55;
 }
 
-@media (max-width: 860px) {
+.add-empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ── Responsive Adaptations ── */
+@media (max-width: 900px) {
+  .add-channel-bar {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
   .add-create-types {
     grid-template-columns: 1fr;
-  }
-  .add-form-link-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-  .add-form-link-actions {
-    justify-content: flex-end;
   }
 }
 

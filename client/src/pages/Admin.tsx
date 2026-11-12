@@ -68,6 +68,7 @@ import {
   KeyRound,
   Layout,
   LayoutDashboard,
+  Link2,
   Loader2,
   LockKeyhole,
   LogOut,
@@ -3817,6 +3818,7 @@ function AddRecordsSection({
 
   const forms = listQuery.data?.forms ?? [];
   const liveForms = forms.filter(f => f.active);
+  const totalSubmissions = forms.reduce((acc, f) => acc + (f.submissions || 0), 0);
 
   const formUrl = (id: string) => `${window.location.origin}/form/${id}`;
 
@@ -3853,13 +3855,15 @@ function AddRecordsSection({
   };
 
   return (
-    <div className="add-records-section">
+    <div className="add-records-page">
+      {/* ── Page Header ── */}
       <div className="admin-page-heading compact-heading">
         <div>
+          <span className="eyebrow dark-eyebrow">REGISTRATION CHANNELS</span>
           <h1>Add Records</h1>
           <p>
-            Generate shareable links for camp attendee self-registration, or
-            register walk-in donors directly at the desk.
+            Create dedicated links for camp attendee self-registration, or open
+            the desk for on-site walk-ins.
           </p>
         </div>
         <div className="add-heading-actions">
@@ -3876,7 +3880,7 @@ function AddRecordsSection({
             className="primary-button"
             onClick={() => {
               setCreating(true);
-              setDraft({ title: "", type: "pending" });
+              setDraft({ title: "", type: "registration" });
             }}
             disabled={createMutation.isPending}
           >
@@ -3885,392 +3889,433 @@ function AddRecordsSection({
         </div>
       </div>
 
-      {/* Create-form card (opens inline when creating is true) */}
+      {/* ── Channel Summary Bar ── */}
+      <div className="add-channel-bar">
+        <div className="add-channel-kpi">
+          <div className="add-channel-kpi-icon active">
+            <Zap size={18} />
+          </div>
+          <div>
+            <span className="add-channel-kpi-label">Active Camp Links</span>
+            <strong className="add-channel-kpi-val">
+              {liveForms.length} <span>/ {forms.length} total</span>
+            </strong>
+          </div>
+        </div>
+
+        <div className="add-channel-kpi">
+          <div className="add-channel-kpi-icon submissions">
+            <Users size={18} />
+          </div>
+          <div>
+            <span className="add-channel-kpi-label">Form Submissions</span>
+            <strong className="add-channel-kpi-val">
+              {totalSubmissions}
+            </strong>
+          </div>
+        </div>
+
+        <div className="add-channel-desk-card">
+          <div className="add-channel-desk-info">
+            <span className="add-channel-desk-title">On-Site Walk-In Desk</span>
+            <span className="add-channel-desk-sub">Volunteer entry · verified instantly</span>
+          </div>
+          <a
+            href="/register"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="add-channel-desk-action"
+          >
+            Launch Desk <ExternalLink size={13} />
+          </a>
+        </div>
+      </div>
+
+      {/* ── Inline Form Creation Card ── */}
       {creating && (
-        <section className="admin-card add-create-card">
-              <div className="admin-card-heading">
-                <div>
-                  <h2>Create form link</h2>
-                  <p>Configure a dedicated registration link for your camp or session</p>
-                </div>
+        <section className="admin-card add-create-modal-card">
+          <div className="admin-card-heading">
+            <div>
+              <h2>Create Camp Form Link</h2>
+              <p>Configure a dedicated, unguessable registration link for this camp</p>
+            </div>
+            <button
+              type="button"
+              className="icon-ghost"
+              onClick={() => setCreating(false)}
+              aria-label="Cancel new form"
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="add-create-body">
+            <label className="add-create-field">
+              <span>Camp or session name</span>
+              <input
+                className="plain-input"
+                value={draft.title}
+                onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
+                placeholder="e.g. HRS Tumakuru Blood Camp — Sept 2026"
+                maxLength={120}
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === "Enter") submitCreate();
+                }}
+              />
+            </label>
+
+            <div className="add-create-types-wrap">
+              <span className="add-create-types-label">Choose registration mode</span>
+              <div className="add-create-types" role="radiogroup" aria-label="Form type">
                 <button
                   type="button"
-                  className="icon-ghost"
-                  onClick={() => setCreating(false)}
-                  aria-label="Cancel new form"
+                  role="radio"
+                  aria-checked={draft.type === "registration"}
+                  className={`add-create-type${draft.type === "registration" ? " selected" : ""}`}
+                  onClick={() => setDraft(d => ({ ...d, type: "registration" }))}
                 >
-                  <X size={16} />
+                  <span className="add-create-type-icon green">
+                    <BadgeCheck size={18} />
+                  </span>
+                  <span className="add-create-type-text">
+                    <strong>Instant Registration</strong>
+                    <small>
+                      Full donor details with blood group. Consenting donors are instantly verified and added to the database.
+                    </small>
+                  </span>
+                  <span className="add-create-type-check">
+                    <Check size={12} />
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={draft.type === "pending"}
+                  className={`add-create-type${draft.type === "pending" ? " selected" : ""}`}
+                  onClick={() => setDraft(d => ({ ...d, type: "pending" }))}
+                >
+                  <span className="add-create-type-icon amber">
+                    <Clock3 size={18} />
+                  </span>
+                  <span className="add-create-type-text">
+                    <strong>Pending Review</strong>
+                    <small>
+                      Basic contact details only. Submissions wait in your review queue until staff verify and assign blood group.
+                    </small>
+                  </span>
+                  <span className="add-create-type-check">
+                    <Check size={12} />
+                  </span>
                 </button>
               </div>
+            </div>
 
-              <div className="add-create-body">
-                <label className="add-create-field">
-                  <span>Camp or session name</span>
-                  <input
-                    className="plain-input"
-                    value={draft.title}
-                    onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
-                    placeholder="e.g. HRS Tumakuru Blood Camp — Sept 2026"
-                    maxLength={120}
-                    autoFocus
-                    onKeyDown={e => {
-                      if (e.key === "Enter") submitCreate();
-                    }}
-                  />
-                </label>
-
-                <div className="add-create-types" role="radiogroup" aria-label="Form type">
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={draft.type === "pending"}
-                    className={`add-create-type${draft.type === "pending" ? " selected" : ""}`}
-                    onClick={() => setDraft(d => ({ ...d, type: "pending" }))}
-                  >
-                    <span className="add-create-type-icon">
-                      <Clock3 size={16} />
-                    </span>
-                    <span className="add-create-type-text">
-                      <strong>Pending Review</strong>
-                      <small>
-                        Attendees submit basic contact info. Entries wait in your
-                        review queue for staff verification before entering the directory.
-                      </small>
-                    </span>
-                    <span className="add-create-type-check">
-                      <Check size={12} />
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={draft.type === "registration"}
-                    className={`add-create-type${draft.type === "registration" ? " selected" : ""}`}
-                    onClick={() => setDraft(d => ({ ...d, type: "registration" }))}
-                  >
-                    <span className="add-create-type-icon">
-                      <BadgeCheck size={16} />
-                    </span>
-                    <span className="add-create-type-text">
-                      <strong>Instant Registration</strong>
-                      <small>
-                        Full donor form with blood group. Consenting donors are
-                        instantly verified and added to the public directory.
-                      </small>
-                    </span>
-                    <span className="add-create-type-check">
-                      <Check size={12} />
-                    </span>
-                  </button>
-                </div>
-
-                <div className="add-create-foot">
-                  <p className="add-create-hint">
-                    Each link is secure and unguessable. Only attendees with the link can submit.
-                  </p>
-                  <div className="add-create-foot-actions">
-                    <button
-                      type="button"
-                      className="text-button"
-                      onClick={() => setCreating(false)}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="primary-button add-create-submit"
-                      onClick={submitCreate}
-                      disabled={createMutation.isPending}
-                    >
-                      {createMutation.isPending ? (
-                        <Loader2 size={15} className="syncing-icon" />
-                      ) : (
-                        <Plus size={15} />
-                      )}
-                      {createMutation.isPending ? "Creating…" : "Create Link"}
-                    </button>
-                  </div>
-                </div>
+            <div className="add-create-foot">
+              <p className="add-create-hint">
+                <LockKeyhole size={13} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} />
+                Each link has a unique, secure token. Only attendees with the link can submit.
+              </p>
+              <div className="add-create-foot-actions">
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => setCreating(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary-button add-create-submit"
+                  onClick={submitCreate}
+                  disabled={createMutation.isPending}
+                >
+                  {createMutation.isPending ? (
+                    <Loader2 size={15} className="syncing-icon" />
+                  ) : (
+                    <Plus size={15} />
+                  )}
+                  {createMutation.isPending ? "Creating…" : "Generate Link"}
+                </button>
               </div>
+            </div>
+          </div>
         </section>
       )}
 
-      {/* Forms List Card */}
-      <section className="admin-card add-forms-card">
-            <div className="admin-card-heading">
-              <div>
-                <h2>Camp Form Links</h2>
-                <p>
-                  {forms.length === 0
-                    ? "No camp links generated yet"
-                    : `${forms.length} link${forms.length === 1 ? "" : "s"} · ${liveForms.length} accepting responses`}
-                </p>
-              </div>
-              {!creating && forms.length > 0 && (
-                <button
-                  type="button"
-                  className="secondary-button add-quick-new-btn"
-                  onClick={() => {
-                    setCreating(true);
-                    setDraft({ title: "", type: "pending" });
-                  }}
-                >
-                  <Plus size={14} /> Add Link
-                </button>
-              )}
+      {/* ── Active Camp Form Links Grid ── */}
+      <div className="add-forms-section">
+        <div className="add-forms-header">
+          <div>
+            <h2>Camp Links ({forms.length})</h2>
+            <p>Active and past camp links. Share with attendees via WhatsApp or print as QR code.</p>
+          </div>
+          {!creating && forms.length > 0 && (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                setCreating(true);
+                setDraft({ title: "", type: "registration" });
+              }}
+            >
+              <Plus size={14} /> New Link
+            </button>
+          )}
+        </div>
+
+        {listQuery.isLoading ? (
+          <div className="add-forms-loading">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="admin-skel" style={{ height: 180, borderRadius: 14 }} />
+            ))}
+          </div>
+        ) : forms.length === 0 ? (
+          <div className="admin-card add-empty-card">
+            <div className="add-empty-icon">
+              <Link2 size={24} />
             </div>
+            <h3>No camp registration links yet</h3>
+            <p>
+              Create a dedicated registration link for your upcoming blood drive.
+              Attendees can scan a QR code at your camp to register themselves instantly.
+            </p>
+            <div className="add-empty-actions">
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  setCreating(true);
+                  setDraft({ title: "", type: "registration" });
+                }}
+              >
+                <Plus size={15} /> Create your first form link
+              </button>
+              <a
+                className="secondary-button"
+                href="/register"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <UserPlus size={15} /> Open Desk Registration
+              </a>
+            </div>
+          </div>
+        ) : (
+          <div className="add-forms-grid">
+            {forms.map(form => {
+              const togglingBusy =
+                setActiveMutation.isPending &&
+                setActiveMutation.variables?.id === form.id;
+              const deletingBusy =
+                deleteMutation.isPending &&
+                deleteMutation.variables?.id === form.id;
 
-            {listQuery.isLoading ? (
-              <div className="small-empty">
-                <Loader2 size={16} className="syncing-icon" /> Loading forms…
-              </div>
-            ) : forms.length === 0 ? (
-              <div className="add-empty-state">
-                <div className="add-empty-icon">
-                  <UserPlus size={22} />
-                </div>
-                <h3>No active camp links</h3>
-                <p>
-                  Create a shareable link for your blood camp. Attendees can scan
-                  a QR code or open the link on their phones to register directly.
-                </p>
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={() => {
-                    setCreating(true);
-                    setDraft({ title: "", type: "pending" });
-                  }}
+              return (
+                <div
+                  key={form.id}
+                  className={`add-camp-card${form.active ? " is-active" : " is-closed"}`}
                 >
-                  <Plus size={15} /> Create your first form link
-                </button>
-              </div>
-            ) : (
-              <div className="add-form-list">
-                {forms.map(form => {
-                  const togglingBusy =
-                    setActiveMutation.isPending &&
-                    setActiveMutation.variables?.id === form.id;
-                  const deletingBusy =
-                    deleteMutation.isPending &&
-                    deleteMutation.variables?.id === form.id;
+                  <div className="add-camp-card-top">
+                    <span className={`add-camp-type-pill ${form.type}`}>
+                      {form.type === "pending" ? (
+                        <>
+                          <Clock3 size={11} /> Review
+                        </>
+                      ) : (
+                        <>
+                          <BadgeCheck size={11} /> Instant
+                        </>
+                      )}
+                    </span>
+                    {form.active ? (
+                      <span className="add-camp-status-badge active">
+                        <span className="add-status-dot" aria-hidden /> Live
+                      </span>
+                    ) : (
+                      <span className="add-camp-status-badge closed">Closed</span>
+                    )}
+                  </div>
 
-                  return (
-                    <article
-                      key={form.id}
-                      className={`add-form-item${form.active ? " is-live" : " is-closed"}`}
-                    >
-                      <div className="add-form-item-header">
-                        <div className="add-form-title-group">
-                          <span
-                            className={`add-form-type-pill ${form.type}`}
-                            title={FORM_TYPE_LABEL[form.type]}
-                          >
-                            {form.type === "pending" ? (
-                              <Clock3 size={11} />
-                            ) : (
-                              <BadgeCheck size={11} />
-                            )}
-                            {form.type === "pending" ? "Pending" : "Registration"}
-                          </span>
-                          <h3 className="add-form-item-name" title={form.title ?? ""}>
-                            {form.title || (
-                              <span className="add-form-unnamed">Unnamed form</span>
-                            )}
-                          </h3>
-                        </div>
+                  <h3 className="add-camp-card-title" title={form.title ?? ""}>
+                    {form.title || <span className="add-camp-unnamed">Unnamed Camp Link</span>}
+                  </h3>
 
-                        {form.active ? (
-                          <span className="add-status-pill live">
-                            <span className="add-status-dot" aria-hidden />
-                            Active
-                          </span>
+                  <div className="add-camp-card-meta">
+                    <span className="add-camp-subs-pill">
+                      <Users size={12} />
+                      <strong>{form.submissions}</strong> attendee{form.submissions === 1 ? "" : "s"}
+                    </span>
+                    <span className="add-camp-date">
+                      {form.active
+                        ? `Since ${new Date(form.createdAt).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                          })}`
+                        : `Closed ${
+                            form.terminatedAt
+                              ? new Date(form.terminatedAt).toLocaleDateString("en-IN", {
+                                  day: "numeric",
+                                  month: "short",
+                                })
+                              : ""
+                          }`}
+                    </span>
+                  </div>
+
+                  <div className="add-camp-link-box">
+                    <span className="add-camp-link-url" title={formUrl(form.id)}>
+                      {formUrl(form.id)}
+                    </span>
+                    <div className="add-camp-link-btns">
+                      <button
+                        type="button"
+                        className="add-camp-icon-btn"
+                        onClick={() => copyLink(form)}
+                        title="Copy link"
+                        aria-label="Copy link"
+                      >
+                        {copiedId === form.id ? (
+                          <Check size={14} className="copied-check" />
                         ) : (
-                          <span className="add-status-pill closed">Closed</span>
+                          <Copy size={14} />
                         )}
-                      </div>
+                      </button>
+                      <a
+                        href={formUrl(form.id)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="add-camp-icon-btn"
+                        title="Open in new tab"
+                        aria-label="Open in new tab"
+                      >
+                        <ExternalLink size={14} />
+                      </a>
+                    </div>
+                  </div>
 
-                      <div className="add-form-item-meta">
-                        <span>
-                          <strong>{form.submissions}</strong> submission{form.submissions === 1 ? "" : "s"}
+                  {editingId === form.id ? (
+                    <div className="add-camp-edit-row">
+                      <input
+                        className="plain-input add-camp-edit-input"
+                        value={editTitle}
+                        onChange={e => setEditTitle(e.target.value)}
+                        maxLength={120}
+                        placeholder="Camp name"
+                        autoFocus
+                        onKeyDown={e => {
+                          if (e.key === "Enter") submitEdit();
+                          if (e.key === "Escape") setEditingId(null);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="primary-button small-btn"
+                        onClick={submitEdit}
+                        disabled={updateMutation.isPending}
+                        title="Save name"
+                      >
+                        <Save size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="text-button small-btn"
+                        onClick={() => setEditingId(null)}
+                        title="Cancel"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="add-camp-card-footer">
+                      <button
+                        type="button"
+                        className="add-camp-footer-action"
+                        onClick={() => startEdit(form)}
+                      >
+                        <Edit3 size={12} /> Rename
+                      </button>
+
+                      {form.active ? (
+                        <button
+                          type="button"
+                          className="add-camp-footer-action"
+                          onClick={() =>
+                            setActiveMutation.mutate({
+                              id: form.id,
+                              active: false,
+                            })
+                          }
+                          disabled={togglingBusy}
+                        >
+                          {togglingBusy ? (
+                            <Loader2 size={12} className="syncing-icon" />
+                          ) : (
+                            <X size={12} />
+                          )}
+                          Close
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="add-camp-footer-action"
+                          onClick={() =>
+                            setActiveMutation.mutate({
+                              id: form.id,
+                              active: true,
+                            })
+                          }
+                          disabled={togglingBusy}
+                        >
+                          {togglingBusy ? (
+                            <Loader2 size={12} className="syncing-icon" />
+                          ) : (
+                            <Zap size={12} />
+                          )}
+                          Re-open
+                        </button>
+                      )}
+
+                      {deletingBusy ? (
+                        <span className="add-camp-footer-action danger" style={{ opacity: 0.6 }}>
+                          Deleting…
                         </span>
-                        <span className="add-form-meta-separator" aria-hidden>·</span>
-                        <span>
-                          {form.active
-                            ? `Created ${new Date(form.createdAt).toLocaleDateString("en-IN", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                              })}`
-                            : `Closed ${
-                                form.terminatedAt
-                                  ? new Date(form.terminatedAt).toLocaleDateString("en-IN", {
-                                      day: "numeric",
-                                      month: "short",
-                                      year: "numeric",
-                                    })
-                                  : "—"
-                              }`}
-                        </span>
-                      </div>
-
-                      <div className="add-form-link-row">
-                        <code className="add-form-link-text">{formUrl(form.id)}</code>
-                        <div className="add-form-link-actions">
+                      ) : confirmDeleteId === form.id ? (
+                        <span className="add-camp-confirm-delete">
                           <button
                             type="button"
-                            className="secondary-button add-link-btn"
-                            onClick={() => copyLink(form)}
-                            title="Copy link to clipboard"
+                            className="add-camp-confirm-yes"
+                            onClick={() => deleteMutation.mutate({ id: form.id })}
                           >
-                            {copiedId === form.id ? (
-                              <>
-                                <Check size={13} /> Copied
-                              </>
-                            ) : (
-                              <>
-                                <Copy size={13} /> Copy
-                              </>
-                            )}
-                          </button>
-                          <a
-                            className="secondary-button add-link-btn"
-                            href={formUrl(form.id)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Open link in new tab"
-                          >
-                            <ExternalLink size={13} /> Open
-                          </a>
-                        </div>
-                      </div>
-
-                      {editingId === form.id ? (
-                        <div className="add-form-edit-bar">
-                          <input
-                            className="plain-input"
-                            value={editTitle}
-                            onChange={e => setEditTitle(e.target.value)}
-                            maxLength={120}
-                            placeholder="Form name"
-                            autoFocus
-                            onKeyDown={e => {
-                              if (e.key === "Enter") submitEdit();
-                              if (e.key === "Escape") setEditingId(null);
-                            }}
-                          />
-                          <button
-                            type="button"
-                            className="primary-button"
-                            onClick={submitEdit}
-                            disabled={updateMutation.isPending}
-                          >
-                            {updateMutation.isPending ? (
-                              <Loader2 size={13} className="syncing-icon" />
-                            ) : (
-                              <Save size={13} />
-                            )}
-                            Save
+                            Delete
                           </button>
                           <button
                             type="button"
-                            className="text-button"
-                            onClick={() => setEditingId(null)}
+                            className="add-camp-confirm-no"
+                            onClick={() => setConfirmDeleteId(null)}
                           >
                             Cancel
                           </button>
-                        </div>
+                        </span>
                       ) : (
-                        <div className="add-form-item-toolbar">
-                          <button
-                            type="button"
-                            className="text-button"
-                            onClick={() => startEdit(form)}
-                          >
-                            <Edit3 size={12} /> Rename
-                          </button>
-
-                          {form.active ? (
-                            <button
-                              type="button"
-                              className="text-button"
-                              onClick={() =>
-                                setActiveMutation.mutate({
-                                  id: form.id,
-                                  active: false,
-                                })
-                              }
-                              disabled={togglingBusy}
-                            >
-                              {togglingBusy ? (
-                                <Loader2 size={12} className="syncing-icon" />
-                              ) : (
-                                <X size={12} />
-                              )}
-                              {togglingBusy ? "Closing…" : "Close Form"}
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              className="text-button"
-                              onClick={() =>
-                                setActiveMutation.mutate({
-                                  id: form.id,
-                                  active: true,
-                                })
-                              }
-                              disabled={togglingBusy}
-                            >
-                              {togglingBusy ? (
-                                <Loader2 size={12} className="syncing-icon" />
-                              ) : (
-                                <Zap size={12} />
-                              )}
-                              {togglingBusy ? "Re-opening…" : "Re-open Form"}
-                            </button>
-                          )}
-
-                          {deletingBusy ? (
-                            <button type="button" className="text-button danger" disabled>
-                              <Loader2 size={12} className="syncing-icon" />
-                              Deleting…
-                            </button>
-                          ) : confirmDeleteId === form.id ? (
-                            <span className="add-confirm-delete-group">
-                              <span className="add-confirm-label">Delete form?</span>
-                              <button
-                                type="button"
-                                className="text-button danger"
-                                onClick={() => deleteMutation.mutate({ id: form.id })}
-                              >
-                                Yes, delete
-                              </button>
-                              <button
-                                type="button"
-                                className="text-button"
-                                onClick={() => setConfirmDeleteId(null)}
-                              >
-                                Cancel
-                              </button>
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              className="text-button danger"
-                              onClick={() => setConfirmDeleteId(form.id)}
-                            >
-                              <Trash2 size={12} /> Delete
-                            </button>
-                          )}
-                        </div>
+                        <button
+                          type="button"
+                          className="add-camp-footer-action danger"
+                          onClick={() => setConfirmDeleteId(form.id)}
+                          title="Delete form link"
+                        >
+                          <Trash2 size={12} />
+                        </button>
                       )}
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-      </section>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
