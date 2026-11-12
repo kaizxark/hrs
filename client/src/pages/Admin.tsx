@@ -808,6 +808,45 @@ function StaffAccessView({ action }: { action?: React.ReactNode }) {
   );
 }
 
+function AdminTopClock({ timeFormat = "12h" }: { timeFormat?: "12h" | "24h" }) {
+  const [time, setTime] = useState("");
+  const [date, setDate] = useState("");
+
+  useEffect(() => {
+    const update = () => {
+      const now = new Date();
+      const t = new Intl.DateTimeFormat("en-IN", {
+        timeZone: "Asia/Kolkata",
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: timeFormat === "12h",
+      }).format(now);
+      const d = new Intl.DateTimeFormat("en-IN", {
+        timeZone: "Asia/Kolkata",
+        weekday: "long",
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+        .format(now)
+        .toUpperCase();
+      setTime(t);
+      setDate(d);
+    };
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [timeFormat]);
+
+  return (
+    <span className="top-clock">
+      <span className="top-sync-time">{time}</span>
+      <span className="top-sync-date">{date}</span>
+    </span>
+  );
+}
+
 export default function Admin() {
   const { staff, isLoading: staffLoading, logout } = useStaffAuth();
   const [, navigate] = useLocation() as [string, (to: string) => void];
@@ -904,9 +943,32 @@ export default function Admin() {
   const [topProfileMenuOpen, setTopProfileMenuOpen] = useState(false);
   const topProfileMenuRef = useRef<HTMLDivElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [indiaTime, setIndiaTime] = useState("");
-  const [indiaDate, setIndiaDate] = useState("");
-  const [greeting, setGreeting] = useState("Good morning");
+  const { greeting, indiaDate } = useMemo(() => {
+    const now = new Date();
+    const date = new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      weekday: "long",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    })
+      .format(now)
+      .toUpperCase();
+    const indiaHour = Number(
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Kolkata",
+        hour: "numeric",
+        hour12: false,
+      }).format(now)
+    );
+    const gr =
+      indiaHour < 12
+        ? "Good morning"
+        : indiaHour < 17
+          ? "Good afternoon"
+          : "Good evening";
+    return { greeting: gr, indiaDate: date };
+  }, []);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [deleteMode, setDeleteMode] = useState(false);
@@ -971,48 +1033,7 @@ export default function Admin() {
     setSelectedForDelete(new Set());
   }, [records]);
 
-  useEffect(() => {
-    const updateIndiaTime = () => {
-      const now = new Date();
-      const time = new Intl.DateTimeFormat("en-IN", {
-        timeZone: "Asia/Kolkata",
-        hour: "numeric",
-        minute: "2-digit",
-        second: "2-digit",
-        hour12: adminSettings.timeFormat === "12h",
-      }).format(now);
-      const date = new Intl.DateTimeFormat("en-IN", {
-        timeZone: "Asia/Kolkata",
-        weekday: "long",
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
-        .format(now)
-        .toUpperCase();
-      const indiaHour = Number(
-        new Intl.DateTimeFormat("en-US", {
-          timeZone: "Asia/Kolkata",
-          hour: "numeric",
-          hour12: false,
-        }).format(now)
-      );
-      const greeting =
-        indiaHour < 12
-          ? "Good morning"
-          : indiaHour < 17
-            ? "Good afternoon"
-            : "Good evening";
 
-      setIndiaTime(time);
-      setIndiaDate(date);
-      setGreeting(greeting);
-    };
-
-    updateIndiaTime();
-    const timer = window.setInterval(updateIndiaTime, 1000);
-    return () => window.clearInterval(timer);
-  }, [activeView, loggedIn]);
 
   // Event listener for donation detail modal
   useEffect(() => {
@@ -1444,47 +1465,64 @@ export default function Admin() {
     const t = new Date(record.registeredAt).getTime();
     return Number.isNaN(t) ? 0 : t;
   };
-  const verifiedByRecent = records
-    .filter(record => record.status === "Verified")
-    .sort((a, b) => recordTime(b) - recordTime(a));
-  const pendingByRecent = records
-    .filter(record => record.status === "Pending")
-    .sort((a, b) => recordTime(b) - recordTime(a));
+  const verifiedByRecent = useMemo(
+    () =>
+      records
+        .filter(record => record.status === "Verified")
+        .sort((a, b) => recordTime(b) - recordTime(a)),
+    [records]
+  );
+  const pendingByRecent = useMemo(
+    () =>
+      records
+        .filter(record => record.status === "Pending")
+        .sort((a, b) => recordTime(b) - recordTime(a)),
+    [records]
+  );
   // Donations tab: only show people who actually have recorded donations,
   // sorted by most recent donation first.
-  const donors = records
-    .filter(record => record.donationCount > 0)
-    .sort((a, b) => {
-      const aTime = a.lastDonationAt ? new Date(a.lastDonationAt).getTime() : 0;
-      const bTime = b.lastDonationAt ? new Date(b.lastDonationAt).getTime() : 0;
-      return bTime - aTime; // most recent first
-    });
+  const donors = useMemo(
+    () =>
+      records
+        .filter(record => record.donationCount > 0)
+        .sort((a, b) => {
+          const aTime = a.lastDonationAt ? new Date(a.lastDonationAt).getTime() : 0;
+          const bTime = b.lastDonationAt ? new Date(b.lastDonationAt).getTime() : 0;
+          return bTime - aTime; // most recent first
+        }),
+    [records]
+  );
   const addedPeriodLabels = {
     today: "today",
     week: "this week",
     month: "this month",
   } as const;
-  const now = new Date();
-  const todayKey = indiaDateKey(now);
-  const addedPeriodCount = records.filter(record => {
-    if (!record.registeredAt) return false;
-    const registeredAt = new Date(record.registeredAt);
-    if (Number.isNaN(registeredAt.getTime()) || registeredAt > now)
-      return false;
-    if (addedPeriod === "today") return indiaDateKey(registeredAt) === todayKey;
-    if (addedPeriod === "month") {
-      return indiaDateKey(registeredAt).slice(0, 7) === todayKey.slice(0, 7);
-    }
-    return now.getTime() - registeredAt.getTime() <= 7 * 24 * 60 * 60 * 1000;
-  }).length;
-  const donationsThisMonth = records.reduce(
-    (total, record) =>
-      total +
-      record.donationDates.filter(
-        date => indiaMonthKey(date) === todayKey.slice(0, 7)
-      ).length,
-    0
-  );
+  const addedPeriodCount = useMemo(() => {
+    const now = new Date();
+    const todayKey = indiaDateKey(now);
+    return records.filter(record => {
+      if (!record.registeredAt) return false;
+      const registeredAt = new Date(record.registeredAt);
+      if (Number.isNaN(registeredAt.getTime()) || registeredAt > now)
+        return false;
+      if (addedPeriod === "today") return indiaDateKey(registeredAt) === todayKey;
+      if (addedPeriod === "month") {
+        return indiaDateKey(registeredAt).slice(0, 7) === todayKey.slice(0, 7);
+      }
+      return now.getTime() - registeredAt.getTime() <= 7 * 24 * 60 * 60 * 1000;
+    }).length;
+  }, [records, addedPeriod]);
+  const donationsThisMonth = useMemo(() => {
+    const todayKey = indiaDateKey(new Date());
+    return records.reduce(
+      (total, record) =>
+        total +
+        record.donationDates.filter(
+          date => indiaMonthKey(date) === todayKey.slice(0, 7)
+        ).length,
+      0
+    );
+  }, [records]);
   const locationOptions = useMemo(
     () => [
       "All",
@@ -1730,12 +1768,9 @@ export default function Admin() {
     }
   };
 
-  // While revalidating an existing session, show the dashboard skeleton so
-  // already-authenticated users don't see a login-form flash. The flag is
-  // persisted in localStorage, so a browser that has EVER logged in gets the
-  // skeleton on revisit — including brand-new tabs — instead of the login
-  // form that then "logs itself in" a moment later.
-  if (staffLoading && hasHadSession.current) {
+  // While checking an existing session, show the dashboard skeleton so
+  // already-authenticated users NEVER see a login-form flash.
+  if (staffLoading) {
     return (
       <div className="admin-shell">
         <aside className="admin-sidebar" style={{ pointerEvents: "none" }}>
@@ -1744,7 +1779,7 @@ export default function Admin() {
               <div className="logo-mark">
                 <img
                   src="/hrs-logo.png"
-                  alt=""
+                  alt="HRS"
                   style={{
                     width: "100%",
                     height: "100%",
@@ -1788,15 +1823,34 @@ export default function Admin() {
         </aside>
         <div className="admin-main">
           <header className="admin-topbar">
-            <div
-              className="admin-skel"
-              style={{
-                width: 120,
-                height: 14,
-                borderRadius: 7,
-                background: "var(--border)",
-              }}
-            />
+            <div className="admin-topbar-left">
+              <div className="admin-topbar-brand">
+                <div className="logo-mark">
+                  <img
+                    src="/hrs-logo.png"
+                    alt="HRS"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      borderRadius: "inherit",
+                    }}
+                  />
+                </div>
+                <span className="admin-topbar-brand-title">
+                  <strong>HRS</strong>
+                </span>
+              </div>
+              <div
+                className="admin-skel"
+                style={{
+                  width: 120,
+                  height: 14,
+                  borderRadius: 7,
+                  background: "var(--border)",
+                }}
+              />
+            </div>
           </header>
           <div className="admin-content" style={{ padding: "32px 28px" }}>
             <div
@@ -2001,23 +2055,39 @@ export default function Admin() {
       </aside>
       <div className="admin-main">
         <header className="admin-topbar">
-          <button
-            className="mobile-admin-menu"
-            onClick={() => setMobileNav(true)}
-            aria-label="Open navigation"
-          >
-            <Menu size={20} />
-          </button>
-          <div className="admin-breadcrumb">
-            <span>HRS workspace</span>
-            <ArrowRight size={14} />
-            <strong>{VIEW_LABELS[activeView]}</strong>
+          <div className="admin-topbar-left">
+            <button
+              className="mobile-admin-menu"
+              onClick={() => setMobileNav(true)}
+              aria-label="Open navigation"
+            >
+              <Menu size={20} />
+            </button>
+            <a className="admin-topbar-brand" href="/" aria-label="HRS Home">
+              <div className="logo-mark">
+                <img
+                  src="/hrs-logo.png"
+                  alt="HRS"
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    borderRadius: "inherit",
+                  }}
+                />
+              </div>
+              <span className="admin-topbar-brand-title">
+                <strong>HRS</strong>
+              </span>
+            </a>
+            <div className="admin-breadcrumb">
+              <span>HRS workspace</span>
+              <ArrowRight size={14} />
+              <strong>{VIEW_LABELS[activeView]}</strong>
+            </div>
           </div>
           <div className="admin-top-actions">
-            <span className="top-clock">
-              <span className="top-sync-time">{indiaTime}</span>
-              <span className="top-sync-date">{indiaDate}</span>
-            </span>
+            <AdminTopClock timeFormat={adminSettings.timeFormat} />
             <div className="staff-top-wrap" ref={topProfileMenuRef}>
               <button
                 className={`staff-top${topProfileMenuOpen ? " open" : ""}`}
@@ -2077,16 +2147,30 @@ export default function Admin() {
           ) : activeView === "overview" ? (
             <>
               <div className="admin-page-heading dashboard-heading">
-                <div>
-                  <span className="eyebrow dark-eyebrow" id="overview-date">
-                    {indiaDate}
-                  </span>
-                  <h1>
-                    {greeting},{" "}
-                    {adminSettings.displayName || staff?.displayName || "Admin"}
-                    .
-                  </h1>
-                  <p>Here’s what needs your attention today.</p>
+                <div className="dashboard-heading-left">
+                  <div className="logo-mark dashboard-heading-logo">
+                    <img
+                      src="/hrs-logo.png"
+                      alt="HRS"
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "contain",
+                        borderRadius: "inherit",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <span className="eyebrow dark-eyebrow" id="overview-date">
+                      {indiaDate}
+                    </span>
+                    <h1>
+                      {greeting},{" "}
+                      {adminSettings.displayName || staff?.displayName || "Admin"}
+                      .
+                    </h1>
+                    <p>Here’s what needs your attention today.</p>
+                  </div>
                 </div>
                 {!isVolunteer && (
                   <SyncNowButton
@@ -3631,19 +3715,16 @@ const FORM_TYPE_LABEL: Record<"pending" | "registration", string> = {
  *  - Create form: name + type → a new unguessable link
  *  - Per-form cards: live/closed badge, copy link, edit title, terminate/
  *    re-open, delete
- *  - Recent submissions: newest records created through ANY form link
- *  - Manual entry: open /register (full form → verified) for walk-ins
- *  - Queue shortcut: jump into the pending review tab in Records
  */
 function AddRecordsSection({
-  records,
+  records = [],
   onOpenRecord,
   onOpenPending,
 }: {
-  records: AdminRecord[];
-  onOpenRecord: (hrsId: string) => void;
-  onOpenPending: () => void;
-}) {
+  records?: AdminRecord[];
+  onOpenRecord?: (hrsId: string) => void;
+  onOpenPending?: () => void;
+} = {}) {
   const listQuery = trpc.form.list.useQuery(undefined, {
     refetchInterval: 20_000,
   });
@@ -3701,28 +3782,6 @@ function AddRecordsSection({
   const forms = listQuery.data?.forms ?? [];
   const liveForms = forms.filter(f => f.active);
 
-  const pendingCount = records.filter(record => record.status === "Pending").length;
-
-  // Recent submissions via ANY form link: newest records whose registration
-  // time is after the OLDEST still-known form's creation, minus slack.
-  const recentSubmissions = useMemo(() => {
-    if (forms.length === 0) return [];
-    const oldestCreated = Math.min(
-      ...forms.map(f => Date.parse(f.createdAt)).filter(t => !Number.isNaN(t))
-    );
-    return records
-      .filter(record => {
-        if (!record.registeredAt) return false;
-        const t = Date.parse(record.registeredAt);
-        return !Number.isNaN(t) && t >= oldestCreated - 60_000;
-      })
-      .sort(
-        (a, b) =>
-          Date.parse(b.registeredAt ?? "") - Date.parse(a.registeredAt ?? "")
-      )
-      .slice(0, 5);
-  }, [forms, records]);
-
   const formUrl = (id: string) => `${window.location.origin}/form/${id}`;
 
   const copyLink = (form: AdminForm) => {
@@ -3761,425 +3820,412 @@ function AddRecordsSection({
     <div className="add-records-section">
       <div className="admin-page-heading compact-heading">
         <div>
-          <span className="eyebrow dark-eyebrow">DIRECTORY</span>
           <h1>Add Records</h1>
           <p>
-            Create a custom form for every camp or generation, share its link,
-            and watch records arrive — or add walk-ins manually.
+            Generate shareable links for camp attendee self-registration.
           </p>
         </div>
-        <div className="add-form-actions">
+        <div className="add-heading-actions">
           <button
+            type="button"
             className="primary-button"
-            onClick={() => startCreate("pending")}
+            onClick={() => {
+              setCreating(true);
+              setDraft({ title: "", type: "pending" });
+            }}
             disabled={createMutation.isPending}
           >
-            <Plus size={17} /> New form
+            <Plus size={15} /> New Form Link
           </button>
         </div>
       </div>
 
-      {/* ── Create-form card (opens inline) ── */}
-      {creating && (
-        <section className="admin-card add-form-card add-create-card">
-          <div className="admin-card-heading">
-            <div>
-              <h2>New form</h2>
-              <p>Name it for the camp or generation it collects for</p>
-            </div>
-            <button
-              className="icon-ghost"
-              onClick={() => setCreating(false)}
-              aria-label="Cancel new form"
-            >
-              <X size={17} />
-            </button>
-          </div>
-          <div className="add-create-body">
-            <label className="add-create-field">
-              <span>Form name</span>
-              <input
-                className="plain-input"
-                value={draft.title}
-                onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
-                placeholder="e.g. HRS Camp — Tumakuru, Sept 2026"
-                maxLength={120}
-                autoFocus
-                onKeyDown={e => {
-                  if (e.key === "Enter") submitCreate();
-                }}
-              />
-            </label>
-            <div className="add-create-types" role="radiogroup" aria-label="Form type">
-              <button
-                type="button"
-                role="radio"
-                aria-checked={draft.type === "pending"}
-                className={`add-create-type${draft.type === "pending" ? " selected" : ""}`}
-                onClick={() => setDraft(d => ({ ...d, type: "pending" }))}
-              >
-                <span className="add-create-type-icon">
-                  <Clock3 size={17} />
-                </span>
-                <span className="add-create-type-text">
-                  <strong>Pending</strong>
-                  <small>
-                    Collects personal details only — submissions wait in the
-                    review queue until you verify them.
-                  </small>
-                </span>
-                <span className="add-create-type-check">
-                  <Check size={13} />
-                </span>
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={draft.type === "registration"}
-                className={`add-create-type${draft.type === "registration" ? " selected" : ""}`}
-                onClick={() => setDraft(d => ({ ...d, type: "registration" }))}
-              >
-                <span className="add-create-type-icon">
-                  <BadgeCheck size={17} />
-                </span>
-                <span className="add-create-type-text">
-                  <strong>Registration</strong>
-                  <small>
-                    Full details + blood group — consenting donors go straight
-                    to the public directory.
-                  </small>
-                </span>
-                <span className="add-create-type-check">
-                  <Check size={13} />
-                </span>
-              </button>
-            </div>
-            <div className="add-create-foot">
-              <p className="add-create-hint">
-                The link is unguessable — only people who have it can submit.
-              </p>
-              <div className="add-create-foot-actions">
-                <button className="text-button" onClick={() => setCreating(false)}>
-                  Cancel
-                </button>
+      {/* Create-form card (opens inline when creating is true) */}
+          {creating && (
+            <section className="admin-card add-create-card">
+              <div className="admin-card-heading">
+                <div>
+                  <h2>Create form link</h2>
+                  <p>Configure a dedicated registration link for your camp or session</p>
+                </div>
                 <button
-                  className="primary-button add-create-submit"
-                  onClick={submitCreate}
-                  disabled={createMutation.isPending}
+                  type="button"
+                  className="icon-ghost"
+                  onClick={() => setCreating(false)}
+                  aria-label="Cancel new form"
                 >
-                  {createMutation.isPending ? (
-                    <Loader2 size={16} className="syncing-icon" />
-                  ) : (
-                    <Plus size={16} />
-                  )}
-                  {createMutation.isPending ? "Creating…" : "Create form"}
+                  <X size={16} />
                 </button>
               </div>
-            </div>
-          </div>
-        </section>
-      )}
 
-      <div className="add-records-grid">
-        {/* ── Forms list card ── */}
-        <section className="admin-card add-form-card">
-          <div className="admin-card-heading">
-            <div>
-              <h2>Your forms</h2>
-              <p>
-                {liveForms.length > 0
-                  ? `${liveForms.length} live · share each camp its own link`
-                  : "No live forms — create one to start collecting"}
-              </p>
-            </div>
-          </div>
+              <div className="add-create-body">
+                <label className="add-create-field">
+                  <span>Camp or session name</span>
+                  <input
+                    className="plain-input"
+                    value={draft.title}
+                    onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
+                    placeholder="e.g. HRS Tumakuru Blood Camp — Sept 2026"
+                    maxLength={120}
+                    autoFocus
+                    onKeyDown={e => {
+                      if (e.key === "Enter") submitCreate();
+                    }}
+                  />
+                </label>
 
-          {listQuery.isLoading ? (
-            <div className="small-empty">
-              <Loader2 size={16} className="syncing-icon" /> Loading forms…
-            </div>
-          ) : forms.length === 0 ? (
-            <div className="add-form-empty">
-              <UserPlus size={22} />
-              <strong>No forms yet</strong>
-              <p>
-                Tap <strong>New form</strong>, name it for your camp, and
-                share the link — attendees fill it on their phones and records
-                appear here automatically.
-              </p>
-              <div className="add-form-choices">
-                <div>
-                  <Clock3 size={15} />
-                  <span>
-                    <strong>Pending</strong> — camp sign-ups you review before
-                    they go public
-                  </span>
+                <div className="add-create-types" role="radiogroup" aria-label="Form type">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={draft.type === "pending"}
+                    className={`add-create-type${draft.type === "pending" ? " selected" : ""}`}
+                    onClick={() => setDraft(d => ({ ...d, type: "pending" }))}
+                  >
+                    <span className="add-create-type-icon">
+                      <Clock3 size={16} />
+                    </span>
+                    <span className="add-create-type-text">
+                      <strong>Pending Review</strong>
+                      <small>
+                        Attendees submit basic contact info. Entries wait in your
+                        review queue for staff verification before entering the directory.
+                      </small>
+                    </span>
+                    <span className="add-create-type-check">
+                      <Check size={12} />
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={draft.type === "registration"}
+                    className={`add-create-type${draft.type === "registration" ? " selected" : ""}`}
+                    onClick={() => setDraft(d => ({ ...d, type: "registration" }))}
+                  >
+                    <span className="add-create-type-icon">
+                      <BadgeCheck size={16} />
+                    </span>
+                    <span className="add-create-type-text">
+                      <strong>Instant Registration</strong>
+                      <small>
+                        Full donor form with blood group. Consenting donors are
+                        instantly verified and added to the public directory.
+                      </small>
+                    </span>
+                    <span className="add-create-type-check">
+                      <Check size={12} />
+                    </span>
+                  </button>
                 </div>
-                <div>
-                  <BadgeCheck size={15} />
-                  <span>
-                    <strong>Registration</strong> — full details, verified
-                    instantly
-                  </span>
+
+                <div className="add-create-foot">
+                  <p className="add-create-hint">
+                    Each link is secure and unguessable. Only attendees with the link can submit.
+                  </p>
+                  <div className="add-create-foot-actions">
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => setCreating(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-button add-create-submit"
+                      onClick={submitCreate}
+                      disabled={createMutation.isPending}
+                    >
+                      {createMutation.isPending ? (
+                        <Loader2 size={15} className="syncing-icon" />
+                      ) : (
+                        <Plus size={15} />
+                      )}
+                      {createMutation.isPending ? "Creating…" : "Create Link"}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="add-form-list">
-              {forms.map(form => {
-                const togglingBusy =
-                  setActiveMutation.isPending &&
-                  setActiveMutation.variables?.id === form.id;
-                const deletingBusy =
-                  deleteMutation.isPending &&
-                  deleteMutation.variables?.id === form.id;
-                return (
-                <div
-                  key={form.id}
-                  className={`add-form-item${form.active ? " live" : ""}`}
+            </section>
+          )}
+
+          {/* Forms List Card */}
+          <section className="admin-card add-forms-card">
+            <div className="admin-card-heading">
+              <div>
+                <h2>Camp Form Links</h2>
+                <p>
+                  {forms.length === 0
+                    ? "No camp links generated yet"
+                    : `${forms.length} link${forms.length === 1 ? "" : "s"} · ${liveForms.length} accepting responses`}
+                </p>
+              </div>
+              {!creating && forms.length > 0 && (
+                <button
+                  type="button"
+                  className="secondary-button add-quick-new-btn"
+                  onClick={() => {
+                    setCreating(true);
+                    setDraft({ title: "", type: "pending" });
+                  }}
                 >
-                  <div className="add-form-item-top">
-                    <div className="add-form-item-title">
-                      <span
-                        className={`add-form-type-badge ${form.type}`}
-                        title={FORM_TYPE_LABEL[form.type]}
-                      >
-                        {form.type === "pending" ? (
-                          <Clock3 size={12} />
-                        ) : (
-                          <BadgeCheck size={12} />
-                        )}
-                        {form.type === "pending" ? "Pending" : "Registration"}
-                      </span>
-                      <span className="add-form-item-name" title={form.title ?? ""}>
-                        {form.title || (
-                          <em className="add-form-unnamed">Unnamed form</em>
-                        )}
-                      </span>
-                    </div>
-                    {form.active ? (
-                      <span className="add-form-live-flag">
-                        <span className="add-form-live-dot" aria-hidden />
-                        Live
-                      </span>
-                    ) : (
-                      <span className="add-form-closed-flag">Closed</span>
-                    )}
-                  </div>
+                  <Plus size={14} /> Add Link
+                </button>
+              )}
+            </div>
 
-                  <div className="add-form-item-meta">
-                    <span>
-                      {form.submissions} submission
-                      {form.submissions === 1 ? "" : "s"}
-                    </span>
-                    <span className="add-form-meta-dot" aria-hidden>·</span>
-                    <span>
-                      {form.active
-                        ? `live since ${new Date(form.createdAt).toLocaleString(
-                            "en-IN",
-                            { dateStyle: "medium", timeStyle: "short" }
-                          )}`
-                        : `closed ${
-                            form.terminatedAt
-                              ? new Date(form.terminatedAt).toLocaleString(
-                                  "en-IN",
-                                  { dateStyle: "medium", timeStyle: "short" }
-                                )
-                              : "—"
-                          }`}
-                    </span>
-                  </div>
-
-                  <div className="add-form-link-box">
-                    <span className="add-form-link">{formUrl(form.id)}</span>
-                    <button
-                      className="text-button"
-                      onClick={() => copyLink(form)}
-                      title="Copy the public form link"
-                    >
-                      {copiedId === form.id ? (
-                        <Check size={14} />
-                      ) : (
-                        <Copy size={14} />
-                      )}
-                      {copiedId === form.id ? "Copied" : "Copy"}
-                    </button>
-                    <a
-                      className="text-button"
-                      href={formUrl(form.id)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Open the form in a new tab"
-                    >
-                      <ExternalLink size={14} /> Open
-                    </a>
-                  </div>
-
-                  {editingId === form.id ? (
-                    <div className="add-form-edit-row">
-                      <input
-                        className="plain-input"
-                        value={editTitle}
-                        onChange={e => setEditTitle(e.target.value)}
-                        maxLength={120}
-                        placeholder="Form name"
-                        autoFocus
-                        onKeyDown={e => {
-                          if (e.key === "Enter") submitEdit();
-                          if (e.key === "Escape") setEditingId(null);
-                        }}
-                      />
-                      <button
-                        className="text-button"
-                        onClick={submitEdit}
-                        disabled={updateMutation.isPending}
-                      >
-                        {updateMutation.isPending ? (
-                          <Loader2 size={14} className="syncing-icon" />
-                        ) : (
-                          <Save size={14} />
-                        )}
-                        Save
-                      </button>
-                      <button
-                        className="text-button"
-                        onClick={() => setEditingId(null)}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="add-form-item-actions">
-                      <button
-                        className="text-button"
-                        onClick={() => startEdit(form)}
-                      >
-                        <Edit3 size={13} /> Rename
-                      </button>
-                      {form.active ? (
-                        <button
-                          className="text-button danger"
-                          onClick={() =>
-                            setActiveMutation.mutate({
-                              id: form.id,
-                              active: false,
-                            })
-                          }
-                          disabled={togglingBusy}
-                        >
-                          {togglingBusy ? (
-                            <Loader2 size={13} className="syncing-icon" />
-                          ) : (
-                            <X size={13} />
-                          )}
-                          {togglingBusy ? "Closing…" : "Close"}
-                        </button>
-                      ) : (
-                        <button
-                          className="text-button"
-                          onClick={() =>
-                            setActiveMutation.mutate({
-                              id: form.id,
-                              active: true,
-                            })
-                          }
-                          disabled={togglingBusy}
-                        >
-                          {togglingBusy ? (
-                            <Loader2 size={13} className="syncing-icon" />
-                          ) : (
-                            <Zap size={13} />
-                          )}
-                          {togglingBusy ? "Opening…" : "Re-open"}
-                        </button>
-                      )}
-                      {deletingBusy ? (
-                        <button className="text-button danger" disabled>
-                          <Loader2 size={13} className="syncing-icon" />
-                          Deleting…
-                        </button>
-                      ) : confirmDeleteId === form.id ? (
-                        <>
-                          <button
-                            className="text-button danger"
-                            onClick={() => deleteMutation.mutate({ id: form.id })}
-                          >
-                            <Trash2 size={13} /> Confirm delete
-                          </button>
-                          <button
-                            className="text-button"
-                            onClick={() => setConfirmDeleteId(null)}
-                          >
-                            Keep
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          className="text-button danger"
-                          onClick={() => setConfirmDeleteId(form.id)}
-                        >
-                          <Trash2 size={13} /> Delete
-                        </button>
-                      )}
-                    </div>
-                  )}
+            {listQuery.isLoading ? (
+              <div className="small-empty">
+                <Loader2 size={16} className="syncing-icon" /> Loading forms…
+              </div>
+            ) : forms.length === 0 ? (
+              <div className="add-empty-state">
+                <div className="add-empty-icon">
+                  <UserPlus size={22} />
                 </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
+                <h3>No active camp links</h3>
+                <p>
+                  Create a shareable link for your blood camp. Attendees can scan
+                  a QR code or open the link on their phones to register directly.
+                </p>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => {
+                    setCreating(true);
+                    setDraft({ title: "", type: "pending" });
+                  }}
+                >
+                  <Plus size={15} /> Create your first form link
+                </button>
+              </div>
+            ) : (
+              <div className="add-form-list">
+                {forms.map(form => {
+                  const togglingBusy =
+                    setActiveMutation.isPending &&
+                    setActiveMutation.variables?.id === form.id;
+                  const deletingBusy =
+                    deleteMutation.isPending &&
+                    deleteMutation.variables?.id === form.id;
 
-        {/* ── Recent submissions card ── */}
-        <section className="admin-card add-submissions-card">
-          <div className="admin-card-heading">
-            <div>
-              <h2>Recent form submissions</h2>
-              <p>Newest records added through any form link</p>
-            </div>
-          </div>
-          {recentSubmissions.length > 0 ? (
-            recentSubmissions.map(record => (
-              <RecordRow
-                key={record.id ?? record.name}
-                record={record}
-                onEdit={origin => onOpenRecord(record.id ?? "")}
-                showSubmitted={false}
-              />
-            ))
-          ) : (
-            <div className="small-empty">
-              <Clock3 size={17} /> No submissions yet — share a form link to
-              start collecting
-            </div>
-          )}
-          {pendingCount > 0 && (
-            <button className="text-button add-pending-jump" onClick={onOpenPending}>
-              Review {pendingCount} pending record{pendingCount === 1 ? "" : "s"}
-              {" "}
-              <ArrowRight size={14} />
-            </button>
-          )}
-        </section>
-      </div>
+                  return (
+                    <article
+                      key={form.id}
+                      className={`add-form-item${form.active ? " is-live" : " is-closed"}`}
+                    >
+                      <div className="add-form-item-header">
+                        <div className="add-form-title-group">
+                          <span
+                            className={`add-form-type-pill ${form.type}`}
+                            title={FORM_TYPE_LABEL[form.type]}
+                          >
+                            {form.type === "pending" ? (
+                              <Clock3 size={11} />
+                            ) : (
+                              <BadgeCheck size={11} />
+                            )}
+                            {form.type === "pending" ? "Pending" : "Registration"}
+                          </span>
+                          <h3 className="add-form-item-name" title={form.title ?? ""}>
+                            {form.title || (
+                              <span className="add-form-unnamed">Unnamed form</span>
+                            )}
+                          </h3>
+                        </div>
 
-      {/* ── Manual entry card ── */}
-      <section className="admin-card add-manual-card">
-        <div className="admin-card-heading">
-          <div>
-            <h2>Add a record manually</h2>
-            <p>For walk-in donors at the desk — full form, verified instantly</p>
-          </div>
-        </div>
-        <a
-          className="primary-button"
-          href="/register"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <UserPlus size={17} /> Open registration page
-        </a>
-      </section>
+                        {form.active ? (
+                          <span className="add-status-pill live">
+                            <span className="add-status-dot" aria-hidden />
+                            Active
+                          </span>
+                        ) : (
+                          <span className="add-status-pill closed">Closed</span>
+                        )}
+                      </div>
+
+                      <div className="add-form-item-meta">
+                        <span>
+                          <strong>{form.submissions}</strong> submission{form.submissions === 1 ? "" : "s"}
+                        </span>
+                        <span className="add-form-meta-separator" aria-hidden>·</span>
+                        <span>
+                          {form.active
+                            ? `Created ${new Date(form.createdAt).toLocaleDateString("en-IN", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                              })}`
+                            : `Closed ${
+                                form.terminatedAt
+                                  ? new Date(form.terminatedAt).toLocaleDateString("en-IN", {
+                                      day: "numeric",
+                                      month: "short",
+                                      year: "numeric",
+                                    })
+                                  : "—"
+                              }`}
+                        </span>
+                      </div>
+
+                      <div className="add-form-link-row">
+                        <code className="add-form-link-text">{formUrl(form.id)}</code>
+                        <div className="add-form-link-actions">
+                          <button
+                            type="button"
+                            className="secondary-button add-link-btn"
+                            onClick={() => copyLink(form)}
+                            title="Copy link to clipboard"
+                          >
+                            {copiedId === form.id ? (
+                              <>
+                                <Check size={13} /> Copied
+                              </>
+                            ) : (
+                              <>
+                                <Copy size={13} /> Copy
+                              </>
+                            )}
+                          </button>
+                          <a
+                            className="secondary-button add-link-btn"
+                            href={formUrl(form.id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Open link in new tab"
+                          >
+                            <ExternalLink size={13} /> Open
+                          </a>
+                        </div>
+                      </div>
+
+                      {editingId === form.id ? (
+                        <div className="add-form-edit-bar">
+                          <input
+                            className="plain-input"
+                            value={editTitle}
+                            onChange={e => setEditTitle(e.target.value)}
+                            maxLength={120}
+                            placeholder="Form name"
+                            autoFocus
+                            onKeyDown={e => {
+                              if (e.key === "Enter") submitEdit();
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="primary-button"
+                            onClick={submitEdit}
+                            disabled={updateMutation.isPending}
+                          >
+                            {updateMutation.isPending ? (
+                              <Loader2 size={13} className="syncing-icon" />
+                            ) : (
+                              <Save size={13} />
+                            )}
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            className="text-button"
+                            onClick={() => setEditingId(null)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="add-form-item-toolbar">
+                          <button
+                            type="button"
+                            className="text-button"
+                            onClick={() => startEdit(form)}
+                          >
+                            <Edit3 size={12} /> Rename
+                          </button>
+
+                          {form.active ? (
+                            <button
+                              type="button"
+                              className="text-button"
+                              onClick={() =>
+                                setActiveMutation.mutate({
+                                  id: form.id,
+                                  active: false,
+                                })
+                              }
+                              disabled={togglingBusy}
+                            >
+                              {togglingBusy ? (
+                                <Loader2 size={12} className="syncing-icon" />
+                              ) : (
+                                <X size={12} />
+                              )}
+                              {togglingBusy ? "Closing…" : "Close Form"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              className="text-button"
+                              onClick={() =>
+                                setActiveMutation.mutate({
+                                  id: form.id,
+                                  active: true,
+                                })
+                              }
+                              disabled={togglingBusy}
+                            >
+                              {togglingBusy ? (
+                                <Loader2 size={12} className="syncing-icon" />
+                              ) : (
+                                <Zap size={12} />
+                              )}
+                              {togglingBusy ? "Re-opening…" : "Re-open Form"}
+                            </button>
+                          )}
+
+                          {deletingBusy ? (
+                            <button type="button" className="text-button danger" disabled>
+                              <Loader2 size={12} className="syncing-icon" />
+                              Deleting…
+                            </button>
+                          ) : confirmDeleteId === form.id ? (
+                            <span className="add-confirm-delete-group">
+                              <span className="add-confirm-label">Delete form?</span>
+                              <button
+                                type="button"
+                                className="text-button danger"
+                                onClick={() => deleteMutation.mutate({ id: form.id })}
+                              >
+                                Yes, delete
+                              </button>
+                              <button
+                                type="button"
+                                className="text-button"
+                                onClick={() => setConfirmDeleteId(null)}
+                              >
+                                Cancel
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="text-button danger"
+                              onClick={() => setConfirmDeleteId(form.id)}
+                            >
+                              <Trash2 size={12} /> Delete
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
     </div>
   );
 }
@@ -5602,14 +5648,28 @@ function VolunteerDashboard({
   return (
     <div className="volunteer-dashboard">
       <div className="admin-page-heading">
-        <div>
-          <span className="eyebrow dark-eyebrow">VOLUNTEER ACCESS</span>
-          <h1>Volunteer Dashboard</h1>
-          <p>
-            Search available verified donor records by blood group, city and
-            area — just like the public page. Click a profile to view full
-            details.
-          </p>
+        <div className="dashboard-heading-left">
+          <div className="logo-mark dashboard-heading-logo">
+            <img
+              src="/hrs-logo.png"
+              alt="HRS"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                borderRadius: "inherit",
+              }}
+            />
+          </div>
+          <div>
+            <span className="eyebrow dark-eyebrow">VOLUNTEER ACCESS</span>
+            <h1>Volunteer Dashboard</h1>
+            <p>
+              Search available verified donor records by blood group, city and
+              area — just like the public page. Click a profile to view full
+              details.
+            </p>
+          </div>
         </div>
       </div>
 

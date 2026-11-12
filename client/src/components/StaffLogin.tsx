@@ -51,12 +51,8 @@ export function StaffLogin() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const { login, isLoggingIn } = useStaffAuth();
-  // Once credentials are accepted, lock the form into "signing in" state
-  // until the component unmounts (parent switches to dashboard).  This
-  // avoids a visible flicker where the spinner reverts to the idle button
-  // while the session refetch completes.
-  const submitted = useRef(false);
-  const busy = isLoggingIn || submitted.current;
+  const [submitting, setSubmitting] = useState(false);
+  const busy = isLoggingIn || submitting;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -66,14 +62,14 @@ export function StaffLogin() {
     }
 
     try {
+      setSubmitting(true);
       const result = await login(username.trim(), password);
-      if (result.success) {
-        // Lock the form — it will unmount once staff.me resolves
-        submitted.current = true;
-      } else {
+      if (!result.success) {
+        setSubmitting(false);
         toast.error(result.error || "Invalid username or password");
       }
     } catch (error) {
+      setSubmitting(false);
       console.error("Login error:", error);
       toast.error("An unexpected error occurred during login.");
     }

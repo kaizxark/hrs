@@ -905,7 +905,7 @@ export default function Volunteer() {
     } catch {}
   }
 
-  if (staffLoading && hadSessionBefore) {
+  if (staffLoading) {
     return (
       <div className="vol-page vol-auth-loading">
         <Loader2 size={26} className="vol-spin" />

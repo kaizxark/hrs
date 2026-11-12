@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import SiteFooter from "@/components/SiteFooter";
 import { usePublicProfiles, Profile } from "@/lib/api";
 import { trpc } from "@/lib/trpc";
+import { useStaffAuth } from "@/lib/staffAuth";
 import {
   Activity,
   ArrowRight,
@@ -15,6 +16,7 @@ import {
   Clock3,
   House,
   Info,
+  LayoutDashboard,
   LockKeyhole,
   MapPin,
   MessageCircle,
@@ -348,29 +350,45 @@ function FloatingScrollbar() {
   const dragStart = useRef<{ y: number; scrollY: number } | null>(null);
 
   useEffect(() => {
+    let rafId: number | null = null;
     const updateScrollbar = () => {
-      const viewportHeight = window.innerHeight;
-      const documentHeight = document.documentElement.scrollHeight;
-      const scrollableHeight = documentHeight - viewportHeight;
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const viewportHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+        const scrollableHeight = documentHeight - viewportHeight;
 
-      if (scrollableHeight <= 0) {
-        setMetrics({ top: 0, height: 0, visible: false });
-        return;
-      }
+        if (scrollableHeight <= 0) {
+          setMetrics(prev => (prev.visible ? { top: 0, height: 0, visible: false } : prev));
+          return;
+        }
 
-      const height = Math.max(
-        42,
-        (viewportHeight * viewportHeight) / documentHeight
-      );
-      const top =
-        (window.scrollY / scrollableHeight) * (viewportHeight - height);
-      setMetrics({ top, height, visible: true });
+        const height = Math.max(
+          42,
+          (viewportHeight * viewportHeight) / documentHeight
+        );
+        const top =
+          (window.scrollY / scrollableHeight) * (viewportHeight - height);
+
+        setMetrics(prev => {
+          if (
+            prev.visible &&
+            Math.abs(prev.top - top) < 0.5 &&
+            Math.abs(prev.height - height) < 0.5
+          ) {
+            return prev;
+          }
+          return { top, height, visible: true };
+        });
+      });
     };
 
     updateScrollbar();
     window.addEventListener("scroll", updateScrollbar, { passive: true });
     window.addEventListener("resize", updateScrollbar);
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       window.removeEventListener("scroll", updateScrollbar);
       window.removeEventListener("resize", updateScrollbar);
     };
@@ -413,6 +431,8 @@ function FloatingScrollbar() {
 }
 
 export default function Home() {
+  const { staff } = useStaffAuth();
+  const isLoggedIn = !!staff && staff.active;
   const [bloodGroup, setBloodGroup] = useState("All Groups");
   const [city, setCity] = useState("Tumakuru");
   const [area, setArea] = useState("All areas");
@@ -820,8 +840,17 @@ export default function Home() {
           <span>Emergency</span>
         </button>
         <Link className="nav-slot nav-right" href="/admin">
-          <LockKeyhole size={20} />
-          <span>Login</span>
+          {isLoggedIn ? (
+            <>
+              <LayoutDashboard size={20} />
+              <span>Dashboard</span>
+            </>
+          ) : (
+            <>
+              <LockKeyhole size={20} />
+              <span>Login</span>
+            </>
+          )}
         </Link>
       </nav>
 

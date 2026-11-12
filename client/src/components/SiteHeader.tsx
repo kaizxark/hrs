@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { House, Info, LogIn, Menu, UserRoundPlus, X } from "lucide-react";
+import { House, Info, LayoutDashboard, LogIn, Menu, UserRoundPlus, X } from "lucide-react";
+import { useStaffAuth } from "@/lib/staffAuth";
 
 function LogoMark() {
   return (
@@ -22,6 +23,9 @@ function LogoMark() {
 export default function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [location] = useLocation();
+  const { staff } = useStaffAuth();
+  const isLoggedIn = !!staff && staff.active;
+
   const isForm = location.startsWith("/form/");
   const isAbout = location === "/about";
   const isHome = location === "/";
@@ -76,7 +80,15 @@ export default function SiteHeader() {
           </Link>
           <span className="nav-divider" aria-hidden="true" />
           <Link href="/admin" className="admin-link" onClick={closeMenu}>
-            <LogIn size={15} /> Login
+            {isLoggedIn ? (
+              <>
+                <LayoutDashboard size={15} /> Dashboard
+              </>
+            ) : (
+              <>
+                <LogIn size={15} /> Login
+              </>
+            )}
           </Link>
         </nav>
         <button

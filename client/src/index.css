@@ -44,9 +44,7 @@ body,
 html {
   scroll-behavior: smooth;
 }
-/* Keep the whole interface comfortably legible at 110% scale by default. */
 body {
-  zoom: 1.1;
   margin: 0;
   background: var(--background);
   color: var(--foreground);
@@ -162,6 +160,7 @@ h3 {
   place-items: center;
   flex: 0 0 auto;
   box-shadow: 0 5px 12px rgba(201, 47, 59, 0.2);
+  overflow: hidden;
 }
 .brand > span {
   display: flex;
@@ -1684,6 +1683,48 @@ textarea:focus,
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.admin-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.admin-topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
+  flex-shrink: 0;
+  padding: 2px 4px;
+  border-radius: 8px;
+  transition: opacity 0.18s ease;
+}
+.admin-topbar-brand:hover {
+  opacity: 0.85;
+}
+.admin-topbar-brand .logo-mark {
+  width: 28px;
+  height: 28px;
+}
+.admin-topbar-brand-title strong {
+  font-family: "Manrope", sans-serif;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: var(--foreground);
+}
+.dashboard-heading-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.dashboard-heading-logo.logo-mark {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  box-shadow: 0 6px 16px rgba(201, 47, 59, 0.22);
+  flex-shrink: 0;
 }
 .admin-breadcrumb {
   display: flex;
