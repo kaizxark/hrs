@@ -3914,21 +3914,6 @@ function AddRecordsSection({
             </strong>
           </div>
         </div>
-
-        <div className="add-channel-desk-card">
-          <div className="add-channel-desk-info">
-            <span className="add-channel-desk-title">On-Site Walk-In Desk</span>
-            <span className="add-channel-desk-sub">Volunteer entry · verified instantly</span>
-          </div>
-          <a
-            href="/register"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="add-channel-desk-action"
-          >
-            Launch Desk <ExternalLink size={13} />
-          </a>
-        </div>
       </div>
 
       {/* ── Inline Form Creation Card ── */}
