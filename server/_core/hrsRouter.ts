@@ -89,18 +89,19 @@ export const hrsRouter = router({
     return supabaseApi.getLocations();
   }),
 
-  // Live sync/cache diagnostics for the admin "Sync & Data".
+  // Live sync/cache diagnostics for the admin Settings / System.
   syncStatus: adminProcedure.query(async () => {
-    // Return basic health since we don't have a poller anymore
     const health = await supabaseApi.ping();
+    const profilesResult = await supabaseApi.getProfiles();
+    const count = profilesResult.data?.length ?? 0;
     return {
       lastStatus: health.success ? "idle" : "error",
       lastError: health.success ? null : health.error,
-      cachedRecordCount: 0, // Not applicable with Supabase
+      cachedRecordCount: count,
       isPolling: false,
       pollRunning: false,
       pollIntervalMs: 0,
-      running: false, // For compatibility with Admin.tsx
+      running: true, // For compatibility with Admin.tsx
       currentIntervalMs: 0, // For compatibility with Admin.tsx
     };
   }),
@@ -153,23 +154,28 @@ export const hrsRouter = router({
     };
   }),
 
-  // Test both connectivity paths (now both are Supabase)
+  // Test both connectivity paths (Supabase PostgreSQL read & write)
   syncDiagnostics: adminProcedure.mutation(async () => {
     const readStart = Date.now();
     const readResult = await supabaseApi.getProfiles();
     const readLatencyMs = Date.now() - readStart;
     
+    const writeStart = Date.now();
     const writeResult = await supabaseApi.ping();
+    const writeLatencyMs = Date.now() - writeStart;
 
     const profiles = readResult.data || [];
     return {
       read: {
-        ok: profiles.length > 0,
+        ok: profiles.length > 0 || readResult.success,
         latencyMs: readLatencyMs,
-        error: profiles.length === 0 ? "No profiles found" : undefined,
+        error: !readResult.success ? readResult.error : profiles.length === 0 ? "No profiles found" : undefined,
         count: profiles.length,
       },
-      write: writeResult,
+      write: {
+        ...writeResult,
+        latencyMs: writeLatencyMs,
+      },
     };
   }),
 

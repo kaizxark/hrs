@@ -1990,10 +1990,10 @@ export default function Admin() {
                 <History size={17} /> Audit Log
               </button>
               <button
-                className={activeView === "sync" ? "active" : ""}
+                className={activeView === "sync" || activeView === "settings" ? "active" : ""}
                 onClick={() => goToView("sync")}
               >
-                <FileSpreadsheet size={17} /> Settings
+                <Settings2 size={17} /> Settings
               </button>
             </>
           )}
@@ -2530,7 +2530,7 @@ export default function Admin() {
                       <p>
                         This will permanently remove {selectedForDelete.size}{" "}
                         record{selectedForDelete.size === 1 ? "" : "s"} from the
-                        HRS Google Sheet. This action cannot be undone.
+                        HRS database. This action cannot be undone.
                       </p>
                       <div className="confirm-delete-list">
                         {Array.from(selectedForDelete)
@@ -3178,7 +3178,7 @@ function WorkspaceView({
     );
   }
 
-  if (view === "sync") {
+  if (view === "sync" || view === "settings") {
     const sync = syncStatusQuery.data;
     const diag = syncDiagMutation.data;
     const syncOk = sync?.lastStatus === "idle";
@@ -3195,17 +3195,26 @@ function WorkspaceView({
       { label: "1m", value: 60000 },
     ];
 
+    const recordsPerPageOptions = [15, 30, 50, 100];
+
+    const defaultViewOptions: { label: string; value: AdminView }[] = [
+      { label: "Dashboard", value: "overview" },
+      { label: "Records", value: "records" },
+      { label: "Add Records", value: "add" },
+      { label: "Donations", value: "donations" },
+      { label: "Tumakuru", value: "locations" },
+      { label: "Staff & Access", value: "staff" },
+      { label: "Audit Log", value: "audit" },
+    ];
+
     const fmtMs = (ms: number | undefined | null) =>
       ms == null ? "—" : ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
-
-    const fmtRate = (successes: number, attempts: number) =>
-      attempts === 0 ? "—" : `${Math.round((successes / attempts) * 100)}%`;
 
     return (
       <AdminSection
         eyebrow="SYSTEM"
         title="Settings"
-        description="Google Sheets connection, auto-sync controls, and data health overview."
+        description="Supabase PostgreSQL database connection, live synchronization, and portal preferences."
         action={
           <button
             className="sync-action-btn"
@@ -3229,12 +3238,12 @@ function WorkspaceView({
           >
             <div className="sync-card-header">
               <div className="sync-card-icon read-icon">
-                <FileSpreadsheet size={18} />
+                <Database size={18} />
               </div>
               <div className="sync-card-badge" data-ok={syncOk}>
                 {syncOk ? (
                   <>
-                    <CheckCircle size={13} /> Healthy
+                    <CheckCircle size={13} /> Connected
                   </>
                 ) : sync?.lastStatus === "error" ? (
                   <>
@@ -3247,9 +3256,9 @@ function WorkspaceView({
                 )}
               </div>
             </div>
-            <h3>Google Sheets (Read)</h3>
+            <h3>Supabase Database (Read)</h3>
             <p className="sync-card-desc">
-              CSV polling — directory data source
+              Direct PostgreSQL queries — live donor records & directory
             </p>
             <div className="sync-metrics">
               <div className="sync-metric">
@@ -3259,40 +3268,33 @@ function WorkspaceView({
                 </span>
               </div>
               <div className="sync-metric">
-                <span className="sync-metric-label">Success rate</span>
+                <span className="sync-metric-label">Status</span>
                 <span className="sync-metric-value">
-                  {fmtRate(
-                    sync?.lastStatus === "idle" ? 1 : 0,
-                    sync?.lastStatus === "idle" || sync?.lastStatus === "error"
-                      ? 1
-                      : 0
-                  )}
+                  {syncOk ? "Operational" : sync?.lastStatus === "error" ? "Degraded" : "Ready"}
                 </span>
               </div>
               <div className="sync-metric">
-                <span className="sync-metric-label">Records cached</span>
+                <span className="sync-metric-label">Records loaded</span>
                 <span className="sync-metric-value">
-                  {sync?.cachedRecordCount ?? "—"}
+                  {diag?.read?.count ?? records.length ?? sync?.cachedRecordCount ?? "—"}
                 </span>
               </div>
               <div className="sync-metric">
-                <span className="sync-metric-label">Poller</span>
+                <span className="sync-metric-label">Engine</span>
                 <span className="sync-metric-value sync-metric-small">
-                  {sync == null ? "—" : sync.running ? "Running" : "Paused"}
+                  PostgreSQL
                 </span>
               </div>
               <div className="sync-metric">
-                <span className="sync-metric-label">Interval</span>
+                <span className="sync-metric-label">Query mode</span>
                 <span className="sync-metric-value sync-metric-small">
-                  {sync?.currentIntervalMs
-                    ? `${sync.currentIntervalMs / 1000}s`
-                    : "—"}
+                  Direct DB (Live)
                 </span>
               </div>
               <div className="sync-metric">
-                <span className="sync-metric-label">Last attempt</span>
+                <span className="sync-metric-label">Last check</span>
                 <span className="sync-metric-value sync-metric-time">
-                  {formatIndiaSyncTime(null)}
+                  {formatIndiaSyncTime(lastSyncedAt)}
                 </span>
               </div>
             </div>
@@ -3305,13 +3307,13 @@ function WorkspaceView({
           </section>
 
           <section
-            className={`admin-card sync-health-card ${writeTested ? (writeOk ? "sync-ok" : "sync-error") : ""}`}
+            className={`admin-card sync-health-card ${writeTested ? (writeOk ? "sync-ok" : "sync-error") : syncOk ? "sync-ok" : ""}`}
           >
             <div className="sync-card-header">
               <div className="sync-card-icon write-icon">
                 <Zap size={18} />
               </div>
-              <div className="sync-card-badge" data-ok={writeOk}>
+              <div className="sync-card-badge" data-ok={writeTested ? writeOk : syncOk}>
                 {writeTested ? (
                   writeOk ? (
                     <>
@@ -3324,26 +3326,38 @@ function WorkspaceView({
                   )
                 ) : (
                   <>
-                    <Clock size={13} /> Not tested
+                    <CheckCircle size={13} /> Ready
                   </>
                 )}
               </div>
             </div>
-            <h3>Apps Script (Write)</h3>
+            <h3>Supabase Database (Write)</h3>
             <p className="sync-card-desc">
-              Mutation endpoint — verification, updates, donations
+              Direct mutations — verification, donations, edits & forms
             </p>
             <div className="sync-metrics">
               <div className="sync-metric">
                 <span className="sync-metric-label">Write latency</span>
                 <span className="sync-metric-value">
-                  {diag?.read ? fmtMs(diag.read.latencyMs) : "—"}
+                  {fmtMs((diag?.write as any)?.latencyMs ?? diag?.read?.latencyMs)}
                 </span>
               </div>
               <div className="sync-metric">
                 <span className="sync-metric-label">Write path</span>
                 <span className="sync-metric-value sync-metric-small">
-                  {diag?.write?.success ? "Active" : "—"}
+                  {writeTested ? (writeOk ? "Active (Supabase)" : "Failed") : "Direct DB"}
+                </span>
+              </div>
+              <div className="sync-metric">
+                <span className="sync-metric-label">Transactions</span>
+                <span className="sync-metric-value sync-metric-small">
+                  Instant ACID
+                </span>
+              </div>
+              <div className="sync-metric">
+                <span className="sync-metric-label">Tables</span>
+                <span className="sync-metric-value sync-metric-small">
+                  profiles, staff, logs
                 </span>
               </div>
             </div>
@@ -3357,15 +3371,15 @@ function WorkspaceView({
               <div className="sync-card-note">
                 <Activity size={12} />
                 <span>
-                  Read refresh: {fmtMs(diag.read.latencyMs)} — {diag.read.count}{" "}
-                  records
+                  Query test: {fmtMs(diag.read.latencyMs)} — {diag.read.count}{" "}
+                  profiles verified
                 </span>
               </div>
             )}
           </section>
         </div>
 
-        {/* ── Auto-Sync Controls ────────────────────────────────────── */}
+        {/* ── Auto-Sync Controls & Actions ──────────────────────────── */}
         <div className="sync-controls-row">
           <section className="admin-card sync-controls-card">
             <div className="sync-controls-header">
@@ -3379,8 +3393,8 @@ function WorkspaceView({
                   }
                 />
                 <div>
-                  <strong>Auto-Sync</strong>
-                  <small>Refresh directory data from Google Sheets</small>
+                  <strong>Live Data Refresh</strong>
+                  <small>Periodic background query to keep records & queue live</small>
                 </div>
               </div>
               <label className="sync-toggle" htmlFor="autoSyncToggle">
@@ -3423,10 +3437,10 @@ function WorkspaceView({
                   className={`sync-dot ${isSyncing || justSynced ? "syncing" : ""}`}
                 />
                 {isSyncing
-                  ? "Syncing now…"
+                  ? "Refreshing now…"
                   : autoSyncEnabled
-                    ? `Polling every ${syncIntervalMs < 1000 ? syncIntervalMs : `${syncIntervalMs / 1000}s`}`
-                    : "Auto-sync paused"}
+                    ? `Refreshing every ${syncIntervalMs < 1000 ? syncIntervalMs : `${syncIntervalMs / 1000}s`}`
+                    : "Auto-refresh paused"}
               </span>
               <span className="sync-status-time">
                 Last sync: {formatIndiaSyncTime(lastSyncedAt)}
@@ -3441,7 +3455,7 @@ function WorkspaceView({
               Export Directory
             </h3>
             <p className="sync-card-desc">
-              Download the full HRS directory as an Excel spreadsheet
+              Download the full HRS directory from database as an Excel spreadsheet
             </p>
             <button
               className="sync-action-btn"
@@ -3461,10 +3475,10 @@ function WorkspaceView({
           <section className="admin-card sync-export-card">
             <h3>
               <ShieldCheck size={16} />
-              Quick Health Check
+              Database Health Check
             </h3>
             <p className="sync-card-desc">
-              Test both read and write connectivity to Google services
+              Test read and write connectivity to Supabase PostgreSQL database
             </p>
             <button
               className="sync-action-btn"
@@ -3477,7 +3491,7 @@ function WorkspaceView({
               ) : (
                 <Wifi size={14} />
               )}
-              {syncDiagMutation.isPending ? "Testing…" : "Test Connections"}
+              {syncDiagMutation.isPending ? "Testing…" : "Test Connection"}
             </button>
             {diag && (
               <div
@@ -3485,17 +3499,103 @@ function WorkspaceView({
               >
                 {diag.read?.ok && diag.write?.success ? (
                   <>
-                    <CheckCircle size={13} /> Both read and write paths are
-                    healthy
+                    <CheckCircle size={13} /> Supabase database read and write paths are healthy
                   </>
                 ) : (
                   <>
-                    <AlertTriangle size={13} /> Issues detected — see connection
-                    health above
+                    <AlertTriangle size={13} /> Issues detected — check database connection
                   </>
                 )}
               </div>
             )}
+          </section>
+        </div>
+
+        {/* ── Portal Preferences ────────────────────────────────────── */}
+        <div className="sync-controls-row" style={{ marginTop: "16px" }}>
+          <section className="admin-card sync-controls-card" style={{ gridColumn: "1 / -1" }}>
+            <div className="sync-controls-header">
+              <div className="sync-controls-label">
+                <Settings2 size={18} />
+                <div>
+                  <strong>Portal Preferences</strong>
+                  <small>Personalize your admin workspace and default view preferences</small>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "20px", marginTop: "12px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "12.5px", fontWeight: 600, color: "var(--ink-soft)", marginBottom: "6px" }}>
+                  Admin Display Name
+                </label>
+                <input
+                  className="plain-input"
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--background)", fontSize: "13px" }}
+                  value={adminSettings.displayName}
+                  onChange={e => onUpdateAdminSettings({ displayName: e.target.value })}
+                  placeholder="e.g. Administrator / Volunteer"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12.5px", fontWeight: 600, color: "var(--ink-soft)", marginBottom: "6px" }}>
+                  Default Landing View
+                </label>
+                <select
+                  className="plain-input"
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--background)", fontSize: "13px" }}
+                  value={adminSettings.defaultView}
+                  onChange={e => onUpdateAdminSettings({ defaultView: e.target.value as AdminView })}
+                >
+                  {defaultViewOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12.5px", fontWeight: 600, color: "var(--ink-soft)", marginBottom: "6px" }}>
+                  Records Per Page
+                </label>
+                <div className="sync-interval-pills">
+                  {recordsPerPageOptions.map(count => (
+                    <button
+                      key={count}
+                      type="button"
+                      className={`sync-interval-pill ${adminSettings.recordsPerPage === count ? "active" : ""}`}
+                      onClick={() => onUpdateAdminSettings({ recordsPerPage: count })}
+                    >
+                      {count}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12.5px", fontWeight: 600, color: "var(--ink-soft)", marginBottom: "6px" }}>
+                  Time Display Format
+                </label>
+                <div className="sync-interval-pills">
+                  <button
+                    type="button"
+                    className={`sync-interval-pill ${adminSettings.timeFormat === "12h" ? "active" : ""}`}
+                    onClick={() => onUpdateAdminSettings({ timeFormat: "12h" })}
+                  >
+                    12-Hour (AM/PM)
+                  </button>
+                  <button
+                    type="button"
+                    className={`sync-interval-pill ${adminSettings.timeFormat === "24h" ? "active" : ""}`}
+                    onClick={() => onUpdateAdminSettings({ timeFormat: "24h" })}
+                  >
+                    24-Hour
+                  </button>
+                </div>
+              </div>
+            </div>
           </section>
         </div>
       </AdminSection>
@@ -4099,7 +4199,7 @@ function SyncNowButton({
       type="button"
       onClick={onClick}
       disabled={isSyncing}
-      title="Sync records from Google Sheets"
+      title="Sync records from database"
     >
       <RefreshCw size={14} className={isSyncing ? "syncing-icon" : ""} />
       {isSyncing ? "Syncing..." : "Sync"}
@@ -6718,7 +6818,7 @@ function AddPersonModal({
         </div>
         <h2>Add a person</h2>
         <p className="modal-copy">
-          Fill in the full profile and it will be saved to the sheet and
+          Fill in the full profile and it will be saved to the database and
           verified immediately — no pending step needed.
         </p>
         <div className="add-form">

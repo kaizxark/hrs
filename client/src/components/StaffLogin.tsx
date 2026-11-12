@@ -198,7 +198,7 @@ export function StaffLogin() {
             </span>
           </div>
           <div className="demo-hint">
-            Use your staff username and password from the Google Sheets directory.
+            Use your staff username and password from the staff directory.
           </div>
         </div>
       </div>

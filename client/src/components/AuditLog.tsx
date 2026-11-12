@@ -388,7 +388,7 @@ export default function AuditLog() {
             disabled={clearMutation.isPending || clearedOptimistic}
             title={
               clearedOptimistic
-                ? "Cleared — waiting for Google Sheets to sync"
+                ? "Cleared — waiting for database to sync"
                 : "Clear all audit logs"
             }
           >
@@ -449,7 +449,7 @@ export default function AuditLog() {
           <CheckCircle2 size={36} strokeWidth={1} />
           <h3>Audit log cleared</h3>
           <p>
-            Entries are being removed from Google Sheets — this can take a few
+            Entries are being removed from database — this can take a few
             moments.
           </p>
         </div>
