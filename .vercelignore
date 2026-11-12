@@ -1,0 +1,27 @@
+# Large files and media in root
+*.zip
+*.mp4
+*.pdf
+*.jpg
+*.jpeg
+*.png
+*.xlsx
+*.csv
+*.log
+*.tar*
+
+# Dependencies and caches
+node_modules
+.pnpm-store
+.git
+.cache
+.claude
+.freebuff
+.kilo
+.manus-logs
+.netlify
+.verify
+
+# Local env files
+.env*
+!.env.example
