@@ -3886,8 +3886,8 @@ function AddRecordsSection({
       </div>
 
       {/* Create-form card (opens inline when creating is true) */}
-          {creating && (
-            <section className="admin-card add-create-card">
+      {creating && (
+        <section className="admin-card add-create-card">
               <div className="admin-card-heading">
                 <div>
                   <h2>Create form link</h2>
@@ -3993,11 +3993,11 @@ function AddRecordsSection({
                   </div>
                 </div>
               </div>
-            </section>
-          )}
+        </section>
+      )}
 
-          {/* Forms List Card */}
-          <section className="admin-card add-forms-card">
+      {/* Forms List Card */}
+      <section className="admin-card add-forms-card">
             <div className="admin-card-heading">
               <div>
                 <h2>Camp Form Links</h2>
@@ -4270,7 +4270,7 @@ function AddRecordsSection({
                 })}
               </div>
             )}
-          </section>
+      </section>
     </div>
   );
 }
