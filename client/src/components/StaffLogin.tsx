@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { useStaffAuth } from "@/lib/staffAuth";
+import hrsLogo from "@/assets/hrs-logo.png";
 import {
   ArrowLeft,
   ArrowRight,
@@ -110,8 +111,8 @@ export function StaffLogin() {
           <div className="mobile-login-brand">
             <div className="logo-mark">
               <img
-                src="/hrs-logo.png"
-                alt=""
+                src={hrsLogo}
+                alt="HRS"
                 style={{
                   width: "100%",
                   height: "100%",

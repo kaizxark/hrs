@@ -44,7 +44,9 @@ body,
 html {
   scroll-behavior: smooth;
 }
+/* Keep the whole interface comfortably legible at 110% scale by default. */
 body {
+  zoom: 1.1;
   margin: 0;
   background: var(--background);
   color: var(--foreground);
@@ -1417,6 +1419,41 @@ textarea:focus,
     animation: none;
   }
 }
+
+/* Modern smooth skeleton shimmer animation for dashboard loading */
+@keyframes admin-skel-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.admin-skel {
+  background: linear-gradient(
+    90deg,
+    rgba(224, 227, 222, 0.45) 0%,
+    rgba(244, 246, 242, 0.95) 45%,
+    rgba(224, 227, 222, 0.45) 100%
+  );
+  background-size: 250% 100%;
+  animation: admin-skel-shimmer 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  border-radius: 8px;
+}
+
+.admin-skel-sidebar {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.14) 45%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  background-size: 250% 100%;
+  animation: admin-skel-shimmer 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  border-radius: 8px;
+}
+
 .admin-sidebar {
   position: fixed;
   width: 250px;

@@ -23,6 +23,7 @@ import { Field, StaffLogin } from "@/components/StaffLogin";
 import type { LocationStats, DistrictCoverage } from "@/lib/api";
 import LocationsView from "./LocationsView";
 import AuditLog from "@/components/AuditLog";
+import hrsLogo from "@/assets/hrs-logo.png";
 import {
   Area,
   AreaChart,
@@ -1775,10 +1776,10 @@ export default function Admin() {
       <div className="admin-shell">
         <aside className="admin-sidebar" style={{ pointerEvents: "none" }}>
           <div className="admin-sidebar-head">
-            <a className="brand" href="/">
+            <a className="brand" href="/" tabIndex={-1}>
               <div className="logo-mark">
                 <img
-                  src="/hrs-logo.png"
+                  src={hrsLogo}
                   alt="HRS"
                   style={{
                     width: "100%",
@@ -1794,28 +1795,26 @@ export default function Admin() {
               </span>
             </a>
           </div>
-          <nav className="admin-nav">
+          <nav className="admin-nav" style={{ marginTop: 12 }}>
             <div
-              className="admin-skel"
+              className="admin-skel-sidebar"
               style={{
-                width: "60%",
+                width: "48%",
                 height: 10,
                 borderRadius: 5,
-                background: "var(--border)",
-                marginBottom: 12,
+                marginBottom: 16,
+                marginLeft: 10,
               }}
             />
-            {[72, 88, 64, 80].map((w, i) => (
+            {[100, 92, 96, 88, 94].map((w, i) => (
               <div
                 key={i}
-                className="admin-skel"
+                className="admin-skel-sidebar"
                 style={{
                   width: `${w}%`,
-                  height: 32,
-                  borderRadius: 8,
-                  background: "var(--border)",
+                  height: 38,
+                  borderRadius: 10,
                   marginBottom: 6,
-                  opacity: 0.5,
                 }}
               />
             ))}
@@ -1827,7 +1826,7 @@ export default function Admin() {
               <div className="admin-topbar-brand">
                 <div className="logo-mark">
                   <img
-                    src="/hrs-logo.png"
+                    src={hrsLogo}
                     alt="HRS"
                     style={{
                       width: "100%",
@@ -1841,86 +1840,123 @@ export default function Admin() {
                   <strong>HRS</strong>
                 </span>
               </div>
+              <div className="admin-breadcrumb">
+                <span>HRS workspace</span>
+                <ArrowRight size={14} />
+                <div
+                  className="admin-skel"
+                  style={{ width: 80, height: 16, borderRadius: 6 }}
+                />
+              </div>
+            </div>
+            <div className="admin-top-actions">
               <div
                 className="admin-skel"
-                style={{
-                  width: 120,
-                  height: 14,
-                  borderRadius: 7,
-                  background: "var(--border)",
-                }}
+                style={{ width: 140, height: 18, borderRadius: 6 }}
+              />
+              <div
+                className="admin-skel"
+                style={{ width: 95, height: 32, borderRadius: 999 }}
               />
             </div>
           </header>
-          <div className="admin-content" style={{ padding: "32px 28px" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                marginBottom: 28,
-              }}
-            >
-              <Loader2
-                size={18}
-                className="animate-spin"
-                style={{ opacity: 0.35 }}
-              />
-              <span
-                style={{
-                  fontSize: "0.82rem",
-                  opacity: 0.4,
-                  letterSpacing: "0.02em",
-                }}
-              >
-                Loading workspace…
-              </span>
+          <main className="admin-content">
+            <div className="admin-page-heading dashboard-heading">
+              <div className="dashboard-heading-left">
+                <div className="logo-mark dashboard-heading-logo">
+                  <img
+                    src={hrsLogo}
+                    alt="HRS"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      borderRadius: "inherit",
+                    }}
+                  />
+                </div>
+                <div>
+                  <div
+                    className="admin-skel"
+                    style={{ width: 130, height: 12, borderRadius: 6, marginBottom: 8 }}
+                  />
+                  <div
+                    className="admin-skel"
+                    style={{ width: 280, height: 30, borderRadius: 8, marginBottom: 6 }}
+                  />
+                  <div
+                    className="admin-skel"
+                    style={{ width: 200, height: 14, borderRadius: 6 }}
+                  />
+                </div>
+              </div>
             </div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-                gap: 14,
-                marginBottom: 32,
-              }}
-            >
+
+            <div className="metric-grid">
               {[1, 2, 3, 4].map(i => (
-                <div
-                  key={i}
-                  className="admin-skel"
-                  style={{
-                    height: 78,
-                    borderRadius: 12,
-                    background: "var(--border)",
-                    opacity: 0.45,
-                  }}
-                />
+                <div key={i} className="metric-card" style={{ pointerEvents: "none" }}>
+                  <div
+                    className="admin-skel"
+                    style={{ width: "55%", height: 13, borderRadius: 5, marginBottom: 14 }}
+                  />
+                  <div
+                    className="admin-skel"
+                    style={{ width: "38%", height: 28, borderRadius: 7, marginBottom: 10 }}
+                  />
+                  <div
+                    className="admin-skel"
+                    style={{ width: "70%", height: 11, borderRadius: 5 }}
+                  />
+                </div>
               ))}
             </div>
-            <div
-              className="admin-skel"
-              style={{
-                width: "45%",
-                height: 14,
-                borderRadius: 7,
-                background: "var(--border)",
-                marginBottom: 16,
-              }}
-            />
-            {[1, 2, 3, 4, 5].map(i => (
-              <div
-                key={i}
-                className="admin-skel"
-                style={{
-                  height: 44,
-                  borderRadius: 8,
-                  background: "var(--border)",
-                  marginBottom: 8,
-                  opacity: 0.35,
-                }}
-              />
-            ))}
-          </div>
+
+            <div className="admin-two-col dashboard-records">
+              <section className="admin-card records-table-card">
+                <div className="admin-card-heading">
+                  <div>
+                    <div
+                      className="admin-skel"
+                      style={{ width: 140, height: 18, borderRadius: 6, marginBottom: 6 }}
+                    />
+                    <div
+                      className="admin-skel"
+                      style={{ width: 210, height: 12, borderRadius: 5 }}
+                    />
+                  </div>
+                </div>
+                {[1, 2, 3].map(i => (
+                  <div
+                    key={i}
+                    className="admin-skel"
+                    style={{ height: 46, borderRadius: 10, marginBottom: 10 }}
+                  />
+                ))}
+              </section>
+
+              <section className="admin-card records-table-card">
+                <div className="admin-card-heading">
+                  <div>
+                    <div
+                      className="admin-skel"
+                      style={{ width: 150, height: 18, borderRadius: 6, marginBottom: 6 }}
+                    />
+                    <div
+                      className="admin-skel"
+                      style={{ width: 190, height: 12, borderRadius: 5 }}
+                    />
+                  </div>
+                </div>
+                {[1, 2, 3].map(i => (
+                  <div
+                    key={i}
+                    className="admin-skel"
+                    style={{ height: 46, borderRadius: 10, marginBottom: 10 }}
+                  />
+                ))}
+              </section>
+            </div>
+          </main>
         </div>
       </div>
     );
@@ -1946,8 +1982,8 @@ export default function Admin() {
           <a className="brand" href="/">
             <div className="logo-mark">
               <img
-                src="/hrs-logo.png"
-                alt=""
+                src={hrsLogo}
+                alt="HRS"
                 style={{
                   width: "100%",
                   height: "100%",
@@ -2066,7 +2102,7 @@ export default function Admin() {
             <a className="admin-topbar-brand" href="/" aria-label="HRS Home">
               <div className="logo-mark">
                 <img
-                  src="/hrs-logo.png"
+                  src={hrsLogo}
                   alt="HRS"
                   style={{
                     width: "100%",
@@ -2150,7 +2186,7 @@ export default function Admin() {
                 <div className="dashboard-heading-left">
                   <div className="logo-mark dashboard-heading-logo">
                     <img
-                      src="/hrs-logo.png"
+                      src={hrsLogo}
                       alt="HRS"
                       style={{
                         width: "100%",
@@ -3822,10 +3858,19 @@ function AddRecordsSection({
         <div>
           <h1>Add Records</h1>
           <p>
-            Generate shareable links for camp attendee self-registration.
+            Generate shareable links for camp attendee self-registration, or
+            register walk-in donors directly at the desk.
           </p>
         </div>
         <div className="add-heading-actions">
+          <a
+            className="secondary-button"
+            href="/register"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <UserPlus size={15} /> Desk Registration
+          </a>
           <button
             type="button"
             className="primary-button"
@@ -5651,7 +5696,7 @@ function VolunteerDashboard({
         <div className="dashboard-heading-left">
           <div className="logo-mark dashboard-heading-logo">
             <img
-              src="/hrs-logo.png"
+              src={hrsLogo}
               alt="HRS"
               style={{
                 width: "100%",

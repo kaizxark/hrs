@@ -1,11 +1,12 @@
 import { Link } from "wouter";
+import hrsLogo from "@/assets/hrs-logo.png";
 
 function LogoMark() {
   return (
     <div className="logo-mark" aria-hidden="true">
       <img
-        src="/hrs-logo.png"
-        alt=""
+        src={hrsLogo}
+        alt="HRS"
         style={{
           width: "100%",
           height: "100%",

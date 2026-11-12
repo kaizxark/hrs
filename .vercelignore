@@ -1,14 +1,19 @@
-# Large files and media in root
-*.zip
-*.mp4
-*.pdf
-*.jpg
-*.jpeg
-*.png
-*.xlsx
-*.csv
-*.log
-*.tar*
+# Large files and media in root directory only
+/*.zip
+/*.mp4
+/*.pdf
+/*.jpg
+/*.jpeg
+/*.png
+/*.xlsx
+/*.csv
+/*.log
+/*.tar*
+
+# Always preserve client & build assets
+!client/public/**
+!client/src/assets/**
+!dist/**
 
 # Dependencies and caches
 node_modules
