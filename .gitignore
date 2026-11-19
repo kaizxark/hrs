@@ -135,3 +135,25 @@ HRS_Blood_Group_Directory*
 # Vercel environment files
 .env.*
 !/client/.env.example
+
+# Large local media, scratch logs, and archives in root
+/*.zip
+/*.mp4
+/*.pdf
+/*.jpg
+/*.jpeg
+/*.png
+/logs__*.txt
+
+# Local debug and scratch test scripts
+/check-tables.cjs
+/debug-row.cjs
+/cleanup_and_test.sh
+/setup-supabase.cjs
+/test_delete.js
+/test_delete.mjs
+
+# Local agent & tooling caches
+.freebuff/
+.kilo/
+.verify/
