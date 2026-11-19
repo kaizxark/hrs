@@ -270,9 +270,8 @@ export function convertApiProfileToAdminRecord(profile: Profile): {
     }
   }
 
-  // Availability is computed against the actual next-eligible date, not the
-  // sheet's status string — Apps Script may not have run by the time the
-  // optimistic UI is rendered, so we trust the timestamp.
+  // Availability is computed against the actual next-eligible date, not a
+  // static status string, so we calculate availability dynamically from the timestamp.
   const nextEligibleMs = nextEligibleAt ? Date.parse(nextEligibleAt) : null;
   const isEligibleNow = nextEligibleMs === null || nextEligibleMs <= Date.now();
   const availability = isEligibleNow

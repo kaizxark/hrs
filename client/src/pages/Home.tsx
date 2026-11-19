@@ -164,7 +164,7 @@ function DonorCard({
   );
 }
 
-// Emergency volunteer contacts — fetched live from the Volunteer sheet cache.
+// Emergency volunteer contacts — fetched live from the staff database.
 // Falls back to an empty array while loading; the popup shows a loading state.
 type EmergencyContact = { name: string; phone: string };
 
@@ -177,7 +177,7 @@ export function EmergencyDropup({
   onClose: () => void;
   clickPos?: { x: number; y: number } | null;
 }) {
-  // Fetch real emergency volunteers from the Volunteer sheet cache.
+  // Fetch real emergency volunteers from the database.
   const { data: contactsData, isLoading: contactsLoading } =
     trpc.staff.emergencyContacts.useQuery(undefined, {
       enabled: !requestDonor,
@@ -465,8 +465,8 @@ export default function Home() {
 
   const publicProfilesQuery = usePublicProfiles();
 
-  // Donor directory comes from the server (single source of truth = the real
-  // Google Sheet). The server already filters to VERIFIED + Donor Consent YES +
+  // Donor directory comes from the server (single source of truth = the Supabase
+  // database). The server already filters to VERIFIED + Donor Consent YES +
   // blood group + Public Directory Visibility YES.
   const donors = useMemo<Donor[]>(() => {
     const data = publicProfilesQuery.data;
