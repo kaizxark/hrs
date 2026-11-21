@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import SiteFooter from "@/components/SiteFooter";
+import MobileBottomNav from "@/components/MobileBottomNav";
 import { usePublicProfiles, Profile } from "@/lib/api";
 import { trpc } from "@/lib/trpc";
 import { useStaffAuth } from "@/lib/staffAuth";
@@ -823,36 +824,7 @@ export default function Home() {
 
       <FloatingScrollbar />
 
-      {/* Floating emergency button removed */}
-      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-        <Link className="nav-slot nav-left" href="/about">
-          <Info size={20} />
-          <span>About</span>
-        </Link>
-        <button
-          className="nav-slot emergency-tab"
-          onClick={() => setEmergencyOpen(true)}
-          aria-label="Open emergency help"
-        >
-          <span className="emergency-tab-icon">
-            <PhoneCall size={28} />
-          </span>
-          <span>Emergency</span>
-        </button>
-        <Link className="nav-slot nav-right" href="/admin">
-          {isLoggedIn ? (
-            <>
-              <LayoutDashboard size={20} />
-              <span>Dashboard</span>
-            </>
-          ) : (
-            <>
-              <LockKeyhole size={20} />
-              <span>Login</span>
-            </>
-          )}
-        </Link>
-      </nav>
+      <MobileBottomNav onOpenEmergency={() => setEmergencyOpen(true)} />
 
       {emergencyOpen && (
         <EmergencyDropup

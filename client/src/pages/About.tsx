@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { EmergencyDropup } from "./Home";
 import SiteFooter from "@/components/SiteFooter";
+import MobileBottomNav from "@/components/MobileBottomNav";
 
 const processSteps = [
   {
@@ -412,26 +413,7 @@ export default function About() {
       </main>
 
       <SiteFooter />
-      <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-        <Link className="nav-slot nav-left" href="/">
-          <House size={20} />
-          <span>Home</span>
-        </Link>
-        <button
-          className="nav-slot emergency-tab"
-          onClick={() => setEmergencyOpen(true)}
-          aria-label="Open emergency help"
-        >
-          <span className="emergency-tab-icon">
-            <PhoneCall size={28} />
-          </span>
-          <span>Emergency</span>
-        </button>
-        <Link className="nav-slot nav-right" href="/admin">
-          <LockKeyhole size={20} />
-          <span>Login</span>
-        </Link>
-      </nav>
+      <MobileBottomNav onOpenEmergency={() => setEmergencyOpen(true)} />
       {emergencyOpen && (
         <EmergencyDropup requestDonor={null} onClose={closeEmergency} />
       )}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { House, Info, LayoutDashboard, LogIn, Menu, UserRoundPlus, X } from "lucide-react";
 import { useStaffAuth } from "@/lib/staffAuth";
@@ -32,6 +32,19 @@ export default function SiteHeader() {
   const isHome = location === "/";
   const isRegister = location === "/register";
 
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [menuOpen]);
+
   if (location === "/admin") return null;
 
   // Form links (/form/<token>) are STANDALONE capture pages: no logo, no
@@ -41,66 +54,75 @@ export default function SiteHeader() {
   const closeMenu = () => setMenuOpen(false);
 
   return (
-    <header className="site-header">
-      <div className="header-inner">
-        <Link
-          className="brand"
-          href="/"
-          aria-label="HRS Blood Donor Portal home"
-        >
-          <LogoMark />
-          <span>
-            <strong>Humanitarian Relief Society</strong>
-            <small>Blood Donor Portal</small>
-          </span>
-        </Link>
-        <nav
-          className={`desktop-nav ${menuOpen ? "nav-open" : ""}`}
-          aria-label="Primary navigation"
-        >
+    <>
+      <header className="site-header">
+        <div className="header-inner">
           <Link
+            className="brand"
             href="/"
-            className={`nav-icon-link${isHome ? " active" : ""}`}
-            onClick={closeMenu}
+            aria-label="HRS Blood Donor Portal home"
           >
-            <House size={15} /> Home
+            <LogoMark />
+            <span>
+              <strong>Humanitarian Relief Society</strong>
+              <small>Blood Donor Portal</small>
+            </span>
           </Link>
-          <Link
-            href="/about"
-            className={`nav-icon-link${isAbout ? " active" : ""}`}
-            onClick={closeMenu}
+          <nav
+            className={`desktop-nav ${menuOpen ? "nav-open" : ""}`}
+            aria-label="Primary navigation"
           >
-            <Info size={15} /> About
-          </Link>
-          <Link
-            href="/register"
-            className={`nav-icon-link nav-register${isRegister ? " active" : ""}`}
-            onClick={closeMenu}
+            <Link
+              href="/"
+              className={`nav-icon-link${isHome ? " active" : ""}`}
+              onClick={closeMenu}
+            >
+              <House size={15} /> Home
+            </Link>
+            <Link
+              href="/about"
+              className={`nav-icon-link${isAbout ? " active" : ""}`}
+              onClick={closeMenu}
+            >
+              <Info size={15} /> About
+            </Link>
+            <Link
+              href="/register"
+              className={`nav-icon-link nav-register${isRegister ? " active" : ""}`}
+              onClick={closeMenu}
+            >
+              <UserRoundPlus size={15} /> Register
+            </Link>
+            <span className="nav-divider" aria-hidden="true" />
+            <Link href="/admin" className="admin-link" onClick={closeMenu}>
+              {isLoggedIn ? (
+                <>
+                  <LayoutDashboard size={15} /> Dashboard
+                </>
+              ) : (
+                <>
+                  <LogIn size={15} /> Login
+                </>
+              )}
+            </Link>
+          </nav>
+          <button
+            className="mobile-menu-button"
+            onClick={() => setMenuOpen(open => !open)}
+            aria-label="Toggle menu"
+            aria-expanded={menuOpen}
           >
-            <UserRoundPlus size={15} /> Register
-          </Link>
-          <span className="nav-divider" aria-hidden="true" />
-          <Link href="/admin" className="admin-link" onClick={closeMenu}>
-            {isLoggedIn ? (
-              <>
-                <LayoutDashboard size={15} /> Dashboard
-              </>
-            ) : (
-              <>
-                <LogIn size={15} /> Login
-              </>
-            )}
-          </Link>
-        </nav>
-        <button
-          className="mobile-menu-button"
-          onClick={() => setMenuOpen(open => !open)}
-          aria-label="Toggle menu"
-          aria-expanded={menuOpen}
-        >
-          {menuOpen ? <X size={21} /> : <Menu size={21} />}
-        </button>
-      </div>
-    </header>
+            {menuOpen ? <X size={21} /> : <Menu size={21} />}
+          </button>
+        </div>
+      </header>
+      {menuOpen && (
+        <div
+          className="mobile-nav-backdrop"
+          onClick={closeMenu}
+          aria-hidden="true"
+        />
+      )}
+    </>
   );
 }
