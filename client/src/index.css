@@ -6640,7 +6640,7 @@ body::-webkit-scrollbar {
   );
   transform: rotate(-18deg);
 }
-.about-page > * {
+.about-page > *:not(.mobile-bottom-nav) {
   position: relative;
   z-index: 1;
 }
@@ -14535,10 +14535,10 @@ img {
   }
 }
 
-/* ── About page: override `.about-page > * { position: relative }` so
-   the mobile bottom nav keeps position:fixed and stays pinned ── */
-.about-page > .mobile-bottom-nav {
-  position: fixed !important;
+@media (min-width: 701px) {
+  .mobile-bottom-nav {
+    display: none !important;
+  }
 }
 
 /* ── About page (04 · How privacy is protected): collapse the two-column
@@ -17602,7 +17602,7 @@ img {
 
 /* ── Page-level entrances (each routed view rises softly) ─────────── */
 .register-page,
-.about-page,
+.about-main,
 .volunteer-directory-wrapper,
 .admin-content > section {
   animation: rise-in var(--motion-slow) var(--ease-soft) both;

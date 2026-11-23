@@ -42,4 +42,9 @@ describe("Navigation & CSS invariants", () => {
     expect(siteHeaderContent).toContain('href="/about"');
     expect(siteHeaderContent).toContain('href="/"');
   });
+
+  it("portals MobileBottomNav to document.body so it stays fixed to the viewport and cannot get stuck in page containers", () => {
+    expect(mobileNavContent).toContain("createPortal");
+    expect(mobileNavContent).toContain("document.body");
+  });
 });

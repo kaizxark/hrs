@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { createPortal } from "react-dom";
 import { House, Info, LayoutDashboard, LockKeyhole, PhoneCall } from "lucide-react";
 import { useStaffAuth } from "@/lib/staffAuth";
 
@@ -13,7 +14,7 @@ export default function MobileBottomNav({ onOpenEmergency }: MobileBottomNavProp
 
   const isHome = location === "/";
 
-  return (
+  const content = (
     <nav className="mobile-bottom-nav" aria-label="Navigation">
       {isHome ? (
         <Link className="nav-slot nav-left" href="/about">
@@ -54,4 +55,10 @@ export default function MobileBottomNav({ onOpenEmergency }: MobileBottomNavProp
       </Link>
     </nav>
   );
+
+  if (typeof document === "undefined") {
+    return content;
+  }
+
+  return createPortal(content, document.body);
 }
