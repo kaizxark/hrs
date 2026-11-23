@@ -110,6 +110,15 @@ export default function About() {
   const [emergencyOpen, setEmergencyOpen] = useState(false);
 
   useEffect(() => {
+    const handleOpen = () => setEmergencyOpen(true);
+    window.addEventListener("open-emergency", handleOpen);
+    if (window.location.search.includes("emergency=1")) {
+      setEmergencyOpen(true);
+    }
+    return () => window.removeEventListener("open-emergency", handleOpen);
+  }, []);
+
+  useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
     const previousDocumentOverflow = document.documentElement.style.overflow;
     if (emergencyOpen) {

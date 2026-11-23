@@ -228,23 +228,29 @@ h3 {
   color: var(--primary);
   transform: translateY(-1px);
 }
-.desktop-nav .active {
-  color: var(--foreground);
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 1px 4px rgba(28, 39, 31, 0.05);
-}
-.desktop-nav .active svg {
+.desktop-nav > .nav-emergency-btn {
+  border: 0;
+  background: transparent;
   color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
 }
-.desktop-nav .active::after {
-  content: "";
-  position: absolute;
-  height: 2px;
-  background: var(--primary);
-  left: 12px;
-  right: 12px;
-  bottom: -9px;
-  border-radius: 99px;
+.desktop-nav > .nav-emergency-btn:hover {
+  background: rgba(201, 47, 59, 0.08);
+}
+.desktop-nav > .nav-emergency-btn svg {
+  color: var(--primary);
 }
 .desktop-nav > a.admin-link {
   background: var(--primary);
@@ -3108,9 +3114,6 @@ textarea:focus,
   .desktop-nav > button {
     padding: 12px 11px;
     border-radius: 7px;
-  }
-  .desktop-nav .active::after {
-    display: none;
   }
   .nav-emergency {
     justify-content: flex-start;
@@ -14410,123 +14413,38 @@ img {
 }
 
 /* =====================================================================
-   MOBILE NAVIGATION (Header menu sheet + 5-slot bottom bar)
-   - Hamburger button visible on mobile (≤700px), toggling dropdown sheet
-   - Dropdown sheet with Home, About, Register, Login/Dashboard
-   - 5-slot glass bottom pill with raised Emergency button dead center
+   MOBILE NAVIGATION (3-slot centered floating bottom pill)
+   - Left slot: About (on Home) / Home (on About or other pages)
+   - Center slot: Raised red Emergency call button
+   - Right slot: Login / Dashboard
+   - Exactly 3 items in total, zero indicators, zero register link.
+   - Desktop header nav: 3 items (Home/About, Emergency, Login/Dashboard)
    ===================================================================== */
 
-.mobile-nav-backdrop {
-  display: none;
-}
-
 @media (max-width: 700px) {
-  /* ── Header Hamburger & Menu Sheet ── */
+  /* No top hamburger or menu sheet on mobile — bottom pill handles navigation */
   .mobile-menu-button {
-    display: grid !important;
-    place-items: center !important;
-    width: 40px !important;
-    height: 40px !important;
-    min-width: 40px !important;
-    min-height: 40px !important;
-    padding: 0 !important;
-    border-radius: 11px !important;
-    background: #ffffff !important;
-    border: 1px solid var(--border) !important;
-    color: var(--foreground) !important;
-    box-shadow: 0 2px 8px rgba(28, 39, 31, 0.08) !important;
-    cursor: pointer !important;
-    transition: background 0.15s ease, transform 0.15s ease;
+    display: none !important;
   }
-  .mobile-menu-button:active {
-    transform: scale(0.95);
-  }
-
-  .mobile-nav-backdrop {
-    display: block;
-    position: fixed;
-    inset: 0;
-    top: calc(54px + env(safe-area-inset-top));
-    background: rgba(18, 25, 20, 0.28);
-    backdrop-filter: blur(2px);
-    z-index: 90;
-    animation: fade-in 0.15s ease-out;
-  }
-
   .desktop-nav {
-    display: none;
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 12px;
-    right: 12px;
-    padding: 10px;
-    background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(24px) saturate(1.5);
-    border: 1px solid rgba(214, 220, 214, 0.95);
-    border-radius: 18px;
-    box-shadow: 0 18px 44px -10px rgba(20, 28, 22, 0.25);
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
-    z-index: 100;
-    animation: nav-sheet-in 0.16s ease-out;
+    display: none !important;
+  }
+  .mobile-nav-backdrop {
+    display: none !important;
   }
 
-  .desktop-nav.nav-open {
-    display: flex !important;
-  }
-
-  .desktop-nav > a,
-  .desktop-nav > button {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-height: 46px;
-    padding: 0 14px;
-    border-radius: 12px;
-    font-size: 15px;
-    font-weight: 600;
-    color: #39423a;
-    text-decoration: none;
-    transition: background 0.15s ease, color 0.15s ease;
-  }
-
-  .desktop-nav > a:hover,
-  .desktop-nav > button:hover {
-    background: rgba(223, 233, 223, 0.6);
-  }
-
-  .desktop-nav > a.nav-icon-link.active {
-    background: rgba(201, 47, 59, 0.1);
-    color: var(--primary);
-    font-weight: 700;
-  }
-
-  .desktop-nav .nav-divider {
-    display: none;
-  }
-
-  .desktop-nav .admin-link {
-    margin-top: 4px;
-    border-top: 1px solid var(--border);
-    padding-top: 8px;
-    color: var(--primary);
-  }
-
-  /* ── 5-Slot Floating Bottom Nav Pill ── */
+  /* ── 3-Slot Centered Floating Bottom Nav Pill ── */
   .mobile-bottom-nav {
     display: grid !important;
-    grid-template-columns: repeat(5, 1fr) !important;
+    grid-template-columns: repeat(3, 1fr) !important;
     position: fixed !important;
-    left: 10px !important;
-    right: 10px !important;
-    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
-    width: auto !important;
-    max-width: 480px !important;
-    margin: 0 auto !important;
-    transform: none !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    width: min(340px, calc(100% - 32px)) !important;
+    bottom: calc(10px + env(safe-area-inset-bottom)) !important;
     height: 64px !important;
-    padding: 0 4px !important;
+    padding: 0 6px !important;
     align-items: center !important;
     border-radius: 9999px !important;
     border: 1px solid rgba(215, 222, 215, 0.9) !important;
@@ -14546,7 +14464,7 @@ img {
     min-width: 0;
     padding: 0;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1;
     color: #6a736a;
     background: transparent;
@@ -14554,35 +14472,34 @@ img {
     border-radius: 0;
     text-decoration: none;
     cursor: pointer;
-    transition: color 0.15s ease, transform 0.15s ease;
+    transition: color 0.15s ease;
   }
 
   .mobile-bottom-nav .nav-slot svg {
     stroke-width: 2;
   }
 
-  .mobile-bottom-nav .nav-slot.selected {
-    color: var(--primary);
-    font-weight: 700;
-  }
-
-  .mobile-bottom-nav .nav-slot.selected svg {
-    color: var(--primary);
+  .mobile-bottom-nav .nav-left {
+    grid-column: 1;
+    justify-self: center;
+    width: 100%;
   }
 
   /* ── Raised Center Emergency Button ── */
   .mobile-bottom-nav .emergency-tab {
+    grid-column: 2;
+    justify-self: center;
     position: relative;
+    height: 100%;
     color: var(--primary);
-    font-weight: 700;
   }
 
   .mobile-bottom-nav .emergency-tab-icon {
     position: relative;
     top: auto;
-    margin-top: -22px;
-    width: 52px;
-    height: 52px;
+    margin-top: -24px;
+    width: 54px;
+    height: 54px;
     display: grid;
     place-items: center;
     border: 3.5px solid #f7f8f5;
@@ -14599,8 +14516,8 @@ img {
 
   .mobile-bottom-nav .emergency-tab-icon svg {
     color: #fff;
-    width: 24px;
-    height: 24px;
+    width: 25px;
+    height: 25px;
     stroke-width: 2.3;
   }
 
@@ -14609,6 +14526,12 @@ img {
     font-size: 10.5px;
     font-weight: 700;
     color: var(--primary);
+  }
+
+  .mobile-bottom-nav .nav-right {
+    grid-column: 3;
+    justify-self: center;
+    width: 100%;
   }
 }
 

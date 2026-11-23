@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { House, Info, LayoutDashboard, LockKeyhole, PhoneCall, UserRoundPlus } from "lucide-react";
+import { House, Info, LayoutDashboard, LockKeyhole, PhoneCall } from "lucide-react";
 import { useStaffAuth } from "@/lib/staffAuth";
 
 interface MobileBottomNavProps {
@@ -12,34 +12,21 @@ export default function MobileBottomNav({ onOpenEmergency }: MobileBottomNavProp
   const isLoggedIn = !!staff && staff.active;
 
   const isHome = location === "/";
-  const isAbout = location === "/about";
-  const isRegister = location === "/register";
-  const isAdmin = location === "/admin";
-
-  const handleHomeClick = (e: React.MouseEvent) => {
-    if (isHome) {
-      e.preventDefault();
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  };
 
   return (
-    <nav className="mobile-bottom-nav" aria-label="Mobile navigation">
-      <Link
-        className={`nav-slot${isHome ? " selected" : ""}`}
-        href="/"
-        onClick={handleHomeClick}
-      >
-        <House size={20} />
-        <span>Home</span>
-      </Link>
-      <Link
-        className={`nav-slot${isAbout ? " selected" : ""}`}
-        href="/about"
-      >
-        <Info size={20} />
-        <span>About</span>
-      </Link>
+    <nav className="mobile-bottom-nav" aria-label="Navigation">
+      {isHome ? (
+        <Link className="nav-slot nav-left" href="/about">
+          <Info size={20} />
+          <span>About</span>
+        </Link>
+      ) : (
+        <Link className="nav-slot nav-left" href="/">
+          <House size={20} />
+          <span>Home</span>
+        </Link>
+      )}
+
       <button
         type="button"
         className="nav-slot emergency-tab"
@@ -47,21 +34,12 @@ export default function MobileBottomNav({ onOpenEmergency }: MobileBottomNavProp
         aria-label="Open emergency help"
       >
         <span className="emergency-tab-icon">
-          <PhoneCall size={24} />
+          <PhoneCall size={26} />
         </span>
         <span>Emergency</span>
       </button>
-      <Link
-        className={`nav-slot${isRegister ? " selected" : ""}`}
-        href="/register"
-      >
-        <UserRoundPlus size={20} />
-        <span>Register</span>
-      </Link>
-      <Link
-        className={`nav-slot${isAdmin ? " selected" : ""}`}
-        href="/admin"
-      >
+
+      <Link className="nav-slot nav-right" href="/admin">
         {isLoggedIn ? (
           <>
             <LayoutDashboard size={20} />
