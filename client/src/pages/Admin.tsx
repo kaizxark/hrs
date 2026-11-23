@@ -3038,113 +3038,76 @@ function AdminPasswordUpdateCard() {
     });
   };
 
+  const isPasswordValid = newPassword.length >= 6;
+  const isPasswordMatch = newPassword === confirmPassword;
+
   return (
-    <section
-      className="admin-card sync-export-card"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-        padding: "24px",
-      }}
-    >
+    <section className="settings-card">
       <div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "12px",
-            marginBottom: "14px",
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: "10px",
-              background: "rgba(220, 38, 38, 0.12)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#dc2626",
-            }}
+        <div className="settings-card-head">
+          <div className="settings-card-head-left">
+            <div className="settings-card-icon crimson">
+              <ShieldCheck size={22} />
+            </div>
+            <div className="settings-card-title">
+              <h3>Admin Authentication</h3>
+              <span>Two-Factor credentials & password update</span>
+            </div>
+          </div>
+          <span
+            className="settings-card-badge"
+            style={{ color: "#dc2626", borderColor: "rgba(220, 38, 38, 0.25)" }}
           >
-            <KeyRound size={22} />
-          </div>
-          <div>
-            <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>
-              Update Admin Password
-            </h3>
-            <span
-              style={{
-                fontSize: "12px",
-                color: "var(--ink-soft, #6b7280)",
-              }}
-            >
-              OTP verification via kaizxark@gmail.com
-            </span>
-          </div>
+            2FA Protected
+          </span>
         </div>
 
-        <p
-          className="sync-card-desc"
-          style={{
-            marginBottom: "16px",
-            color: "var(--ink-soft, #6b7280)",
-            fontSize: "13.5px",
-            lineHeight: "1.5",
-          }}
-        >
-          To change the administrator password, request a 6-digit verification code
-          sent to <strong>kaizxark@gmail.com</strong>.
+        <p className="settings-card-desc">
+          Safeguard your root administrator access. Password changes require
+          a secure one-time verification code dispatched to{" "}
+          <strong>kaizxark@gmail.com</strong>.
         </p>
 
         {step === "idle" ? (
-          <div
-            style={{
-              background: "rgba(0, 0, 0, 0.02)",
-              border: "1px dashed var(--border)",
-              borderRadius: "10px",
-              padding: "20px 16px",
-              textAlign: "center",
-              margin: "12px 0 6px 0",
-            }}
-          >
-            <LockKeyhole
-              size={30}
+          <div className="settings-vault-box">
+            <div className="settings-vault-icon">
+              <LockKeyhole size={24} />
+            </div>
+            <h4
               style={{
-                color: "var(--ink-soft, #6b7280)",
-                margin: "0 auto 10px auto",
-                display: "block",
-              }}
-            />
-            <p
-              style={{
-                fontSize: "13px",
-                color: "var(--ink-soft, #6b7280)",
-                margin: "0 0 14px 0",
+                margin: "0 0 6px 0",
+                fontSize: "14px",
+                fontWeight: 600,
+                color: "var(--foreground)",
               }}
             >
-              Click below to send a one-time code to <strong>kaizxark@gmail.com</strong>.
+              Root Administrator Security
+            </h4>
+            <p
+              style={{
+                margin: "0 0 16px 0",
+                fontSize: "12.5px",
+                color: "var(--ink-soft)",
+                lineHeight: "1.5",
+              }}
+            >
+              Generate a temporary 6-digit cryptographic verification code sent
+              to <strong>kaizxark@gmail.com</strong> to authenticate this session.
             </p>
             <button
               type="button"
-              className="sync-action-btn"
+              className="settings-vault-btn"
               onClick={handleSendOtp}
               disabled={requestOtpMutation.isPending}
-              style={{
-                margin: "0 auto",
-                padding: "10px 20px",
-                fontWeight: 600,
-                fontSize: "13.5px",
-              }}
             >
               {requestOtpMutation.isPending ? (
-                <Loader2 size={15} className="syncing-icon" />
+                <Loader2 size={16} className="syncing-icon" />
               ) : (
-                <ShieldCheck size={15} />
+                <KeyRound size={16} />
               )}
-              {requestOtpMutation.isPending ? "Sending Code…" : "Send Verification Code"}
+              {requestOtpMutation.isPending
+                ? "Generating Code…"
+                : "Request Verification Code"}
             </button>
           </div>
         ) : (
@@ -3154,14 +3117,14 @@ function AdminPasswordUpdateCard() {
               display: "flex",
               flexDirection: "column",
               gap: "14px",
-              marginTop: "8px",
+              marginTop: "4px",
             }}
           >
             <div
               style={{
                 background: "rgba(16, 185, 129, 0.08)",
-                border: "1px solid rgba(16, 185, 129, 0.25)",
-                borderRadius: "8px",
+                border: "1px solid rgba(16, 185, 129, 0.28)",
+                borderRadius: "10px",
                 padding: "10px 14px",
                 fontSize: "12.5px",
                 color: "#065f46",
@@ -3171,9 +3134,12 @@ function AdminPasswordUpdateCard() {
                 gap: "8px",
               }}
             >
-              <span>
-                Code sent to <strong>kaizxark@gmail.com</strong>
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <CheckCircle size={15} style={{ color: "#10b981", flexShrink: 0 }} />
+                <span>
+                  Code sent to <strong>kaizxark@gmail.com</strong>
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={handleSendOtp}
@@ -3181,14 +3147,14 @@ function AdminPasswordUpdateCard() {
                 style={{
                   background: "none",
                   border: "none",
-                  color: cooldown > 0 ? "#9ca3af" : "#dc2626",
+                  color: cooldown > 0 ? "var(--ink-soft)" : "#dc2626",
                   cursor: cooldown > 0 ? "not-allowed" : "pointer",
                   fontWeight: 600,
                   fontSize: "12px",
                   padding: 0,
                 }}
               >
-                {cooldown > 0 ? `Resend (${cooldown}s)` : "Resend"}
+                {cooldown > 0 ? `Resend (${cooldown}s)` : "Resend Code"}
               </button>
             </div>
 
@@ -3198,8 +3164,10 @@ function AdminPasswordUpdateCard() {
                   display: "block",
                   fontSize: "12px",
                   fontWeight: 600,
-                  color: "var(--ink-soft, #6b7280)",
-                  marginBottom: "5px",
+                  color: "var(--ink-soft)",
+                  marginBottom: "6px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
                 }}
               >
                 6-Digit Verification Code
@@ -3209,20 +3177,21 @@ function AdminPasswordUpdateCard() {
                 maxLength={6}
                 value={otp}
                 onChange={e => setOtp(e.target.value.replace(/\D/g, ""))}
-                placeholder="123456"
+                placeholder="000000"
                 required
                 autoFocus
                 style={{
                   width: "100%",
-                  padding: "9px 12px",
-                  borderRadius: "8px",
+                  padding: "11px 14px",
+                  borderRadius: "10px",
                   border: "1px solid var(--border)",
                   background: "var(--background)",
-                  fontSize: "18px",
-                  letterSpacing: "6px",
+                  fontSize: "20px",
+                  letterSpacing: "8px",
                   fontFamily: "monospace",
                   textAlign: "center",
                   fontWeight: 700,
+                  color: "var(--foreground)",
                 }}
               />
             </div>
@@ -3233,8 +3202,10 @@ function AdminPasswordUpdateCard() {
                   display: "block",
                   fontSize: "12px",
                   fontWeight: 600,
-                  color: "var(--ink-soft, #6b7280)",
-                  marginBottom: "5px",
+                  color: "var(--ink-soft)",
+                  marginBottom: "6px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
                 }}
               >
                 New Password
@@ -3248,11 +3219,12 @@ function AdminPasswordUpdateCard() {
                   required
                   style={{
                     width: "100%",
-                    padding: "9px 38px 9px 12px",
-                    borderRadius: "8px",
+                    padding: "10px 40px 10px 12px",
+                    borderRadius: "10px",
                     border: "1px solid var(--border)",
                     background: "var(--background)",
-                    fontSize: "13px",
+                    fontSize: "13.5px",
+                    color: "var(--foreground)",
                   }}
                 />
                 <button
@@ -3260,12 +3232,12 @@ function AdminPasswordUpdateCard() {
                   onClick={() => setShowNewPassword(!showNewPassword)}
                   style={{
                     position: "absolute",
-                    right: "10px",
+                    right: "12px",
                     top: "50%",
                     transform: "translateY(-50%)",
                     background: "none",
                     border: "none",
-                    color: "var(--ink-soft, #6b7280)",
+                    color: "var(--ink-soft)",
                     cursor: "pointer",
                     padding: 0,
                     display: "flex",
@@ -3273,7 +3245,7 @@ function AdminPasswordUpdateCard() {
                   }}
                   title={showNewPassword ? "Hide password" : "Show password"}
                 >
-                  {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
@@ -3284,8 +3256,10 @@ function AdminPasswordUpdateCard() {
                   display: "block",
                   fontSize: "12px",
                   fontWeight: 600,
-                  color: "var(--ink-soft, #6b7280)",
-                  marginBottom: "5px",
+                  color: "var(--ink-soft)",
+                  marginBottom: "6px",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
                 }}
               >
                 Confirm New Password
@@ -3299,11 +3273,12 @@ function AdminPasswordUpdateCard() {
                   required
                   style={{
                     width: "100%",
-                    padding: "9px 38px 9px 12px",
-                    borderRadius: "8px",
+                    padding: "10px 40px 10px 12px",
+                    borderRadius: "10px",
                     border: "1px solid var(--border)",
                     background: "var(--background)",
-                    fontSize: "13px",
+                    fontSize: "13.5px",
+                    color: "var(--foreground)",
                   }}
                 />
                 <button
@@ -3311,12 +3286,12 @@ function AdminPasswordUpdateCard() {
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   style={{
                     position: "absolute",
-                    right: "10px",
+                    right: "12px",
                     top: "50%",
                     transform: "translateY(-50%)",
                     background: "none",
                     border: "none",
-                    color: "var(--ink-soft, #6b7280)",
+                    color: "var(--ink-soft)",
                     cursor: "pointer",
                     padding: 0,
                     display: "flex",
@@ -3324,33 +3299,56 @@ function AdminPasswordUpdateCard() {
                   }}
                   title={showConfirmPassword ? "Hide password" : "Show password"}
                 >
-                  {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: "10px", marginTop: "4px" }}>
-              <button
-                type="submit"
-                className="sync-action-btn"
-                disabled={updatePasswordMutation.isPending}
+            {newPassword && confirmPassword && (
+              <div
                 style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  padding: "10px 16px",
-                  fontWeight: 600,
-                  fontSize: "13.5px",
-                  background: "#dc2626",
-                  color: "#ffffff",
-                  borderColor: "#dc2626",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  color: isPasswordMatch && isPasswordValid ? "#059669" : "#dc2626",
                 }}
               >
-                {updatePasswordMutation.isPending ? (
-                  <Loader2 size={15} className="syncing-icon" />
+                {isPasswordMatch && isPasswordValid ? (
+                  <>
+                    <CheckCircle size={14} />
+                    <span>Passwords match and meet complexity criteria.</span>
+                  </>
+                ) : !isPasswordValid ? (
+                  <>
+                    <AlertTriangle size={14} />
+                    <span>Password must contain at least 6 characters.</span>
+                  </>
                 ) : (
-                  <Check size={15} />
+                  <>
+                    <AlertTriangle size={14} />
+                    <span>Passwords do not match.</span>
+                  </>
                 )}
-                {updatePasswordMutation.isPending ? "Updating…" : "Update Password"}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
+              <button
+                type="submit"
+                className="settings-vault-btn"
+                disabled={updatePasswordMutation.isPending}
+                style={{ flex: 1, padding: "11px 16px" }}
+              >
+                {updatePasswordMutation.isPending ? (
+                  <Loader2 size={16} className="syncing-icon" />
+                ) : (
+                  <Check size={16} />
+                )}
+                {updatePasswordMutation.isPending
+                  ? "Updating Password…"
+                  : "Update Password"}
               </button>
               <button
                 type="button"
@@ -3362,7 +3360,7 @@ function AdminPasswordUpdateCard() {
                   setConfirmPassword("");
                 }}
                 disabled={updatePasswordMutation.isPending}
-                style={{ padding: "10px 14px", fontSize: "13px" }}
+                style={{ padding: "10px 16px", borderRadius: "10px" }}
               >
                 Cancel
               </button>
@@ -3714,105 +3712,227 @@ function WorkspaceView({
   if (view === "sync" || view === "settings") {
     return (
       <AdminSection
-        eyebrow="SYSTEM"
-        title="Settings"
-        description="Export directory records and manage administrator credentials."
+        eyebrow="SYSTEM & DATA GOVERNANCE"
+        title="Settings & Security"
+        description="Export directory records, manage administrator 2FA credentials, and configure regional portal preferences."
       >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
-            gap: "24px",
-            alignItems: "start",
-          }}
-        >
-          {/* ── Export Directory ──────────────────────────────────────── */}
-          <section
-            className="admin-card sync-export-card"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-              padding: "24px",
-              minHeight: "260px",
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  marginBottom: "14px",
-                }}
-              >
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: "10px",
-                    background: "rgba(16, 185, 129, 0.12)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#10b981",
-                  }}
-                >
-                  <FileSpreadsheet size={22} />
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>
-                    Export Directory
-                  </h3>
+        <div className="settings-hub">
+          {/* ── Status Ribbon ── */}
+          <div className="settings-banner">
+            <div className="settings-banner-left">
+              <div className="settings-banner-icon">
+                <ShieldCheck size={20} />
+              </div>
+              <div className="settings-banner-text">
+                <strong>System Governance & Data Administration</strong>
+                <span>Direct transactional link to Supabase PostgreSQL</span>
+              </div>
+            </div>
+            <div className="settings-banner-badges">
+              <span className="settings-pill success">
+                <CheckCircle size={13} /> PostgreSQL Active
+              </span>
+              <span className="settings-pill accent">
+                <KeyRound size={13} /> Admin: kaizxark@gmail.com
+              </span>
+              <span className="settings-pill">
+                <Clock size={13} />{" "}
+                {adminSettings.timeFormat === "12h" ? "12h Clock" : "24h Clock"}
+              </span>
+            </div>
+          </div>
+
+          <div className="settings-grid">
+            {/* ── Export Directory ── */}
+            <section className="settings-card">
+              <div>
+                <div className="settings-card-head">
+                  <div className="settings-card-head-left">
+                    <div className="settings-card-icon emerald">
+                      <FileSpreadsheet size={22} />
+                    </div>
+                    <div className="settings-card-title">
+                      <h3>Directory Export Center</h3>
+                      <span>Spreadsheet & database export</span>
+                    </div>
+                  </div>
                   <span
+                    className="settings-card-badge"
                     style={{
-                      fontSize: "12px",
-                      color: "var(--ink-soft, #6b7280)",
+                      color: "#10b981",
+                      borderColor: "rgba(16, 185, 129, 0.28)",
                     }}
                   >
-                    Download spreadsheet records
+                    Live PostgreSQL
                   </span>
                 </div>
-              </div>
-              <p
-                className="sync-card-desc"
-                style={{
-                  marginBottom: "20px",
-                  color: "var(--ink-soft, #6b7280)",
-                  fontSize: "13.5px",
-                  lineHeight: "1.5",
-                }}
-              >
-                Download the full HRS directory from database as an Excel
-                spreadsheet.
-              </p>
-            </div>
-            <div>
-              <button
-                className="sync-action-btn"
-                type="button"
-                onClick={triggerExportCsv}
-                disabled={exportCsvQuery.isFetching}
-                style={{
-                  width: "100%",
-                  justifyContent: "center",
-                  padding: "11px 18px",
-                  fontWeight: 600,
-                  fontSize: "13.5px",
-                }}
-              >
-                {exportCsvQuery.isFetching ? (
-                  <Loader2 size={16} className="syncing-icon" />
-                ) : (
-                  <Download size={16} />
-                )}
-                {exportCsvQuery.isFetching ? "Preparing…" : "Export Excel"}
-              </button>
-            </div>
-          </section>
 
-          {/* ── Admin Password Update (OTP-based) ───────────────────────── */}
-          <AdminPasswordUpdateCard />
+                <p className="settings-card-desc">
+                  Export the verified live database to a spreadsheet file compatible
+                  with Microsoft Excel, Google Sheets, and Numbers.
+                </p>
+
+                <div className="settings-stat-grid">
+                  <div className="settings-stat-item">
+                    <span>Total Records</span>
+                    <strong>{records.length}</strong>
+                  </div>
+                  <div className="settings-stat-item">
+                    <span>Available Donors</span>
+                    <strong style={{ color: "#10b981" }}>
+                      {availableDonors.length}
+                    </strong>
+                  </div>
+                  <div className="settings-stat-item">
+                    <span>Districts Covered</span>
+                    <strong>{districtsCovered || "Karnataka"}</strong>
+                  </div>
+                  <div className="settings-stat-item">
+                    <span>Export Format</span>
+                    <strong>CSV / Excel</strong>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: "16px" }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: "var(--ink-soft)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    Included Data Fields
+                  </span>
+                  <div className="settings-field-tags">
+                    <span className="settings-tag">Donor Name</span>
+                    <span className="settings-tag">Blood Group</span>
+                    <span className="settings-tag">Contact Number</span>
+                    <span className="settings-tag">District</span>
+                    <span className="settings-tag">City</span>
+                    <span className="settings-tag">Area</span>
+                    <span className="settings-tag">Availability</span>
+                    <span className="settings-tag">Verification Status</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <button
+                  className="settings-export-btn"
+                  type="button"
+                  onClick={triggerExportCsv}
+                  disabled={exportCsvQuery.isFetching}
+                >
+                  {exportCsvQuery.isFetching ? (
+                    <Loader2 size={17} className="syncing-icon" />
+                  ) : (
+                    <Download size={17} />
+                  )}
+                  {exportCsvQuery.isFetching
+                    ? "Generating Spreadsheet…"
+                    : "Export Excel Directory"}
+                </button>
+              </div>
+            </section>
+
+            {/* ── Admin Password Update (OTP-based) ── */}
+            <AdminPasswordUpdateCard />
+
+            {/* ── Portal Preferences ── */}
+            <section className="settings-card" style={{ gridColumn: "1 / -1" }}>
+              <div>
+                <div className="settings-card-head">
+                  <div className="settings-card-head-left">
+                    <div className="settings-card-icon indigo">
+                      <Settings2 size={22} />
+                    </div>
+                    <div className="settings-card-title">
+                      <h3>Portal Preferences</h3>
+                      <span>
+                        Regional clock formatting, directory table density, and
+                        display nickname
+                      </span>
+                    </div>
+                  </div>
+                  <span className="settings-card-badge">Preferences</span>
+                </div>
+
+                <div className="settings-pref-row">
+                  <div className="settings-pref-meta">
+                    <strong>Clock Display Format</strong>
+                    <span>
+                      Choose between 12-hour AM/PM and 24-hour military notation
+                      for the topbar
+                    </span>
+                  </div>
+                  <div className="settings-pref-control">
+                    <button
+                      type="button"
+                      className={`settings-toggle-btn ${adminSettings.timeFormat === "12h" ? "active" : ""}`}
+                      onClick={() => onUpdateAdminSettings({ timeFormat: "12h" })}
+                    >
+                      12-Hour (3:45 PM)
+                    </button>
+                    <button
+                      type="button"
+                      className={`settings-toggle-btn ${adminSettings.timeFormat === "24h" ? "active" : ""}`}
+                      onClick={() => onUpdateAdminSettings({ timeFormat: "24h" })}
+                    >
+                      24-Hour (15:45)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-pref-row">
+                  <div className="settings-pref-meta">
+                    <strong>Records Per Page</strong>
+                    <span>
+                      Control table pagination density across Directory and
+                      Volunteer views
+                    </span>
+                  </div>
+                  <div className="settings-pref-control">
+                    {[15, 30, 50, 100].map(sz => (
+                      <button
+                        key={sz}
+                        type="button"
+                        className={`settings-toggle-btn ${adminSettings.recordsPerPage === sz ? "active" : ""}`}
+                        onClick={() =>
+                          onUpdateAdminSettings({ recordsPerPage: sz })
+                        }
+                      >
+                        {sz}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="settings-pref-row">
+                  <div className="settings-pref-meta">
+                    <strong>Administrator Display Name</strong>
+                    <span>
+                      Custom greeting name displayed in header welcome message
+                    </span>
+                  </div>
+                  <div className="settings-pref-control">
+                    <input
+                      type="text"
+                      className="settings-input"
+                      value={adminSettings.displayName || ""}
+                      onChange={e =>
+                        onUpdateAdminSettings({ displayName: e.target.value })
+                      }
+                      placeholder="Admin"
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
       </AdminSection>
     );
