@@ -2964,7 +2964,13 @@ export default function Admin() {
   );
 }
 
-function AdminPasswordUpdateCard() {
+function AdminPasswordUpdateCard({
+  displayName,
+  onUpdateDisplayName,
+}: {
+  displayName?: string;
+  onUpdateDisplayName?: (name: string) => void;
+} = {}) {
   const [step, setStep] = useState<"idle" | "otp_sent">("idle");
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -3067,6 +3073,25 @@ function AdminPasswordUpdateCard() {
           a secure one-time verification code dispatched to{" "}
           <strong>kaizxark@gmail.com</strong>.
         </p>
+
+        {onUpdateDisplayName && (
+          <div className="settings-admin-name-block">
+            <div className="settings-admin-name-label">
+              <strong>Admin Display Name</strong>
+              <span>Greeting & header profile name</span>
+            </div>
+            <div className="settings-admin-name-input-wrap">
+              <UserRound size={15} />
+              <input
+                type="text"
+                className="settings-admin-name-input"
+                value={displayName || ""}
+                onChange={e => onUpdateDisplayName(e.target.value)}
+                placeholder="Admin"
+              />
+            </div>
+          </div>
+        )}
 
         {step === "idle" ? (
           <div className="settings-vault-box">
@@ -3712,36 +3737,11 @@ function WorkspaceView({
   if (view === "sync" || view === "settings") {
     return (
       <AdminSection
-        eyebrow="SYSTEM & DATA GOVERNANCE"
-        title="Settings & Security"
-        description="Export directory records, manage administrator 2FA credentials, and configure regional portal preferences."
+        eyebrow="SYSTEM"
+        title="Settings"
+        description="Export directory records and manage administrator credentials."
       >
         <div className="settings-hub">
-          {/* ── Status Ribbon ── */}
-          <div className="settings-banner">
-            <div className="settings-banner-left">
-              <div className="settings-banner-icon">
-                <ShieldCheck size={20} />
-              </div>
-              <div className="settings-banner-text">
-                <strong>System Governance & Data Administration</strong>
-                <span>Direct transactional link to Supabase PostgreSQL</span>
-              </div>
-            </div>
-            <div className="settings-banner-badges">
-              <span className="settings-pill success">
-                <CheckCircle size={13} /> PostgreSQL Active
-              </span>
-              <span className="settings-pill accent">
-                <KeyRound size={13} /> Admin: kaizxark@gmail.com
-              </span>
-              <span className="settings-pill">
-                <Clock size={13} />{" "}
-                {adminSettings.timeFormat === "12h" ? "12h Clock" : "24h Clock"}
-              </span>
-            </div>
-          </div>
-
           <div className="settings-grid">
             {/* ── Export Directory ── */}
             <section className="settings-card">
@@ -3785,7 +3785,7 @@ function WorkspaceView({
                   </div>
                   <div className="settings-stat-item">
                     <span>Districts Covered</span>
-                    <strong>{districtsCovered || "Karnataka"}</strong>
+                    <strong>{districtsCovered || "1"}</strong>
                   </div>
                   <div className="settings-stat-item">
                     <span>Export Format</span>
@@ -3839,99 +3839,13 @@ function WorkspaceView({
               </div>
             </section>
 
-            {/* ── Admin Password Update (OTP-based) ── */}
-            <AdminPasswordUpdateCard />
-
-            {/* ── Portal Preferences ── */}
-            <section className="settings-card" style={{ gridColumn: "1 / -1" }}>
-              <div>
-                <div className="settings-card-head">
-                  <div className="settings-card-head-left">
-                    <div className="settings-card-icon indigo">
-                      <Settings2 size={22} />
-                    </div>
-                    <div className="settings-card-title">
-                      <h3>Portal Preferences</h3>
-                      <span>
-                        Regional clock formatting, directory table density, and
-                        display nickname
-                      </span>
-                    </div>
-                  </div>
-                  <span className="settings-card-badge">Preferences</span>
-                </div>
-
-                <div className="settings-pref-row">
-                  <div className="settings-pref-meta">
-                    <strong>Clock Display Format</strong>
-                    <span>
-                      Choose between 12-hour AM/PM and 24-hour military notation
-                      for the topbar
-                    </span>
-                  </div>
-                  <div className="settings-pref-control">
-                    <button
-                      type="button"
-                      className={`settings-toggle-btn ${adminSettings.timeFormat === "12h" ? "active" : ""}`}
-                      onClick={() => onUpdateAdminSettings({ timeFormat: "12h" })}
-                    >
-                      12-Hour (3:45 PM)
-                    </button>
-                    <button
-                      type="button"
-                      className={`settings-toggle-btn ${adminSettings.timeFormat === "24h" ? "active" : ""}`}
-                      onClick={() => onUpdateAdminSettings({ timeFormat: "24h" })}
-                    >
-                      24-Hour (15:45)
-                    </button>
-                  </div>
-                </div>
-
-                <div className="settings-pref-row">
-                  <div className="settings-pref-meta">
-                    <strong>Records Per Page</strong>
-                    <span>
-                      Control table pagination density across Directory and
-                      Volunteer views
-                    </span>
-                  </div>
-                  <div className="settings-pref-control">
-                    {[15, 30, 50, 100].map(sz => (
-                      <button
-                        key={sz}
-                        type="button"
-                        className={`settings-toggle-btn ${adminSettings.recordsPerPage === sz ? "active" : ""}`}
-                        onClick={() =>
-                          onUpdateAdminSettings({ recordsPerPage: sz })
-                        }
-                      >
-                        {sz}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="settings-pref-row">
-                  <div className="settings-pref-meta">
-                    <strong>Administrator Display Name</strong>
-                    <span>
-                      Custom greeting name displayed in header welcome message
-                    </span>
-                  </div>
-                  <div className="settings-pref-control">
-                    <input
-                      type="text"
-                      className="settings-input"
-                      value={adminSettings.displayName || ""}
-                      onChange={e =>
-                        onUpdateAdminSettings({ displayName: e.target.value })
-                      }
-                      placeholder="Admin"
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
+            {/* ── Admin Password Update & Display Name ── */}
+            <AdminPasswordUpdateCard
+              displayName={adminSettings.displayName}
+              onUpdateDisplayName={displayName =>
+                onUpdateAdminSettings({ displayName })
+              }
+            />
           </div>
         </div>
       </AdminSection>
