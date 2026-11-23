@@ -1883,23 +1883,6 @@ export default function Admin() {
         <div className="admin-main">
           <header className="admin-topbar">
             <div className="admin-topbar-left">
-              <div className="admin-topbar-brand">
-                <div className="logo-mark">
-                  <img
-                    src={hrsLogo}
-                    alt="HRS"
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "contain",
-                      borderRadius: "inherit",
-                    }}
-                  />
-                </div>
-                <span className="admin-topbar-brand-title">
-                  <strong>HRS</strong>
-                </span>
-              </div>
               <div className="admin-breadcrumb">
                 <span>HRS workspace</span>
                 <ArrowRight size={14} />
@@ -1923,18 +1906,6 @@ export default function Admin() {
           <main className="admin-content">
             <div className="admin-page-heading dashboard-heading">
               <div className="dashboard-heading-left">
-                <div className="logo-mark dashboard-heading-logo">
-                  <img
-                    src={hrsLogo}
-                    alt="HRS"
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "contain",
-                      borderRadius: "inherit",
-                    }}
-                  />
-                </div>
                 <div>
                   <div
                     className="admin-skel"
@@ -2159,23 +2130,6 @@ export default function Admin() {
             >
               <Menu size={20} />
             </button>
-            <a className="admin-topbar-brand" href="/" aria-label="HRS Home">
-              <div className="logo-mark">
-                <img
-                  src={hrsLogo}
-                  alt="HRS"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                    borderRadius: "inherit",
-                  }}
-                />
-              </div>
-              <span className="admin-topbar-brand-title">
-                <strong>HRS</strong>
-              </span>
-            </a>
             <div className="admin-breadcrumb">
               <span>HRS workspace</span>
               <ArrowRight size={14} />
@@ -2244,18 +2198,6 @@ export default function Admin() {
             <>
               <div className="admin-page-heading dashboard-heading">
                 <div className="dashboard-heading-left">
-                  <div className="logo-mark dashboard-heading-logo">
-                    <img
-                      src={hrsLogo}
-                      alt="HRS"
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "contain",
-                        borderRadius: "inherit",
-                      }}
-                    />
-                  </div>
                   <div>
                     <span className="eyebrow dark-eyebrow" id="overview-date">
                       {indiaDate}
@@ -5881,18 +5823,6 @@ function VolunteerDashboard({
     <div className="volunteer-dashboard">
       <div className="admin-page-heading">
         <div className="dashboard-heading-left">
-          <div className="logo-mark dashboard-heading-logo">
-            <img
-              src={hrsLogo}
-              alt="HRS"
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "contain",
-                borderRadius: "inherit",
-              }}
-            />
-          </div>
           <div>
             <span className="eyebrow dark-eyebrow">VOLUNTEER ACCESS</span>
             <h1>Volunteer Dashboard</h1>
