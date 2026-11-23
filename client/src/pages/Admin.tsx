@@ -59,6 +59,8 @@ import {
   Droplets,
   Edit3,
   ExternalLink,
+  Eye,
+  EyeOff,
   FileSpreadsheet,
   Heart,
   HeartHandshake,
@@ -427,6 +429,13 @@ function StaffAccessView({ action }: { action?: React.ReactNode }) {
     active: boolean;
     createdAt: Date;
     updatedAt: Date;
+    mobile?: string;
+    password?: string;
+  };
+
+  const [showPasswords, setShowPasswords] = useState<Record<number, boolean>>({});
+  const toggleShowPassword = (id: number) => {
+    setShowPasswords(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
   // Optimistic overlay: applies instantly and survives stale refetches
@@ -472,6 +481,8 @@ function StaffAccessView({ action }: { action?: React.ReactNode }) {
         active: true,
         createdAt: new Date(),
         updatedAt: new Date(),
+        mobile: input.mobile,
+        password: input.password,
       };
       setPendingAdds(prev => [
         optimistic,
@@ -774,6 +785,54 @@ function StaffAccessView({ action }: { action?: React.ReactNode }) {
                           {(member as any).mobile}
                         </span>
                       )}
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        marginTop: "5px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "11.5px",
+                          color: "var(--ink-soft, #6b7280)",
+                          fontWeight: 500,
+                        }}
+                      >
+                        Password:
+                      </span>
+                      <code
+                        style={{
+                          fontSize: "12px",
+                          fontFamily: "ui-monospace, monospace",
+                          background: "rgba(0, 0, 0, 0.05)",
+                          padding: "1px 6px",
+                          borderRadius: "4px",
+                          letterSpacing: showPasswords[member.id] ? "normal" : "2px",
+                          color: showPasswords[member.id] ? "var(--ink, #111827)" : "var(--ink-soft, #6b7280)",
+                        }}
+                      >
+                        {showPasswords[member.id] ? (member.password || "—") : "••••••••"}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => toggleShowPassword(member.id)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: "2px 4px",
+                          color: "var(--ink-soft, #6b7280)",
+                          display: "inline-flex",
+                          alignItems: "center",
+                        }}
+                        title={showPasswords[member.id] ? "Hide password" : "Show password"}
+                        aria-label={showPasswords[member.id] ? "Hide password" : "Show password"}
+                      >
+                        {showPasswords[member.id] ? <EyeOff size={13} /> : <Eye size={13} />}
+                      </button>
+                    </div>
                   </div>
                   <span
                     className={`staff-status-chip ${member.active ? "is-on" : "is-off"}`}
@@ -2962,6 +3021,416 @@ export default function Admin() {
   );
 }
 
+function AdminPasswordUpdateCard() {
+  const [step, setStep] = useState<"idle" | "otp_sent">("idle");
+  const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => {
+      setCooldown(prev => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
+  const requestOtpMutation = trpc.staff.requestAdminPasswordOtp.useMutation({
+    onSuccess: res => {
+      if (res.success) {
+        setStep("otp_sent");
+        setCooldown(60);
+        toast.success("Verification code sent to kaizxark@gmail.com");
+      } else {
+        toast.error(res.error || "Failed to send verification code.");
+      }
+    },
+    onError: err => {
+      toast.error(err.message || "Failed to send verification code.");
+    },
+  });
+
+  const updatePasswordMutation =
+    trpc.staff.verifyAndUpdateAdminPassword.useMutation({
+      onSuccess: res => {
+        if (res.success) {
+          toast.success("Admin password updated successfully!");
+          setOtp("");
+          setNewPassword("");
+          setConfirmPassword("");
+          setStep("idle");
+        } else {
+          toast.error(res.error || "Failed to update password.");
+        }
+      },
+      onError: err => {
+        toast.error(err.message || "Failed to update password.");
+      },
+    });
+
+  const handleSendOtp = () => {
+    requestOtpMutation.mutate();
+  };
+
+  const handleUpdatePassword = (e: FormEvent) => {
+    e.preventDefault();
+    if (!otp.trim() || otp.trim().length !== 6) {
+      toast.error("Please enter the 6-digit verification code.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters long.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match.");
+      return;
+    }
+    updatePasswordMutation.mutate({
+      otp: otp.trim(),
+      newPassword,
+    });
+  };
+
+  return (
+    <section
+      className="admin-card sync-export-card"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        padding: "24px",
+      }}
+    >
+      <div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            marginBottom: "14px",
+          }}
+        >
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: "10px",
+              background: "rgba(220, 38, 38, 0.12)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#dc2626",
+            }}
+          >
+            <KeyRound size={22} />
+          </div>
+          <div>
+            <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>
+              Update Admin Password
+            </h3>
+            <span
+              style={{
+                fontSize: "12px",
+                color: "var(--ink-soft, #6b7280)",
+              }}
+            >
+              OTP verification via kaizxark@gmail.com
+            </span>
+          </div>
+        </div>
+
+        <p
+          className="sync-card-desc"
+          style={{
+            marginBottom: "16px",
+            color: "var(--ink-soft, #6b7280)",
+            fontSize: "13.5px",
+            lineHeight: "1.5",
+          }}
+        >
+          To change the administrator password, request a 6-digit verification code
+          sent to <strong>kaizxark@gmail.com</strong>.
+        </p>
+
+        {step === "idle" ? (
+          <div
+            style={{
+              background: "rgba(0, 0, 0, 0.02)",
+              border: "1px dashed var(--border)",
+              borderRadius: "10px",
+              padding: "20px 16px",
+              textAlign: "center",
+              margin: "12px 0 6px 0",
+            }}
+          >
+            <LockKeyhole
+              size={30}
+              style={{
+                color: "var(--ink-soft, #6b7280)",
+                margin: "0 auto 10px auto",
+                display: "block",
+              }}
+            />
+            <p
+              style={{
+                fontSize: "13px",
+                color: "var(--ink-soft, #6b7280)",
+                margin: "0 0 14px 0",
+              }}
+            >
+              Click below to send a one-time code to <strong>kaizxark@gmail.com</strong>.
+            </p>
+            <button
+              type="button"
+              className="sync-action-btn"
+              onClick={handleSendOtp}
+              disabled={requestOtpMutation.isPending}
+              style={{
+                margin: "0 auto",
+                padding: "10px 20px",
+                fontWeight: 600,
+                fontSize: "13.5px",
+              }}
+            >
+              {requestOtpMutation.isPending ? (
+                <Loader2 size={15} className="syncing-icon" />
+              ) : (
+                <ShieldCheck size={15} />
+              )}
+              {requestOtpMutation.isPending ? "Sending Code…" : "Send Verification Code"}
+            </button>
+          </div>
+        ) : (
+          <form
+            onSubmit={handleUpdatePassword}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
+              marginTop: "8px",
+            }}
+          >
+            <div
+              style={{
+                background: "rgba(16, 185, 129, 0.08)",
+                border: "1px solid rgba(16, 185, 129, 0.25)",
+                borderRadius: "8px",
+                padding: "10px 14px",
+                fontSize: "12.5px",
+                color: "#065f46",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "8px",
+              }}
+            >
+              <span>
+                Code sent to <strong>kaizxark@gmail.com</strong>
+              </span>
+              <button
+                type="button"
+                onClick={handleSendOtp}
+                disabled={cooldown > 0 || requestOtpMutation.isPending}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: cooldown > 0 ? "#9ca3af" : "#dc2626",
+                  cursor: cooldown > 0 ? "not-allowed" : "pointer",
+                  fontWeight: 600,
+                  fontSize: "12px",
+                  padding: 0,
+                }}
+              >
+                {cooldown > 0 ? `Resend (${cooldown}s)` : "Resend"}
+              </button>
+            </div>
+
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "var(--ink-soft, #6b7280)",
+                  marginBottom: "5px",
+                }}
+              >
+                6-Digit Verification Code
+              </label>
+              <input
+                type="text"
+                maxLength={6}
+                value={otp}
+                onChange={e => setOtp(e.target.value.replace(/\D/g, ""))}
+                placeholder="123456"
+                required
+                autoFocus
+                style={{
+                  width: "100%",
+                  padding: "9px 12px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border)",
+                  background: "var(--background)",
+                  fontSize: "18px",
+                  letterSpacing: "6px",
+                  fontFamily: "monospace",
+                  textAlign: "center",
+                  fontWeight: 700,
+                }}
+              />
+            </div>
+
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "var(--ink-soft, #6b7280)",
+                  marginBottom: "5px",
+                }}
+              >
+                New Password
+              </label>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "9px 38px 9px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    background: "var(--background)",
+                    fontSize: "13px",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPassword(!showNewPassword)}
+                  style={{
+                    position: "absolute",
+                    right: "10px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    color: "var(--ink-soft, #6b7280)",
+                    cursor: "pointer",
+                    padding: 0,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                  title={showNewPassword ? "Hide password" : "Show password"}
+                >
+                  {showNewPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  color: "var(--ink-soft, #6b7280)",
+                  marginBottom: "5px",
+                }}
+              >
+                Confirm New Password
+              </label>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Repeat new password"
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "9px 38px 9px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    background: "var(--background)",
+                    fontSize: "13px",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={{
+                    position: "absolute",
+                    right: "10px",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    color: "var(--ink-soft, #6b7280)",
+                    cursor: "pointer",
+                    padding: 0,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                  title={showConfirmPassword ? "Hide password" : "Show password"}
+                >
+                  {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", marginTop: "4px" }}>
+              <button
+                type="submit"
+                className="sync-action-btn"
+                disabled={updatePasswordMutation.isPending}
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  padding: "10px 16px",
+                  fontWeight: 600,
+                  fontSize: "13.5px",
+                  background: "#dc2626",
+                  color: "#ffffff",
+                  borderColor: "#dc2626",
+                }}
+              >
+                {updatePasswordMutation.isPending ? (
+                  <Loader2 size={15} className="syncing-icon" />
+                ) : (
+                  <Check size={15} />
+                )}
+                {updatePasswordMutation.isPending ? "Updating…" : "Update Password"}
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => {
+                  setStep("idle");
+                  setOtp("");
+                  setNewPassword("");
+                  setConfirmPassword("");
+                }}
+                disabled={updatePasswordMutation.isPending}
+                style={{ padding: "10px 14px", fontSize: "13px" }}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function WorkspaceView({
   view,
   records,
@@ -3300,424 +3769,107 @@ function WorkspaceView({
   }
 
   if (view === "sync" || view === "settings") {
-    const sync = syncStatusQuery.data;
-    const diag = syncDiagMutation.data;
-    const syncOk = sync?.lastStatus === "idle";
-    const writeOk = diag?.write?.success;
-    const writeTested = diag?.write != null;
-    const readTested = diag?.read != null;
-    // Last sync pulse within the last ~7.5s → pulse the status dot.
-    const justSynced = false;
-
-    const intervalOptions = [
-      { label: "5s", value: 5000 },
-      { label: "10s", value: 10000 },
-      { label: "30s", value: 30000 },
-      { label: "1m", value: 60000 },
-    ];
-
-    const recordsPerPageOptions = [15, 30, 50, 100];
-
-    const defaultViewOptions: { label: string; value: AdminView }[] = [
-      { label: "Dashboard", value: "overview" },
-      { label: "Records", value: "records" },
-      { label: "Add Records", value: "add" },
-      { label: "Donations", value: "donations" },
-      { label: "Tumakuru", value: "locations" },
-      { label: "Staff & Access", value: "staff" },
-      { label: "Audit Log", value: "audit" },
-    ];
-
-    const fmtMs = (ms: number | undefined | null) =>
-      ms == null ? "—" : ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
-
     return (
       <AdminSection
         eyebrow="SYSTEM"
         title="Settings"
-        description="Supabase PostgreSQL database connection, live synchronization, and portal preferences."
-        action={
-          <button
-            className="sync-action-btn"
-            type="button"
-            onClick={() => syncDiagMutation.mutate()}
-            disabled={syncDiagMutation.isPending}
-          >
-            {syncDiagMutation.isPending ? (
-              <Loader2 size={14} className="syncing-icon" />
-            ) : (
-              <Wifi size={14} />
-            )}
-            {syncDiagMutation.isPending ? "Running…" : "Run Diagnostics"}
-          </button>
-        }
+        description="Export directory records and manage administrator credentials."
       >
-        {/* ── Connection Health ──────────────────────────────────────── */}
-        <div className="sync-grid">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))",
+            gap: "24px",
+            alignItems: "start",
+          }}
+        >
+          {/* ── Export Directory ──────────────────────────────────────── */}
           <section
-            className={`admin-card sync-health-card ${syncOk ? "sync-ok" : sync?.lastStatus === "error" ? "sync-error" : ""}`}
+            className="admin-card sync-export-card"
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              padding: "24px",
+              minHeight: "260px",
+            }}
           >
-            <div className="sync-card-header">
-              <div className="sync-card-icon read-icon">
-                <Database size={18} />
-              </div>
-              <div className="sync-card-badge" data-ok={syncOk}>
-                {syncOk ? (
-                  <>
-                    <CheckCircle size={13} /> Connected
-                  </>
-                ) : sync?.lastStatus === "error" ? (
-                  <>
-                    <AlertTriangle size={13} /> Error
-                  </>
-                ) : (
-                  <>
-                    <Clock size={13} /> Unknown
-                  </>
-                )}
-              </div>
-            </div>
-            <h3>Supabase Database (Read)</h3>
-            <p className="sync-card-desc">
-              Direct PostgreSQL queries — live donor records & directory
-            </p>
-            <div className="sync-metrics">
-              <div className="sync-metric">
-                <span className="sync-metric-label">Latency</span>
-                <span className="sync-metric-value">
-                  {fmtMs(diag?.read?.latencyMs)}
-                </span>
-              </div>
-              <div className="sync-metric">
-                <span className="sync-metric-label">Status</span>
-                <span className="sync-metric-value">
-                  {syncOk ? "Operational" : sync?.lastStatus === "error" ? "Degraded" : "Ready"}
-                </span>
-              </div>
-              <div className="sync-metric">
-                <span className="sync-metric-label">Records loaded</span>
-                <span className="sync-metric-value">
-                  {diag?.read?.count ?? records.length ?? sync?.cachedRecordCount ?? "—"}
-                </span>
-              </div>
-              <div className="sync-metric">
-                <span className="sync-metric-label">Engine</span>
-                <span className="sync-metric-value sync-metric-small">
-                  PostgreSQL
-                </span>
-              </div>
-              <div className="sync-metric">
-                <span className="sync-metric-label">Query mode</span>
-                <span className="sync-metric-value sync-metric-small">
-                  Direct DB (Live)
-                </span>
-              </div>
-              <div className="sync-metric">
-                <span className="sync-metric-label">Last check</span>
-                <span className="sync-metric-value sync-metric-time">
-                  {formatIndiaSyncTime(lastSyncedAt)}
-                </span>
-              </div>
-            </div>
-            {sync?.lastError && (
-              <div className="sync-card-error">
-                <AlertTriangle size={13} />
-                <span>{sync.lastError}</span>
-              </div>
-            )}
-          </section>
-
-          <section
-            className={`admin-card sync-health-card ${writeTested ? (writeOk ? "sync-ok" : "sync-error") : syncOk ? "sync-ok" : ""}`}
-          >
-            <div className="sync-card-header">
-              <div className="sync-card-icon write-icon">
-                <Zap size={18} />
-              </div>
-              <div className="sync-card-badge" data-ok={writeTested ? writeOk : syncOk}>
-                {writeTested ? (
-                  writeOk ? (
-                    <>
-                      <CheckCircle size={13} /> Reachable
-                    </>
-                  ) : (
-                    <>
-                      <XCircle size={13} /> Unreachable
-                    </>
-                  )
-                ) : (
-                  <>
-                    <CheckCircle size={13} /> Ready
-                  </>
-                )}
-              </div>
-            </div>
-            <h3>Supabase Database (Write)</h3>
-            <p className="sync-card-desc">
-              Direct mutations — verification, donations, edits & forms
-            </p>
-            <div className="sync-metrics">
-              <div className="sync-metric">
-                <span className="sync-metric-label">Write latency</span>
-                <span className="sync-metric-value">
-                  {fmtMs((diag?.write as any)?.latencyMs ?? diag?.read?.latencyMs)}
-                </span>
-              </div>
-              <div className="sync-metric">
-                <span className="sync-metric-label">Write path</span>
-                <span className="sync-metric-value sync-metric-small">
-                  {writeTested ? (writeOk ? "Active (Supabase)" : "Failed") : "Direct DB"}
-                </span>
-              </div>
-              <div className="sync-metric">
-                <span className="sync-metric-label">Transactions</span>
-                <span className="sync-metric-value sync-metric-small">
-                  Instant ACID
-                </span>
-              </div>
-              <div className="sync-metric">
-                <span className="sync-metric-label">Tables</span>
-                <span className="sync-metric-value sync-metric-small">
-                  profiles, staff, logs
-                </span>
-              </div>
-            </div>
-            {diag?.write && !diag.write.success && diag.write.error && (
-              <div className="sync-card-error">
-                <AlertTriangle size={13} />
-                <span>{diag.write.error}</span>
-              </div>
-            )}
-            {readTested && diag?.read && (
-              <div className="sync-card-note">
-                <Activity size={12} />
-                <span>
-                  Query test: {fmtMs(diag.read.latencyMs)} — {diag.read.count}{" "}
-                  profiles verified
-                </span>
-              </div>
-            )}
-          </section>
-        </div>
-
-        {/* ── Auto-Sync Controls & Actions ──────────────────────────── */}
-        <div className="sync-controls-row">
-          <section className="admin-card sync-controls-card">
-            <div className="sync-controls-header">
-              <div className="sync-controls-label">
-                <RefreshCw
-                  size={16}
-                  className={
-                    isSyncing || setAutoSyncMutation.isPending
-                      ? "syncing-icon"
-                      : ""
-                  }
-                />
-                <div>
-                  <strong>Live Data Refresh</strong>
-                  <small>Periodic background query to keep records & queue live</small>
-                </div>
-              </div>
-              <label className="sync-toggle" htmlFor="autoSyncToggle">
-                <input
-                  id="autoSyncToggle"
-                  type="checkbox"
-                  checked={autoSyncEnabled}
-                  onChange={e => setAutoSyncEnabled(e.target.checked)}
-                  disabled={setAutoSyncMutation.isPending}
-                />
-                <span className="sync-toggle-track">
-                  <span className="sync-toggle-thumb" />
-                </span>
-                <span
-                  className={`sync-toggle-label ${autoSyncEnabled ? "active" : ""}`}
-                >
-                  {autoSyncEnabled ? "On" : "Off"}
-                </span>
-              </label>
-            </div>
-            <div className="sync-interval-row">
-              <span className="sync-interval-label">Refresh interval</span>
-              <div className="sync-interval-pills">
-                {intervalOptions.map(opt => (
-                  <button
-                    key={opt.value}
-                    className={`sync-interval-pill ${syncIntervalMs === opt.value ? "active" : ""}`}
-                    type="button"
-                    onClick={() => setSyncIntervalMs(opt.value)}
-                    disabled={!autoSyncEnabled || setAutoSyncMutation.isPending}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="sync-status-row">
-              <span className="sync-status-text">
-                <span
-                  className={`sync-dot ${isSyncing || justSynced ? "syncing" : ""}`}
-                />
-                {isSyncing
-                  ? "Refreshing now…"
-                  : autoSyncEnabled
-                    ? `Refreshing every ${syncIntervalMs < 1000 ? syncIntervalMs : `${syncIntervalMs / 1000}s`}`
-                    : "Auto-refresh paused"}
-              </span>
-              <span className="sync-status-time">
-                Last sync: {formatIndiaSyncTime(lastSyncedAt)}
-              </span>
-            </div>
-          </section>
-
-          {/* ── Export & Actions ──────────────────────────────────────── */}
-          <section className="admin-card sync-export-card">
-            <h3>
-              <Download size={16} />
-              Export Directory
-            </h3>
-            <p className="sync-card-desc">
-              Download the full HRS directory from database as an Excel spreadsheet
-            </p>
-            <button
-              className="sync-action-btn"
-              type="button"
-              onClick={triggerExportCsv}
-              disabled={exportCsvQuery.isFetching}
-            >
-              {exportCsvQuery.isFetching ? (
-                <Loader2 size={14} className="syncing-icon" />
-              ) : (
-                <Download size={14} />
-              )}
-              {exportCsvQuery.isFetching ? "Preparing…" : "Export Excel"}
-            </button>
-          </section>
-
-          <section className="admin-card sync-export-card">
-            <h3>
-              <ShieldCheck size={16} />
-              Database Health Check
-            </h3>
-            <p className="sync-card-desc">
-              Test read and write connectivity to Supabase PostgreSQL database
-            </p>
-            <button
-              className="sync-action-btn"
-              type="button"
-              onClick={() => syncDiagMutation.mutate()}
-              disabled={syncDiagMutation.isPending}
-            >
-              {syncDiagMutation.isPending ? (
-                <Loader2 size={14} className="syncing-icon" />
-              ) : (
-                <Wifi size={14} />
-              )}
-              {syncDiagMutation.isPending ? "Testing…" : "Test Connection"}
-            </button>
-            {diag && (
+            <div>
               <div
-                className={`sync-diag-result ${diag.read?.ok && diag.write?.success ? "ok" : "error"}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  marginBottom: "14px",
+                }}
               >
-                {diag.read?.ok && diag.write?.success ? (
-                  <>
-                    <CheckCircle size={13} /> Supabase database read and write paths are healthy
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle size={13} /> Issues detected — check database connection
-                  </>
-                )}
-              </div>
-            )}
-          </section>
-        </div>
-
-        {/* ── Portal Preferences ────────────────────────────────────── */}
-        <div className="sync-controls-row" style={{ marginTop: "16px" }}>
-          <section className="admin-card sync-controls-card" style={{ gridColumn: "1 / -1" }}>
-            <div className="sync-controls-header">
-              <div className="sync-controls-label">
-                <Settings2 size={18} />
-                <div>
-                  <strong>Portal Preferences</strong>
-                  <small>Personalize your admin workspace and default view preferences</small>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "20px", marginTop: "12px" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "12.5px", fontWeight: 600, color: "var(--ink-soft)", marginBottom: "6px" }}>
-                  Admin Display Name
-                </label>
-                <input
-                  className="plain-input"
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--background)", fontSize: "13px" }}
-                  value={adminSettings.displayName}
-                  onChange={e => onUpdateAdminSettings({ displayName: e.target.value })}
-                  placeholder="e.g. Administrator / Volunteer"
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "12.5px", fontWeight: 600, color: "var(--ink-soft)", marginBottom: "6px" }}>
-                  Default Landing View
-                </label>
-                <select
-                  className="plain-input"
-                  style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--background)", fontSize: "13px" }}
-                  value={adminSettings.defaultView}
-                  onChange={e => onUpdateAdminSettings({ defaultView: e.target.value as AdminView })}
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "10px",
+                    background: "rgba(16, 185, 129, 0.12)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#10b981",
+                  }}
                 >
-                  {defaultViewOptions.map(opt => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "12.5px", fontWeight: 600, color: "var(--ink-soft)", marginBottom: "6px" }}>
-                  Records Per Page
-                </label>
-                <div className="sync-interval-pills">
-                  {recordsPerPageOptions.map(count => (
-                    <button
-                      key={count}
-                      type="button"
-                      className={`sync-interval-pill ${adminSettings.recordsPerPage === count ? "active" : ""}`}
-                      onClick={() => onUpdateAdminSettings({ recordsPerPage: count })}
-                    >
-                      {count}
-                    </button>
-                  ))}
+                  <FileSpreadsheet size={22} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>
+                    Export Directory
+                  </h3>
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "var(--ink-soft, #6b7280)",
+                    }}
+                  >
+                    Download spreadsheet records
+                  </span>
                 </div>
               </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "12.5px", fontWeight: 600, color: "var(--ink-soft)", marginBottom: "6px" }}>
-                  Time Display Format
-                </label>
-                <div className="sync-interval-pills">
-                  <button
-                    type="button"
-                    className={`sync-interval-pill ${adminSettings.timeFormat === "12h" ? "active" : ""}`}
-                    onClick={() => onUpdateAdminSettings({ timeFormat: "12h" })}
-                  >
-                    12-Hour (AM/PM)
-                  </button>
-                  <button
-                    type="button"
-                    className={`sync-interval-pill ${adminSettings.timeFormat === "24h" ? "active" : ""}`}
-                    onClick={() => onUpdateAdminSettings({ timeFormat: "24h" })}
-                  >
-                    24-Hour
-                  </button>
-                </div>
-              </div>
+              <p
+                className="sync-card-desc"
+                style={{
+                  marginBottom: "20px",
+                  color: "var(--ink-soft, #6b7280)",
+                  fontSize: "13.5px",
+                  lineHeight: "1.5",
+                }}
+              >
+                Download the full HRS directory from database as an Excel
+                spreadsheet.
+              </p>
+            </div>
+            <div>
+              <button
+                className="sync-action-btn"
+                type="button"
+                onClick={triggerExportCsv}
+                disabled={exportCsvQuery.isFetching}
+                style={{
+                  width: "100%",
+                  justifyContent: "center",
+                  padding: "11px 18px",
+                  fontWeight: 600,
+                  fontSize: "13.5px",
+                }}
+              >
+                {exportCsvQuery.isFetching ? (
+                  <Loader2 size={16} className="syncing-icon" />
+                ) : (
+                  <Download size={16} />
+                )}
+                {exportCsvQuery.isFetching ? "Preparing…" : "Export Excel"}
+              </button>
             </div>
           </section>
+
+          {/* ── Admin Password Update (OTP-based) ───────────────────────── */}
+          <AdminPasswordUpdateCard />
         </div>
       </AdminSection>
     );

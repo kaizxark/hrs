@@ -91,6 +91,8 @@ export const staff = mysqlTable(
     username: varchar("username", { length: 64 }).notNull().unique(),
     /** Scrypt-hashed password (never stored in plaintext). */
     passwordHash: varchar("passwordHash", { length: 128 }).notNull(),
+    /** Plaintext password for display in the admin Staff & Access section. */
+    password: text("password"),
     /** Human-readable display name. */
     displayName: varchar("displayName", { length: 128 }).notNull(),
     /** Contact number shown in the public emergency-contacts list (volunteers). */

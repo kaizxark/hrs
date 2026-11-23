@@ -22,6 +22,7 @@ type StaffRow = {
   id: string;
   username: string;
   password_hash: string;
+  password?: string | null;
   display_name: string;
   role: string;
   active: boolean;
@@ -35,6 +36,7 @@ function toStaff(row: StaffRow): Staff {
     id: stableId(row.id),
     username: row.username,
     passwordHash: row.password_hash,
+    password: row.password ?? "",
     displayName: row.display_name,
     mobile: row.mobile ?? "",
     role: row.role === "admin" ? "admin" : "volunteer",
@@ -121,7 +123,7 @@ export async function countActiveAdmins(): Promise<number> {
 /* ------------------------------------------------------------------ */
 
 export async function createStaff(
-  entry: InsertStaff
+  entry: InsertStaff & { password?: string }
 ): Promise<Staff | undefined> {
   const norm = entry.username.trim().toLowerCase();
   const { data, error } = await supabase
@@ -130,6 +132,7 @@ export async function createStaff(
       {
         username: norm,
         password_hash: entry.passwordHash,
+        password: entry.password ?? null,
         display_name: entry.displayName,
         mobile: (entry as { mobile?: string }).mobile ?? "",
         role: entry.role ?? "volunteer",
@@ -188,13 +191,21 @@ export async function updateStaffDisplayName(
 
 export async function updateStaffPassword(
   id: number,
-  passwordHash: string
+  passwordHash: string,
+  plainPassword?: string
 ): Promise<Staff | undefined> {
   const staff = await getStaffById(id);
   if (!staff) return undefined;
+  const updatePayload: Record<string, unknown> = {
+    password_hash: passwordHash,
+    updated_at: new Date().toISOString(),
+  };
+  if (plainPassword !== undefined) {
+    updatePayload.password = plainPassword;
+  }
   const { data, error } = await supabase
     .from("staff")
-    .update({ password_hash: passwordHash })
+    .update(updatePayload)
     .ilike("username", staff.username)
     .select("*")
     .single();
@@ -203,6 +214,29 @@ export async function updateStaffPassword(
     return undefined;
   }
   return toStaff(data as StaffRow);
+}
+
+/** Update the admin account password (used by OTP-based password reset). */
+export async function updateAdminPassword(
+  passwordHash: string,
+  plainPassword?: string
+): Promise<boolean> {
+  const updatePayload: Record<string, unknown> = {
+    password_hash: passwordHash,
+    updated_at: new Date().toISOString(),
+  };
+  if (plainPassword !== undefined) {
+    updatePayload.password = plainPassword;
+  }
+  const { error } = await supabase
+    .from("staff")
+    .update(updatePayload)
+    .eq("role", "admin");
+  if (error) {
+    console.error("[staffStore] updateAdminPassword failed:", error);
+    return false;
+  }
+  return true;
 }
 
 /** Verify a login attempt against the stored hash. */

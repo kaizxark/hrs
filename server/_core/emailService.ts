@@ -376,3 +376,73 @@ export async function sendVerificationEmail(
     return { response, via: "gas" };
   }
 }
+
+/**
+ * Render the HTML email template for the Admin Password Reset OTP.
+ */
+export function buildAdminOtpEmailHtml(otp: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>HRS Admin Password Reset Code</title>
+</head>
+<body style="margin:0; padding:24px; background-color:#f8fafc; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#1e293b;">
+  <div style="max-width:520px; margin:0 auto; background:#ffffff; border-radius:12px; overflow:hidden; border:1px solid #e2e8f0; box-shadow:0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+    <div style="background:linear-gradient(135deg, #dc2626 0%, #991b1b 100%); padding:28px 24px; text-align:center;">
+      <h1 style="color:#ffffff; margin:0; font-size:22px; font-weight:700; letter-spacing:-0.5px;">HRS Blood Donor Portal</h1>
+      <p style="color:#fee2e2; margin:6px 0 0 0; font-size:13px; font-weight:500;">Admin Security Verification</p>
+    </div>
+    <div style="padding:32px 28px;">
+      <h2 style="font-size:18px; font-weight:600; margin:0 0 12px 0; color:#0f172a;">Password Reset Code</h2>
+      <p style="margin:0 0 20px 0; font-size:14px; line-height:1.6; color:#475569;">
+        A request was submitted to update the Administrator password for the HRS Portal. Use the one-time verification code below to authorize this change for <strong>kaizxark@gmail.com</strong>:
+      </p>
+      <div style="background:#fef2f2; border:2px dashed #f87171; border-radius:10px; padding:18px; text-align:center; margin:24px 0;">
+        <span style="font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:36px; font-weight:800; letter-spacing:10px; color:#b91c1c; display:inline-block; padding-left:10px;">
+          ${otp}
+        </span>
+      </div>
+      <p style="margin:0 0 8px 0; font-size:13px; color:#64748b; line-height:1.5;">
+        ⏱️ This code is valid for <strong>10 minutes</strong> and can only be used once.
+      </p>
+      <p style="margin:0; font-size:13px; color:#64748b; line-height:1.5;">
+        🔒 If you did not initiate this request, someone may be attempting unauthorized access. Please ignore this email or review your access logs immediately.
+      </p>
+    </div>
+    <div style="background:#f8fafc; border-top:1px solid #e2e8f0; padding:16px 28px; text-align:center; font-size:12px; color:#94a3b8;">
+      HRS Blood Donor Portal • Automated Security System
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * Send an OTP code to the designated admin email (kaizxark@gmail.com).
+ */
+export async function sendAdminPasswordOtpEmail(toEmail: string, otp: string): Promise<boolean> {
+  if (!isSmtpConfigured()) {
+    console.error("[emailService] SMTP is not configured for admin OTP email.");
+    return false;
+  }
+  try {
+    const transporter = nodemailer.createTransport({
+      host: ENV.smtpHost,
+      port: ENV.smtpPort,
+      secure: ENV.smtpSecure,
+      auth: { user: ENV.smtpUser, pass: ENV.smtpPass },
+    });
+    await transporter.sendMail({
+      from: ENV.smtpFrom,
+      to: toEmail,
+      subject: `HRS Admin Password Reset Code: ${otp}`,
+      text: `Your HRS Admin verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nIf you did not request this password reset, please ignore this email.`,
+      html: buildAdminOtpEmailHtml(otp),
+    });
+    return true;
+  } catch (error) {
+    console.error("[emailService] Failed to send admin OTP email:", error);
+    return false;
+  }
+}
