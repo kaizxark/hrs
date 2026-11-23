@@ -278,10 +278,8 @@ export const hrsRouter = router({
       return response;
     }),
 
-  // Public donor self-registration — the shared camp/registration form.
-  // Creates the profile as PENDING: an admin reviews and verifies it in the
-  // dashboard before it reaches the public directory.
-  registerDonor: publicProcedure
+  // Donor registration — adding users is restricted to admins only.
+  registerDonor: adminProcedure
     .input(
       z.object({
         fullName: z.string().min(2).max(120),

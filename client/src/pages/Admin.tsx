@@ -2435,6 +2435,7 @@ export default function Admin() {
                 if (rec) openRecord(rec, undefined);
               }}
               onOpenPending={() => goToView("records", "pending")}
+              onOpenAdd={() => setAddOpen(true)}
             />
           ) : activeView === "records" ? (
             <>
@@ -3909,10 +3910,12 @@ function AddRecordsSection({
   records = [],
   onOpenRecord,
   onOpenPending,
+  onOpenAdd,
 }: {
   records?: AdminRecord[];
   onOpenRecord?: (hrsId: string) => void;
   onOpenPending?: () => void;
+  onOpenAdd?: () => void;
 } = {}) {
   const listQuery = trpc.form.list.useQuery(undefined, {
     refetchInterval: 20_000,
@@ -4019,14 +4022,15 @@ function AddRecordsSection({
           </p>
         </div>
         <div className="add-heading-actions">
-          <a
-            className="secondary-button"
-            href="/register"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <UserPlus size={15} /> Desk Registration
-          </a>
+          {onOpenAdd && (
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={onOpenAdd}
+            >
+              <UserPlus size={15} /> Add Donor
+            </button>
+          )}
           <button
             type="button"
             className="primary-button"
@@ -4229,14 +4233,15 @@ function AddRecordsSection({
               >
                 <Plus size={15} /> Create your first form link
               </button>
-              <a
-                className="secondary-button"
-                href="/register"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <UserPlus size={15} /> Open Desk Registration
-              </a>
+              {onOpenAdd && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={onOpenAdd}
+                >
+                  <UserPlus size={15} /> Add Donor
+                </button>
+              )}
             </div>
           </div>
         ) : (

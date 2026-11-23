@@ -23,7 +23,7 @@ import MobileBottomNav from "@/components/MobileBottomNav";
 const processSteps = [
   {
     title: "Fill the registration form",
-    copy: "Your details, blood group, and consents — one short form at the camp or online at /register.",
+    copy: "Your details, blood group, and consents — one short form completed with HRS coordinators at the camp.",
     icon: FileCheck2,
   },
   {

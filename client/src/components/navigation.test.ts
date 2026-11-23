@@ -47,4 +47,10 @@ describe("Navigation & CSS invariants", () => {
     expect(mobileNavContent).toContain("createPortal");
     expect(mobileNavContent).toContain("document.body");
   });
+
+  it("does not expose /register route to public visitors", () => {
+    const appPath = path.resolve(__dirname, "../App.tsx");
+    const appContent = fs.readFileSync(appPath, "utf-8");
+    expect(appContent).not.toMatch(/path=["']\/register["']/);
+  });
 });
